@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wolffia Bioimage Analysis Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🔬 Wolffia Bioimage Analysis</h1>
+            <p>Advanced automated cell counting, morphological analysis, and biomass estimation for Wolffia specimens</p>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="main-grid">
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <!-- File Upload -->
+                <div class="control-section">
+                    <h3>📁 Image Upload</h3>
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">📷</div>
+                        <p><strong>Drop images here</strong></p>
+                        <p>or click to browse</p>
+                        <p style="font-size: 0.8rem; color: #a1a1aa; margin-top: 10px;">
+                            Supported: JPG, PNG, TIF, BMP
+                        </p>
+                        <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.tif,.tiff,.bmp,.jfif" multiple style="display: none;">
+                    </div>
+                </div>
+
+                <!-- Analysis Parameters -->
+                <div class="control-section">
+                    <h3>⚙️ Parameters</h3>
+                    <div class="param-group">
+                        <div class="param-input">
+                            <label>Pixel to Micron Ratio</label>
+                            <input type="number" id="pixelRatio" value="1.0" step="0.1" min="0.1">
+                        </div>
+                        <div class="param-input">
+                            <label>Chlorophyll Threshold</label>
+                            <input type="number" id="chlorophyllThreshold" value="0.6" step="0.1" min="0" max="1">
+                        </div>
+                        <div class="param-input">
+                            <label>Min Cell Area (px)</label>
+                            <input type="number" id="minCellArea" value="30" min="1">
+                        </div>
+                        <div class="param-input">
+                            <label>Max Cell Area (px)</label>
+                            <input type="number" id="maxCellArea" value="8000" min="100">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analysis Method -->
+                <div class="control-section">
+                    <h3>🎯 Analysis Method</h3>
+                    <div class="param-input">
+                        <select id="analysisMethod">
+                            <option value="auto">Auto Segmentation</option>
+                            <option value="watershed">Watershed</option>
+                            <option value="color">Color-based</option>
+                        </select>
+                    </div>
+                    
+                    <div id="colorMethods" class="color-methods" style="display: none;">
+                        <div class="color-method" data-color="green_wolffia">
+                            <strong>🟢 Green Wolffia</strong>
+                            <div style="font-size: 0.8rem; color: #a1a1aa;">Standard chlorophyll</div>
+                        </div>
+                        <div class="color-method" data-color="pink_cells">
+                            <strong>🌸 Pink Cells</strong>
+                            <div style="font-size: 0.8rem; color: #a1a1aa;">Fluorescent markers</div>
+                        </div>
+                        <div class="color-method" data-color="blue_cells">
+                            <strong>🔵 Blue Cells</strong>
+                            <div style="font-size: 0.8rem; color: #a1a1aa;">DAPI staining</div>
+                        </div>
+                        <div class="color-method" data-color="purple_nuclei">
+                            <strong>🟣 Purple Nuclei</strong>
+                            <div style="font-size: 0.8rem; color: #a1a1aa;">Nuclear stains</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <button class="btn" id="analyzeBtn" disabled>
+                        <span>🔍</span> Analyze Image
+                    </button>
+                    <button class="btn btn-secondary" id="batchBtn" disabled>
+                        <span>📊</span> Batch Analysis
+                    </button>
+                    <button class="btn" id="exportBtn" disabled style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                        <span>💾</span> Export Results
+                    </button>
+                </div>
+            </div>
+
+            <!-- Analysis Results Area -->
+            <div class="analysis-area">
+                <div class="analysis-tabs">
+                    <div class="tab active" data-tab="overview">📊 Overview</div>
+                    <div class="tab" data-tab="details">📋 Details</div>
+                    <div class="tab" data-tab="visualization">🎨 Visualization</div>
+                </div>
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div style="text-align: center; color: #a1a1aa;" id="progressText">
+                        Initializing analysis...
+                    </div>
+                </div>
+
+                <!-- Overview Tab -->
+                <div class="tab-content active" id="overviewTab">
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalCells">-</div>
+                            <div class="stat-label">Total Cells</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="avgArea">-</div>
+                            <div class="stat-label">Avg Area (μm²)</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalBiomass">-</div>
+                            <div class="stat-label">Biomass Est.</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="chlorophyllRatio">-</div>
+                            <div class="stat-label">High Chlorophyll %</div>
+                        </div>
+                    </div>
+
+                    <div class="image-display" id="imageDisplay">
+                        <p style="color: #a1a1aa;">📷 Upload an image to begin analysis</p>
+                    </div>
+                </div>
+
+                <!-- Details Tab -->
+                <div class="tab-content" id="detailsTab">
+                    <div class="results-table" id="resultsTable" style="display: none;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Cell ID</th>
+                                    <th>Area (μm²)</th>
+                                    <th>Perimeter</th>
+                                    <th>Chlorophyll</th>
+                                    <th>Classification</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="noDetailsMessage">
+                        <p style="text-align: center; color: #a1a1aa; padding: 50px;">
+                            📋 Detailed results will appear here after analysis
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Visualization Tab -->
+                <div class="tab-content" id="visualizationTab">
+                    <div id="visualizations" style="display: none;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div style="text-align: center;">
+                                <h4 style="color: #22c55e; margin-bottom: 15px;">Original Image</h4>
+                                <canvas id="originalCanvas" style="max-width: 100%; border-radius: 10px;"></canvas>
+                            </div>
+                            <div style="text-align: center;">
+                                <h4 style="color: #22c55e; margin-bottom: 15px;">Segmented Cells</h4>
+                                <canvas id="segmentedCanvas" style="max-width: 100%; border-radius: 10px;"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="noVisualizationMessage">
+                        <p style="text-align: center; color: #a1a1aa; padding: 50px;">
+                            🎨 Visualization will appear here after analysis
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis History -->
+        <div class="history-panel">
+            <h3 style="color: #22c55e; margin-bottom: 20px;">📈 Analysis History</h3>
+            <div id="historyList">
+                <p style="text-align: center; color: #a1a1aa; padding: 20px;">
+                    📝 Your analysis history will appear here
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        Analysis complete! 🎉
+    </div>
+
+    <script>
+
+    </script>
+<script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>

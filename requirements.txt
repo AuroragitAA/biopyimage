@@ -1,0 +1,8 @@
+Flask==3.0.3
+opencv-python-headless==4.9.0.80
+scikit-image==0.23.2
+numpy==1.26.4
+scipy==1.13.0
+setuptools==70.0.0
+Werkzeug==2.3.7
+matplotlib==3.7.2
