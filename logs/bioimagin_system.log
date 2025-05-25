@@ -1,0 +1,357 @@
+2025-05-25 17:32:45,397 - logging_config - INFO - ✅ Logging system initialized with emoji support
+2025-05-25 17:32:45,404 - __main__ - INFO - ======================================================================
+2025-05-25 17:32:45,404 - __main__ - INFO - 🌱 BIOIMAGIN PROFESSIONAL WOLFFIA ANALYSIS SYSTEM
+2025-05-25 17:32:45,404 - __main__ - INFO -    Production-Grade Bioimage Analysis Platform
+2025-05-25 17:32:45,405 - __main__ - INFO - ======================================================================
+2025-05-25 17:32:45,408 - __main__ - INFO - 📁 All required directories created/verified
+2025-05-25 17:32:45,408 - __main__ - INFO - 🚀 Initializing BIOIMAGIN Professional System...
+2025-05-25 17:32:45,411 - professional_integrator - INFO - 🚀 Initializing Professional Wolffia System Integration...
+2025-05-25 17:32:45,412 - advanced_wolffia_analyzer - INFO - 🔬 Advanced Image Processor initialized
+2025-05-25 17:32:45,412 - advanced_wolffia_analyzer - INFO - 🧬 Biological Feature Extractor initialized
+2025-05-25 17:32:45,412 - advanced_wolffia_analyzer - INFO - 📊 Statistical Analyzer initialized
+2025-05-25 17:32:45,413 - image_processor - INFO - 📷 Professional Image Processor initialized
+2025-05-25 17:32:45,413 - image_processor - INFO -    Supported formats: .jpg, .jpeg, .png, .tif, .tiff, .bmp, .jfif, .webp, .jp2
+2025-05-25 17:32:45,413 - segmentation - INFO - 🎨 Advanced Color Segmenter initialized
+2025-05-25 17:32:45,413 - segmentation - INFO - 🔬 Professional Cell Segmentation System initialized
+2025-05-25 17:32:45,413 - segmentation - INFO -    Cell size range: 30-8000 pixels
+2025-05-25 17:32:45,414 - segmentation - INFO -    Quality threshold: 0.6
+2025-05-25 17:32:45,414 - wolffia_analyzer - INFO - 🧬 AdvancedFeatureExtractor initialized
+2025-05-25 17:32:45,414 - wolffia_analyzer - INFO - ✅ All analysis components initialized
+2025-05-25 17:32:45,414 - wolffia_analyzer - INFO - 🔬 Professional Wolffia Analyzer initialized
+2025-05-25 17:32:45,414 - wolffia_analyzer - INFO -    Pixel to micron ratio: 1.0
+2025-05-25 17:32:45,415 - wolffia_analyzer - INFO -    Chlorophyll threshold: 0.6
+2025-05-25 17:32:45,415 - wolffia_analyzer - INFO -    Cell area range: 30-8000 pixels
+2025-05-25 17:32:45,415 - professional_integrator - INFO - ✅ Professional analyzer components initialized
+2025-05-25 17:32:45,417 - database_manager - INFO - ✅ Table created/verified: projects
+2025-05-25 17:32:45,418 - database_manager - INFO - ✅ Table created/verified: experiments
+2025-05-25 17:32:45,418 - database_manager - INFO - ✅ Table created/verified: images
+2025-05-25 17:32:45,418 - database_manager - INFO - ✅ Table created/verified: analyses
+2025-05-25 17:32:45,418 - database_manager - INFO - ✅ Table created/verified: cells
+2025-05-25 17:32:45,418 - database_manager - INFO - ✅ Table created/verified: batch_jobs
+2025-05-25 17:32:45,419 - database_manager - INFO - ✅ Table created/verified: quality_metrics
+2025-05-25 17:32:45,419 - database_manager - INFO - ✅ Table created/verified: ml_models
+2025-05-25 17:32:45,419 - database_manager - INFO - ✅ Table created/verified: system_logs
+2025-05-25 17:32:45,419 - database_manager - INFO - ✅ Table created/verified: user_sessions
+2025-05-25 17:32:45,422 - database_manager - INFO - ✅ Database indexes created
+2025-05-25 17:32:45,423 - database_manager - INFO - ✅ Database initialization complete
+2025-05-25 17:32:45,423 - database_manager - INFO - 🕒 Backup scheduler started
+2025-05-25 17:32:45,424 - database_manager - INFO - 🧹 Cleanup scheduler started
+2025-05-25 17:32:45,424 - database_manager - INFO - 🗄️ Database Manager initialized
+2025-05-25 17:32:45,426 - professional_integrator - INFO - ✅ Database system initialized
+2025-05-25 17:32:45,427 - ml_enhancement - INFO - 🤖 Cell Classification Model initialized
+2025-05-25 17:32:45,427 - ml_enhancement - INFO - 📈 Growth Prediction Model initialized
+2025-05-25 17:32:45,427 - ml_enhancement - INFO - 🔍 Anomaly Detector initialized
+2025-05-25 17:32:45,427 - ml_enhancement - INFO - 🤖 ML-Enhanced Analyzer initialized
+2025-05-25 17:32:45,428 - professional_integrator - INFO - ℹ️ Insufficient data for ML training (need 50+ samples)
+2025-05-25 17:32:45,428 - professional_integrator - INFO - ✅ ML enhancement system initialized
+2025-05-25 17:32:45,428 - batch_processor - INFO - 🚀 Batch Processor initialized: batch_job_20250525_173245
+2025-05-25 17:32:45,429 - professional_integrator - INFO - ✅ Batch processing system initialized
+2025-05-25 17:32:45,429 - professional_integrator - INFO - ✅ Integrated workflows configured
+2025-05-25 17:32:45,429 - professional_integrator - INFO - ✅ Professional Wolffia System fully integrated and ready
+2025-05-25 17:32:45,431 - __main__ - INFO - ✅ Professional system initialized
+2025-05-25 17:32:45,432 - __main__ - INFO -    Components: 7
+2025-05-25 17:32:45,432 - __main__ - INFO -    Professional mode: True
+2025-05-25 17:32:45,432 - __main__ - INFO -    Workflows available: ['single_analysis', 'batch_analysis', 'ml_enhanced_analysis', 'comprehensive_analysis']
+2025-05-25 17:32:45,432 - __main__ - INFO - 🔄 Starting background services...
+2025-05-25 17:32:45,433 - __main__ - INFO - ✅ Started health_monitor
+2025-05-25 17:32:45,433 - __main__ - INFO - ✅ Started backup_scheduler
+2025-05-25 17:32:45,434 - __main__ - INFO - ✅ Started ml_scheduler
+2025-05-25 17:32:45,434 - __main__ - INFO - 📊 SYSTEM STATUS SUMMARY:
+2025-05-25 17:32:45,434 - __main__ - INFO -    Professional System: ✅ Available
+2025-05-25 17:32:45,435 - __main__ - INFO -    Database Integration: ✅ Enabled
+2025-05-25 17:32:45,435 - __main__ - INFO -    ML Enhancement: ✅ Enabled
+2025-05-25 17:32:45,435 - __main__ - INFO -    Batch Processing: ✅ Enabled
+2025-05-25 17:32:45,435 - __main__ - INFO -    System Health: POOR
+2025-05-25 17:32:45,435 - __main__ - INFO - ✅ BIOIMAGIN System initialization complete
+2025-05-25 17:32:45,436 - __main__ - INFO - 🌐 Server ready to accept requests
+2025-05-25 17:55:05,256 - logging_config - INFO - ✅ Logging system initialized with emoji support
+2025-05-25 17:55:05,262 - __main__ - INFO - ======================================================================
+2025-05-25 17:55:05,263 - __main__ - INFO - 🌱 BIOIMAGIN PROFESSIONAL WOLFFIA ANALYSIS SYSTEM
+2025-05-25 17:55:05,263 - __main__ - INFO -    Production-Grade Bioimage Analysis Platform
+2025-05-25 17:55:05,263 - __main__ - INFO - ======================================================================
+[INFO] __main__: ? All required directories created/verified
+[INFO] __main__: ? Initializing BIOIMAGIN Professional System...
+2025-05-25 17:55:05,267 - professional_integrator - INFO - 🚀 Initializing Professional Wolffia System Integration...
+2025-05-25 17:55:05,268 - advanced_wolffia_analyzer - INFO - 🔬 Advanced Image Processor initialized
+2025-05-25 17:55:05,268 - advanced_wolffia_analyzer - INFO - 🧬 Biological Feature Extractor initialized
+2025-05-25 17:55:05,268 - advanced_wolffia_analyzer - INFO - 📊 Statistical Analyzer initialized
+2025-05-25 17:55:05,268 - image_processor - INFO - 📷 Professional Image Processor initialized
+2025-05-25 17:55:05,268 - image_processor - INFO -    Supported formats: .jpg, .jpeg, .png, .tif, .tiff, .bmp, .jfif, .webp, .jp2
+2025-05-25 17:55:05,269 - segmentation - INFO - 🎨 Advanced Color Segmenter initialized
+2025-05-25 17:55:05,269 - segmentation - INFO - 🔬 Professional Cell Segmentation System initialized
+2025-05-25 17:55:05,269 - segmentation - INFO -    Cell size range: 30-8000 pixels
+2025-05-25 17:55:05,269 - segmentation - INFO -    Quality threshold: 0.6
+2025-05-25 17:55:05,269 - wolffia_analyzer - INFO - 🧬 AdvancedFeatureExtractor initialized
+2025-05-25 17:55:05,269 - wolffia_analyzer - INFO - ✅ All analysis components initialized
+2025-05-25 17:55:05,269 - wolffia_analyzer - INFO - 🔬 Professional Wolffia Analyzer initialized
+2025-05-25 17:55:05,270 - wolffia_analyzer - INFO -    Pixel to micron ratio: 1.0
+2025-05-25 17:55:05,270 - wolffia_analyzer - INFO -    Chlorophyll threshold: 0.6
+2025-05-25 17:55:05,270 - wolffia_analyzer - INFO -    Cell area range: 30-8000 pixels
+2025-05-25 17:55:05,270 - professional_integrator - INFO - ✅ Professional analyzer components initialized
+2025-05-25 17:55:05,272 - database_manager - INFO - ✅ Table created/verified: projects
+2025-05-25 17:55:05,272 - database_manager - INFO - ✅ Table created/verified: experiments
+2025-05-25 17:55:05,273 - database_manager - INFO - ✅ Table created/verified: images
+2025-05-25 17:55:05,273 - database_manager - INFO - ✅ Table created/verified: analyses
+2025-05-25 17:55:05,273 - database_manager - INFO - ✅ Table created/verified: cells
+2025-05-25 17:55:05,274 - database_manager - INFO - ✅ Table created/verified: batch_jobs
+2025-05-25 17:55:05,274 - database_manager - INFO - ✅ Table created/verified: quality_metrics
+2025-05-25 17:55:05,274 - database_manager - INFO - ✅ Table created/verified: ml_models
+2025-05-25 17:55:05,274 - database_manager - INFO - ✅ Table created/verified: system_logs
+2025-05-25 17:55:05,274 - database_manager - INFO - ✅ Table created/verified: user_sessions
+2025-05-25 17:55:05,277 - database_manager - INFO - ✅ Database indexes created
+2025-05-25 17:55:05,277 - database_manager - INFO - ✅ Database initialization complete
+2025-05-25 17:55:05,278 - database_manager - INFO - 🕒 Backup scheduler started
+2025-05-25 17:55:05,278 - database_manager - INFO - 🧹 Cleanup scheduler started
+2025-05-25 17:55:05,278 - database_manager - INFO - 🗄️ Database Manager initialized
+2025-05-25 17:55:05,280 - professional_integrator - INFO - ✅ Database system initialized
+2025-05-25 17:55:05,281 - ml_enhancement - INFO - 🤖 Cell Classification Model initialized
+2025-05-25 17:55:05,281 - ml_enhancement - INFO - 📈 Growth Prediction Model initialized
+2025-05-25 17:55:05,281 - ml_enhancement - INFO - 🔍 Anomaly Detector initialized
+2025-05-25 17:55:05,281 - ml_enhancement - INFO - 🤖 ML-Enhanced Analyzer initialized
+2025-05-25 17:55:05,281 - professional_integrator - INFO - ℹ️ Insufficient data for ML training (need 50+ samples)
+2025-05-25 17:55:05,282 - professional_integrator - INFO - ✅ ML enhancement system initialized
+2025-05-25 17:55:05,282 - batch_processor - INFO - 🚀 Batch Processor initialized: batch_job_20250525_175505
+2025-05-25 17:55:05,282 - professional_integrator - INFO - ✅ Batch processing system initialized
+2025-05-25 17:55:05,282 - professional_integrator - INFO - ✅ Integrated workflows configured
+2025-05-25 17:55:05,283 - professional_integrator - INFO - ✅ Professional Wolffia System fully integrated and ready
+[INFO] __main__: ? Professional system initialized
+[INFO] __main__:    Components: 7
+[INFO] __main__:    Professional mode: True
+[INFO] __main__:    Workflows available: ['single_analysis', 'batch_analysis', 'ml_enhanced_analysis', 'comprehensive_analysis']
+[INFO] __main__: ? Starting background services...
+[INFO] __main__: ? Started health_monitor
+[INFO] __main__: ? Started backup_scheduler
+[INFO] __main__: ? Started ml_scheduler
+2025-05-25 17:55:05,288 - __main__ - INFO - 📊 SYSTEM STATUS SUMMARY:
+2025-05-25 17:55:05,288 - __main__ - INFO -    Professional System: ✅ Available
+2025-05-25 17:55:05,288 - __main__ - INFO -    Database Integration: ✅ Enabled
+2025-05-25 17:55:05,288 - __main__ - INFO -    ML Enhancement: ✅ Enabled
+2025-05-25 17:55:05,288 - __main__ - INFO -    Batch Processing: ✅ Enabled
+2025-05-25 17:55:05,288 - __main__ - INFO -    System Health: POOR
+2025-05-25 17:55:05,288 - __main__ - INFO - ✅ BIOIMAGIN System initialization complete
+2025-05-25 17:55:05,288 - __main__ - INFO - 🌐 Server ready to accept requests
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_175536_617411_1-2205.jfif
+2025-05-25 17:55:36,619 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_175536_617411_1-2205.jfif
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_175541_530924_1-2205.jfif
+2025-05-25 17:55:41,532 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_175541_530924_1-2205.jfif
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_175542_822558_1-2205.jfif
+2025-05-25 17:55:42,824 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_175542_822558_1-2205.jfif
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_175543_759030_1-2205.jfif
+2025-05-25 17:55:43,760 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_175543_759030_1-2205.jfif
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_175544_447216_1-2205.jfif
+2025-05-25 17:55:44,449 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_175544_447216_1-2205.jfif
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_175545_424822_1-2205.jfif
+2025-05-25 17:55:45,426 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_175545_424822_1-2205.jfif
+2025-05-25 17:59:36,017 - logging_config - INFO - ✅ Logging system initialized with emoji support
+2025-05-25 17:59:36,022 - __main__ - INFO - ======================================================================
+2025-05-25 17:59:36,022 - __main__ - INFO - 🌱 BIOIMAGIN PROFESSIONAL WOLFFIA ANALYSIS SYSTEM
+2025-05-25 17:59:36,023 - __main__ - INFO -    Production-Grade Bioimage Analysis Platform
+2025-05-25 17:59:36,023 - __main__ - INFO - ======================================================================
+[INFO] __main__: ? All required directories created/verified
+[INFO] __main__: ? Initializing BIOIMAGIN Professional System...
+2025-05-25 17:59:36,027 - professional_integrator - INFO - 🚀 Initializing Professional Wolffia System Integration...
+2025-05-25 17:59:36,027 - advanced_wolffia_analyzer - INFO - 🔬 Advanced Image Processor initialized
+2025-05-25 17:59:36,028 - advanced_wolffia_analyzer - INFO - 🧬 Biological Feature Extractor initialized
+2025-05-25 17:59:36,028 - advanced_wolffia_analyzer - INFO - 📊 Statistical Analyzer initialized
+2025-05-25 17:59:36,028 - image_processor - INFO - 📷 Professional Image Processor initialized
+2025-05-25 17:59:36,028 - image_processor - INFO -    Supported formats: .jpg, .jpeg, .png, .tif, .tiff, .bmp, .jfif, .webp, .jp2
+2025-05-25 17:59:36,029 - segmentation - INFO - 🎨 Advanced Color Segmenter initialized
+2025-05-25 17:59:36,029 - segmentation - INFO - 🔬 Professional Cell Segmentation System initialized
+2025-05-25 17:59:36,029 - segmentation - INFO -    Cell size range: 30-8000 pixels
+2025-05-25 17:59:36,029 - segmentation - INFO -    Quality threshold: 0.6
+2025-05-25 17:59:36,029 - wolffia_analyzer - INFO - 🧬 AdvancedFeatureExtractor initialized
+2025-05-25 17:59:36,029 - wolffia_analyzer - INFO - ✅ All analysis components initialized
+2025-05-25 17:59:36,030 - wolffia_analyzer - INFO - 🔬 Professional Wolffia Analyzer initialized
+2025-05-25 17:59:36,030 - wolffia_analyzer - INFO -    Pixel to micron ratio: 1.0
+2025-05-25 17:59:36,030 - wolffia_analyzer - INFO -    Chlorophyll threshold: 0.6
+2025-05-25 17:59:36,030 - wolffia_analyzer - INFO -    Cell area range: 30-8000 pixels
+2025-05-25 17:59:36,030 - professional_integrator - INFO - ✅ Professional analyzer components initialized
+2025-05-25 17:59:36,032 - database_manager - INFO - ✅ Table created/verified: projects
+2025-05-25 17:59:36,032 - database_manager - INFO - ✅ Table created/verified: experiments
+2025-05-25 17:59:36,032 - database_manager - INFO - ✅ Table created/verified: images
+2025-05-25 17:59:36,033 - database_manager - INFO - ✅ Table created/verified: analyses
+2025-05-25 17:59:36,033 - database_manager - INFO - ✅ Table created/verified: cells
+2025-05-25 17:59:36,033 - database_manager - INFO - ✅ Table created/verified: batch_jobs
+2025-05-25 17:59:36,033 - database_manager - INFO - ✅ Table created/verified: quality_metrics
+2025-05-25 17:59:36,033 - database_manager - INFO - ✅ Table created/verified: ml_models
+2025-05-25 17:59:36,034 - database_manager - INFO - ✅ Table created/verified: system_logs
+2025-05-25 17:59:36,034 - database_manager - INFO - ✅ Table created/verified: user_sessions
+2025-05-25 17:59:36,037 - database_manager - INFO - ✅ Database indexes created
+2025-05-25 17:59:36,037 - database_manager - INFO - ✅ Database initialization complete
+2025-05-25 17:59:36,038 - database_manager - INFO - 🕒 Backup scheduler started
+2025-05-25 17:59:36,038 - database_manager - INFO - 🧹 Cleanup scheduler started
+2025-05-25 17:59:36,039 - database_manager - INFO - 🗄️ Database Manager initialized
+2025-05-25 17:59:36,041 - professional_integrator - INFO - ✅ Database system initialized
+2025-05-25 17:59:36,041 - professional_integrator - ERROR - ❌ ML initialization failed: name 'safe_log_message' is not defined
+2025-05-25 17:59:36,042 - batch_processor - INFO - 🚀 Batch Processor initialized: batch_job_20250525_175936
+2025-05-25 17:59:36,042 - professional_integrator - INFO - ✅ Batch processing system initialized
+2025-05-25 17:59:36,042 - professional_integrator - INFO - ✅ Integrated workflows configured
+2025-05-25 17:59:36,042 - professional_integrator - INFO - ✅ Professional Wolffia System fully integrated and ready
+[INFO] __main__: ? Professional system initialized
+[INFO] __main__:    Components: 6
+[INFO] __main__:    Professional mode: True
+[INFO] __main__:    Workflows available: ['single_analysis', 'batch_analysis', 'ml_enhanced_analysis', 'comprehensive_analysis']
+[INFO] __main__: ? Starting background services...
+[INFO] __main__: ? Started health_monitor
+[INFO] __main__: ? Started backup_scheduler
+[INFO] __main__: ? Started ml_scheduler
+2025-05-25 17:59:36,047 - __main__ - INFO - 📊 SYSTEM STATUS SUMMARY:
+2025-05-25 17:59:36,048 - __main__ - INFO -    Professional System: ✅ Available
+2025-05-25 17:59:36,048 - __main__ - INFO -    Database Integration: ✅ Enabled
+2025-05-25 17:59:36,048 - __main__ - INFO -    ML Enhancement: ✅ Enabled
+2025-05-25 17:59:36,048 - __main__ - INFO -    Batch Processing: ✅ Enabled
+2025-05-25 17:59:36,048 - __main__ - INFO -    System Health: POOR
+2025-05-25 17:59:36,048 - __main__ - INFO - ✅ BIOIMAGIN System initialization complete
+2025-05-25 17:59:36,049 - __main__ - INFO - 🌐 Server ready to accept requests
+2025-05-25 17:59:55,725 - logging_config - INFO - ✅ Logging system initialized with emoji support
+2025-05-25 17:59:55,731 - __main__ - INFO - ======================================================================
+2025-05-25 17:59:55,731 - __main__ - INFO - 🌱 BIOIMAGIN PROFESSIONAL WOLFFIA ANALYSIS SYSTEM
+2025-05-25 17:59:55,731 - __main__ - INFO -    Production-Grade Bioimage Analysis Platform
+2025-05-25 17:59:55,732 - __main__ - INFO - ======================================================================
+[INFO] __main__: ? All required directories created/verified
+[INFO] __main__: ? Initializing BIOIMAGIN Professional System...
+2025-05-25 17:59:55,737 - professional_integrator - INFO - 🚀 Initializing Professional Wolffia System Integration...
+2025-05-25 17:59:55,737 - advanced_wolffia_analyzer - INFO - 🔬 Advanced Image Processor initialized
+2025-05-25 17:59:55,737 - advanced_wolffia_analyzer - INFO - 🧬 Biological Feature Extractor initialized
+2025-05-25 17:59:55,738 - advanced_wolffia_analyzer - INFO - 📊 Statistical Analyzer initialized
+2025-05-25 17:59:55,738 - image_processor - INFO - 📷 Professional Image Processor initialized
+2025-05-25 17:59:55,738 - image_processor - INFO -    Supported formats: .jpg, .jpeg, .png, .tif, .tiff, .bmp, .jfif, .webp, .jp2
+2025-05-25 17:59:55,738 - segmentation - INFO - 🎨 Advanced Color Segmenter initialized
+2025-05-25 17:59:55,739 - segmentation - INFO - 🔬 Professional Cell Segmentation System initialized
+2025-05-25 17:59:55,739 - segmentation - INFO -    Cell size range: 30-8000 pixels
+2025-05-25 17:59:55,739 - segmentation - INFO -    Quality threshold: 0.6
+2025-05-25 17:59:55,739 - wolffia_analyzer - INFO - 🧬 AdvancedFeatureExtractor initialized
+2025-05-25 17:59:55,739 - wolffia_analyzer - INFO - ✅ All analysis components initialized
+2025-05-25 17:59:55,739 - wolffia_analyzer - INFO - 🔬 Professional Wolffia Analyzer initialized
+2025-05-25 17:59:55,740 - wolffia_analyzer - INFO -    Pixel to micron ratio: 1.0
+2025-05-25 17:59:55,740 - wolffia_analyzer - INFO -    Chlorophyll threshold: 0.6
+2025-05-25 17:59:55,740 - wolffia_analyzer - INFO -    Cell area range: 30-8000 pixels
+2025-05-25 17:59:55,740 - professional_integrator - INFO - ✅ Professional analyzer components initialized
+2025-05-25 17:59:55,742 - database_manager - INFO - ✅ Table created/verified: projects
+2025-05-25 17:59:55,742 - database_manager - INFO - ✅ Table created/verified: experiments
+2025-05-25 17:59:55,742 - database_manager - INFO - ✅ Table created/verified: images
+2025-05-25 17:59:55,743 - database_manager - INFO - ✅ Table created/verified: analyses
+2025-05-25 17:59:55,743 - database_manager - INFO - ✅ Table created/verified: cells
+2025-05-25 17:59:55,743 - database_manager - INFO - ✅ Table created/verified: batch_jobs
+2025-05-25 17:59:55,743 - database_manager - INFO - ✅ Table created/verified: quality_metrics
+2025-05-25 17:59:55,743 - database_manager - INFO - ✅ Table created/verified: ml_models
+2025-05-25 17:59:55,744 - database_manager - INFO - ✅ Table created/verified: system_logs
+2025-05-25 17:59:55,744 - database_manager - INFO - ✅ Table created/verified: user_sessions
+2025-05-25 17:59:55,747 - database_manager - INFO - ✅ Database indexes created
+2025-05-25 17:59:55,747 - database_manager - INFO - ✅ Database initialization complete
+2025-05-25 17:59:55,748 - database_manager - INFO - 🕒 Backup scheduler started
+2025-05-25 17:59:55,748 - database_manager - INFO - 🧹 Cleanup scheduler started
+2025-05-25 17:59:55,748 - database_manager - INFO - 🗄️ Database Manager initialized
+2025-05-25 17:59:55,751 - professional_integrator - INFO - ✅ Database system initialized
+2025-05-25 17:59:55,751 - ml_enhancement - INFO - 🤖 Cell Classification Model initialized
+2025-05-25 17:59:55,751 - ml_enhancement - INFO - 📈 Growth Prediction Model initialized
+2025-05-25 17:59:55,751 - ml_enhancement - INFO - 🔍 Anomaly Detector initialized
+2025-05-25 17:59:55,752 - ml_enhancement - INFO - 🤖 ML-Enhanced Analyzer initialized
+2025-05-25 17:59:55,752 - professional_integrator - INFO - ℹ️ Insufficient data for ML training (need 50+ samples)
+2025-05-25 17:59:55,752 - professional_integrator - INFO - ✅ ML enhancement system initialized
+2025-05-25 17:59:55,753 - batch_processor - INFO - 🚀 Batch Processor initialized: batch_job_20250525_175955
+2025-05-25 17:59:55,753 - professional_integrator - INFO - ✅ Batch processing system initialized
+2025-05-25 17:59:55,753 - professional_integrator - INFO - ✅ Integrated workflows configured
+2025-05-25 17:59:55,753 - professional_integrator - INFO - ✅ Professional Wolffia System fully integrated and ready
+[INFO] __main__: ? Professional system initialized
+[INFO] __main__:    Components: 7
+[INFO] __main__:    Professional mode: True
+[INFO] __main__:    Workflows available: ['single_analysis', 'batch_analysis', 'ml_enhanced_analysis', 'comprehensive_analysis']
+[INFO] __main__: ? Starting background services...
+[INFO] __main__: ? Started health_monitor
+[INFO] __main__: ? Started backup_scheduler
+[INFO] __main__: ? Started ml_scheduler
+2025-05-25 17:59:55,759 - __main__ - INFO - 📊 SYSTEM STATUS SUMMARY:
+2025-05-25 17:59:55,759 - __main__ - INFO -    Professional System: ✅ Available
+2025-05-25 17:59:55,759 - __main__ - INFO -    Database Integration: ✅ Enabled
+2025-05-25 17:59:55,759 - __main__ - INFO -    ML Enhancement: ✅ Enabled
+2025-05-25 17:59:55,759 - __main__ - INFO -    Batch Processing: ✅ Enabled
+2025-05-25 17:59:55,760 - __main__ - INFO -    System Health: POOR
+2025-05-25 17:59:55,760 - __main__ - INFO - ✅ BIOIMAGIN System initialization complete
+2025-05-25 17:59:55,760 - __main__ - INFO - 🌐 Server ready to accept requests
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_180053_303611_1-2305.jfif
+2025-05-25 18:00:53,305 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_180053_303611_1-2305.jfif
+2025-05-25 18:05:15,265 - logging_config - INFO - ✅ Logging system initialized with emoji support
+2025-05-25 18:05:15,271 - __main__ - INFO - ======================================================================
+2025-05-25 18:05:15,271 - __main__ - INFO - 🌱 BIOIMAGIN PROFESSIONAL WOLFFIA ANALYSIS SYSTEM
+2025-05-25 18:05:15,271 - __main__ - INFO -    Production-Grade Bioimage Analysis Platform
+2025-05-25 18:05:15,272 - __main__ - INFO - ======================================================================
+[INFO] __main__: ? All required directories created/verified
+[INFO] __main__: ? Initializing BIOIMAGIN Professional System...
+2025-05-25 18:05:15,276 - professional_integrator - INFO - 🚀 Initializing Professional Wolffia System Integration...
+2025-05-25 18:05:15,276 - advanced_wolffia_analyzer - INFO - 🔬 Advanced Image Processor initialized
+2025-05-25 18:05:15,276 - advanced_wolffia_analyzer - INFO - 🧬 Biological Feature Extractor initialized
+2025-05-25 18:05:15,277 - advanced_wolffia_analyzer - INFO - 📊 Statistical Analyzer initialized
+2025-05-25 18:05:15,277 - image_processor - INFO - 📷 Professional Image Processor initialized
+2025-05-25 18:05:15,277 - image_processor - INFO -    Supported formats: .jpg, .jpeg, .png, .tif, .tiff, .bmp, .jfif, .webp, .jp2
+2025-05-25 18:05:15,277 - segmentation - INFO - 🎨 Advanced Color Segmenter initialized
+2025-05-25 18:05:15,277 - segmentation - INFO - 🔬 Professional Cell Segmentation System initialized
+2025-05-25 18:05:15,278 - segmentation - INFO -    Cell size range: 30-8000 pixels
+2025-05-25 18:05:15,278 - segmentation - INFO -    Quality threshold: 0.6
+2025-05-25 18:05:15,278 - wolffia_analyzer - INFO - 🧬 AdvancedFeatureExtractor initialized
+2025-05-25 18:05:15,278 - wolffia_analyzer - INFO - ✅ All analysis components initialized
+2025-05-25 18:05:15,278 - wolffia_analyzer - INFO - 🔬 Professional Wolffia Analyzer initialized
+2025-05-25 18:05:15,278 - wolffia_analyzer - INFO -    Pixel to micron ratio: 1.0
+2025-05-25 18:05:15,279 - wolffia_analyzer - INFO -    Chlorophyll threshold: 0.6
+2025-05-25 18:05:15,279 - wolffia_analyzer - INFO -    Cell area range: 30-8000 pixels
+2025-05-25 18:05:15,279 - professional_integrator - INFO - ✅ Professional analyzer components initialized
+2025-05-25 18:05:15,281 - database_manager - INFO - ✅ Table created/verified: projects
+2025-05-25 18:05:15,281 - database_manager - INFO - ✅ Table created/verified: experiments
+2025-05-25 18:05:15,281 - database_manager - INFO - ✅ Table created/verified: images
+2025-05-25 18:05:15,282 - database_manager - INFO - ✅ Table created/verified: analyses
+2025-05-25 18:05:15,282 - database_manager - INFO - ✅ Table created/verified: cells
+2025-05-25 18:05:15,282 - database_manager - INFO - ✅ Table created/verified: batch_jobs
+2025-05-25 18:05:15,282 - database_manager - INFO - ✅ Table created/verified: quality_metrics
+2025-05-25 18:05:15,282 - database_manager - INFO - ✅ Table created/verified: ml_models
+2025-05-25 18:05:15,283 - database_manager - INFO - ✅ Table created/verified: system_logs
+2025-05-25 18:05:15,283 - database_manager - INFO - ✅ Table created/verified: user_sessions
+2025-05-25 18:05:15,285 - database_manager - INFO - ✅ Database indexes created
+2025-05-25 18:05:15,286 - database_manager - INFO - ✅ Database initialization complete
+2025-05-25 18:05:15,286 - database_manager - INFO - 🕒 Backup scheduler started
+2025-05-25 18:05:15,287 - database_manager - INFO - 🧹 Cleanup scheduler started
+2025-05-25 18:05:15,287 - database_manager - INFO - 🗄️ Database Manager initialized
+2025-05-25 18:05:15,289 - professional_integrator - INFO - ✅ Database system initialized
+2025-05-25 18:05:15,289 - ml_enhancement - INFO - 🤖 Cell Classification Model initialized
+2025-05-25 18:05:15,290 - ml_enhancement - INFO - 📈 Growth Prediction Model initialized
+2025-05-25 18:05:15,290 - ml_enhancement - INFO - 🔍 Anomaly Detector initialized
+2025-05-25 18:05:15,290 - ml_enhancement - INFO - 🤖 ML-Enhanced Analyzer initialized
+2025-05-25 18:05:15,290 - professional_integrator - INFO - ℹ️ Insufficient data for ML training (need 50+ samples)
+2025-05-25 18:05:15,290 - professional_integrator - INFO - ✅ ML enhancement system initialized
+2025-05-25 18:05:15,291 - batch_processor - INFO - 🚀 Batch Processor initialized: batch_job_20250525_180515
+2025-05-25 18:05:15,291 - professional_integrator - INFO - ✅ Batch processing system initialized
+2025-05-25 18:05:15,291 - professional_integrator - INFO - ✅ Integrated workflows configured
+2025-05-25 18:05:15,291 - professional_integrator - INFO - ✅ Professional Wolffia System fully integrated and ready
+[INFO] __main__: ? Professional system initialized
+[INFO] __main__:    Components: 7
+[INFO] __main__:    Professional mode: True
+2025-05-25 18:05:15,294 - __main__ - INFO -    Workflows available: ['single_analysis', 'batch_analysis', 'ml_enhanced_analysis', 'comprehensive_analysis']
+[INFO] __main__: ? Starting background services...
+[INFO] __main__: ? Started health_monitor
+[INFO] __main__: ? Started backup_scheduler
+[INFO] __main__: ? Started ml_scheduler
+2025-05-25 18:05:15,296 - __main__ - INFO - 📊 SYSTEM STATUS SUMMARY:
+2025-05-25 18:05:15,296 - __main__ - INFO -    Professional System: ✅ Available
+2025-05-25 18:05:15,296 - __main__ - INFO -    Database Integration: ✅ Enabled
+2025-05-25 18:05:15,297 - __main__ - INFO -    ML Enhancement: ✅ Enabled
+2025-05-25 18:05:15,297 - __main__ - INFO -    Batch Processing: ✅ Enabled
+2025-05-25 18:05:15,297 - __main__ - INFO -    System Health: POOR
+2025-05-25 18:05:15,297 - __main__ - INFO - ✅ BIOIMAGIN System initialization complete
+2025-05-25 18:05:15,297 - __main__ - INFO - 🌐 Server ready to accept requests
+[INFO] __main__: ? File saved for analysis: temp_uploads\analysis_20250525_181550_976504_1-2205.jfif
+2025-05-25 18:15:50,978 - ml_enhancement - ERROR - ❌ ML-enhanced single image analysis error: WolffiaAnalyzer.analyze_single_image() got an unexpected keyword argument 'pixel_ratio'
+[INFO] __main__: ? Analysis complete: 0 cells in 0.00s
+[INFO] __main__: ?? Cleaned up temporary file: temp_uploads\analysis_20250525_181550_976504_1-2205.jfif

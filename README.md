@@ -133,7 +133,7 @@ http://localhost:5000
 Automatically selects the best segmentation method based on image characteristics.
 
 #### Watershed
-Ideal for images with overlapping or touching cells. Uses distance transform and local maxima detection.
+Ideal for images with overlapping or touching cells. Uses distance transform and local max detection.
 
 #### Threshold  
 Simple binary thresholding with morphological cleaning. Good for high-contrast images.

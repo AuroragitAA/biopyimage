@@ -55,7 +55,7 @@ class WolffiaAnalyzerApp {
 
     async checkServerHealth() {
         try {
-            const response = await fetch('/health');
+            const response = await fetch('/api/system/status');
             const health = await response.json();
             
             if (health.status === 'healthy') {
@@ -231,14 +231,15 @@ class WolffiaAnalyzerApp {
         await this.analyzeFiles([this.state.currentFiles[0]], false);
     }
 
-    async runBatchAnalysis() {
-        if (this.state.currentFiles.length < 2) {
-            this.showNotification('Please select at least 2 images for batch analysis', 'warning');
-            return;
+        async runBatchAnalysis() {
+        const formData = new FormData();
+        this.state.currentFiles.forEach(file => formData.append("images", file));
+
+        const res = await fetch("/batch", { method: "POST", body: formData });
+        const json = await res.json();
+        // handle results like: json.results, json.qc_report, json.export_info
         }
-        
-        await this.analyzeFiles(this.state.currentFiles, true);
-    }
+
 
     async analyzeFiles(files, isBatch = false) {
         if (this.state.isAnalyzing) {
@@ -294,7 +295,7 @@ class WolffiaAnalyzerApp {
                 formData.append(key, value.toString());
             });
 
-            const response = await fetch('/analyze', {
+            const response = await fetch('/api/analyze', {
                 method: 'POST',
                 body: formData
             });

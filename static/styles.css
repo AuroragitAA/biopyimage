@@ -461,9 +461,32 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             transform: translateX(400px);
             transition: transform 0.3s ease;
-            z-index: 500;
         }
 
         .notification.show {
             transform: translateX(0);
         }
+
+
+
+        .info-panel {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 10px;
+    color: #e4e4e7;
+}
+
+.export-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.export-list li {
+    margin-bottom: 10px;
+}
+
+.export-list a {
+    color: #22c55e;
+    text-decoration: underline;
+}

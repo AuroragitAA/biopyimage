@@ -141,8 +141,8 @@
     # Watershed segmentation for separating touching cells
     distance = ndimage.distance_transform_edt(combined_binary)
 
-    # Find local maxima as seeds
-    local_maxima = feature.peak_local_max(
+    # Find local max as seeds
+    local_max = feature.peak_local_max(
     distance, 
     min_distance=8, 
     threshold_abs=3,
@@ -151,8 +151,8 @@
 
     # Create markers
     markers = np.zeros(distance.shape, dtype=bool)
-    if local_maxima.size > 0:
-    for r, c in local_maxima:
+    if local_max.size > 0:
+    for r, c in local_max:
     markers[r, c] = True
     markers, _ = ndimage.label(markers)
 

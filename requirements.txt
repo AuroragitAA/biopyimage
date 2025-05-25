@@ -1,8 +1,103 @@
+# Professional Wolffia Bioimage Analysis System - Requirements
+# Enhanced version with advanced scientific computing and machine learning capabilities
+
+# Web Framework
 Flask==3.0.3
-opencv-python-headless==4.9.0.80
-scikit-image==0.23.2
+Werkzeug==2.3.7
+
+# Core Scientific Computing
 numpy==1.26.4
 scipy==1.13.0
+pandas==2.1.4
+
+# Image Processing and Computer Vision
+opencv-python-headless==4.9.0.80
+scikit-image==0.23.2
+Pillow==10.2.0
+
+# Machine Learning and Data Analysis
+scikit-learn==1.4.0
+xgboost==2.0.3
+
+# Visualization and Plotting
+matplotlib==3.8.2
+seaborn==0.13.1
+
+# Advanced Mathematical Operations
+numba==0.59.0
+sympy==1.12
+
+# Data Export and File Handling
+openpyxl==3.1.2
+xlsxwriter==3.2.0
+h5py==3.10.0
+tables==3.9.2
+
+# Statistical Analysis
+statsmodels==0.14.1
+
+# Parallel Processing and Performance
+joblib==1.3.2
+tqdm==4.66.1
+
+# Development and Testing
+pytest==7.4.4
+pytest-cov==4.1.0
+black==23.12.1
+isort==5.13.2
+flake8==7.0.0
+
+# Optional Advanced Features (install if needed)
+# Wavelet processing
+PyWavelets==1.5.0
+
+# Advanced optimization
+cvxpy==1.4.2
+
+# Deep learning (optional, for future ML enhancements)
+# torch==2.1.2
+# torchvision==0.16.2
+
+# Image format support
+imageio==2.33.1
+imageio[ffmpeg]==2.33.1
+
+# Memory profiling and optimization
+memory-profiler==0.61.0
+psutil==5.9.7
+
+# Configuration and logging
+pyyaml==6.0.1
+colorlog==6.8.0
+
+# Quality assurance
+mypy==1.8.0
+bandit==1.7.6
+
+# Documentation (optional)
+sphinx==7.2.6
+sphinx-rtd-theme==2.0.0
+
+# Production deployment (optional)
+gunicorn==21.2.0
+supervisor==4.2.5
+
+# Development utilities
+ipython==8.18.1
+jupyter==1.0.0
+
+# Version compatibility
 setuptools==70.0.0
-Werkzeug==2.3.7
-matplotlib==3.7.2
+wheel==0.42.0
+
+# Security
+cryptography==41.0.8
+
+# Environment management
+python-dotenv==1.0.0
+
+# API documentation (optional)
+flask-restx==1.3.0
+
+# Database support (for future features)
+SQLAlchemy==2.0.25

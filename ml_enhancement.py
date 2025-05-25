@@ -952,6 +952,75 @@ class MLEnhancedAnalyzer:
             return ["ML analysis complete. Monitor population trends."]
 
 
+            # Add these methods to the MLEnhancedAnalyzer class in ml_enhancement.py
+
+    def analyze_single_image(self, image_path: str, **kwargs) -> Dict:
+        """
+        Analyze a single image using the base analyzer with ML enhancements.
+        This method ensures compatibility with the standard analyzer interface.
+        """
+        try:
+            # Use the base analyzer's method
+            if hasattr(self.base_analyzer, 'analyze_single_image'):
+                base_result = self.base_analyzer.analyze_single_image(image_path, **kwargs)
+            elif hasattr(self.base_analyzer, 'analyze_image_professional'):
+                base_result = self.base_analyzer.analyze_image_professional(image_path, **kwargs)
+            else:
+                # Fallback to generic analyze method if available
+                base_result = self.base_analyzer.analyze_image(image_path)
+            
+            if not base_result or not base_result.get('success', False):
+                return base_result
+            
+            # Add ML enhancements if models are trained
+            if self.models_trained and 'cell_data' in base_result:
+                ml_enhancements = self._apply_ml_enhancements(base_result['cell_data'])
+                base_result['ml_enhancements'] = ml_enhancements
+            
+            # Store data for future training
+            self._store_training_data(base_result)
+            
+            return base_result
+            
+        except Exception as e:
+            logger.error(f"❌ ML-enhanced single image analysis error: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+    
+    def analyze_image_professional(self, image_path: str, **kwargs) -> Dict:
+        """
+        Professional analysis with ML enhancements.
+        Delegates to analyze_with_ml_enhancement for consistency.
+        """
+        return self.analyze_with_ml_enhancement(image_path, **kwargs)
+    
+    def batch_analyze_images(self, image_paths: List[str], progress_callback=None, **kwargs) -> List[Dict]:
+        """
+        Batch analyze multiple images with ML enhancements.
+        """
+        try:
+            results = []
+            total = len(image_paths)
+            
+            for i, image_path in enumerate(image_paths):
+                # Analyze with ML enhancements
+                result = self.analyze_single_image(image_path, **kwargs)
+                results.append(result)
+                
+                # Progress callback
+                if progress_callback:
+                    progress_callback(i + 1, total, result)
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ Batch ML analysis error: {str(e)}")
+            return []
+
+
 # Example usage and testing
 if __name__ == "__main__":
     print("🤖 Testing ML Enhancement Module...")

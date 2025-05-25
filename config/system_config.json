@@ -1,0 +1,13 @@
+{
+  "analysis_config": {
+    "default_pixel_to_micron": 1.0,
+    "default_chlorophyll_threshold": 0.6,
+    "min_cell_area": 30,
+    "max_cell_area": 8000
+  },
+  "feature_flags": {
+    "ml_enhancements": true,
+    "batch_processing": true,
+    "database_integration": true
+  }
+}

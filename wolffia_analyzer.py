@@ -914,6 +914,55 @@ class WolffiaAnalyzer:
         logger.info("🔄 Analysis history cleared")
 
 
+
+        
+# Add this method to your WolffiaAnalyzer class in wolffia_analyzer.py
+
+def integrate_with_professional_system(self, professional_system):
+    """Integrate this analyzer with the professional system"""
+    try:
+        self.professional_system = professional_system
+        self.professional_mode = True
+        
+        # Use professional components if available
+        if hasattr(professional_system, 'components'):
+            components = professional_system.components
+            
+            # Upgrade image processor if available
+            if 'image_processor' in components:
+                self.image_processor = components['image_processor']
+                logger.info("✅ Upgraded to professional image processor")
+            
+            # Upgrade segmentation if available
+            if 'segmentation' in components:
+                self.segmentation = components['segmentation']
+                logger.info("✅ Upgraded to professional segmentation")
+            
+            # Connect to database if available
+            if 'database' in components:
+                self.database = components['database']
+                logger.info("✅ Connected to professional database")
+        
+        logger.info("🔗 Analyzer integrated with professional system")
+        
+    except Exception as e:
+        logger.error(f"❌ Professional integration failed: {str(e)}")
+
+def analyze_with_professional_features(self, image_path, **kwargs):
+    """Enhanced analysis using professional features when available"""
+    try:
+        # Use professional system if integrated
+        if hasattr(self, 'professional_system') and self.professional_system:
+            return self.professional_system.analyze_image(image_path, **kwargs)
+        else:
+            # Fallback to standard analysis
+            return self.analyze_single_image(image_path, **kwargs)
+            
+    except Exception as e:
+        logger.error(f"❌ Professional analysis failed: {str(e)}")
+        # Fallback to basic analysis
+        return self.analyze_single_image(image_path, **kwargs)
+
 # Testing and validation
 if __name__ == "__main__":
     print("🧪 Testing Professional Wolffia Analyzer...")
