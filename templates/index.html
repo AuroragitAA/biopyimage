@@ -6,15 +6,11 @@
     <title>BIOIMAGIN - Professional Wolffia Analysis System</title>
     
     <!-- Bootstrap CSS -->
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     
     <!-- Custom CSS -->
-    <style>
-
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
     <div class="container">
@@ -58,21 +54,53 @@
                             <input type="number" id="pixelRatio" value="1.0" step="0.1" min="0.1" max="10">
                         </div>
                         <div class="option-group">
+                            <label for="analysisType">Analysis Type</label>
+                            <select id="analysisType">
+                                <option value="standard">🎯 Standard Analysis</option>
+                                <option value="comprehensive">🚀 Comprehensive Analysis</option>
+                                <option value="temporal">📈 Temporal Series</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
                             <label for="analysisMethod">Analysis Method</label>
                             <select id="analysisMethod">
                                 <option value="auto">🎯 Auto (Recommended)</option>
                                 <option value="wolffia_specific">🔬 Wolffia Specific</option>
-                                <option value="adaptive">🤖 Adaptive ML</option>
+                                <option value="professional">🚀 Professional Pipeline</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label for="wavelengthAnalysis">Wavelength Analysis</label>
+                            <select id="wavelengthAnalysis">
+                                <option value="enabled">✅ Enabled</option>
+                                <option value="disabled">❌ Disabled</option>
                             </select>
                         </div>
                     </div>
+                    
+                    <!-- Temporal Analysis Options -->
+                    <div id="timestampGroup" style="display: none; margin-top: 15px;">
+                        <div class="option-group">
+                            <label for="imageTimestamp">Image Timestamp (for temporal tracking)</label>
+                            <input type="datetime-local" id="imageTimestamp">
+                        </div>
+                    </div>
+                    
                     <div class="checkbox-group">
                         <input type="checkbox" id="debugMode" checked>
                         <label for="debugMode">Enable debug visualizations</label>
                     </div>
                     <div class="checkbox-group">
-                        <input type="checkbox" id="autoExport">
+                        <input type="checkbox" id="autoExport" checked>
                         <label for="autoExport">Auto-export results</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="biomassCalculation" checked>
+                        <label for="biomassCalculation">Calculate biomass estimation</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cellTracking">
+                        <label for="cellTracking">Enable cell tracking (multi-image)</label>
                     </div>
                 </div>
 
@@ -121,12 +149,17 @@
                         </div>
                     </div>
 
-                    <!-- Visualization Tabs -->
+                    <!-- Enhanced Visualization Tabs -->
                     <div class="visualization-tabs">
                         <button class="tab-button active" data-tab="original">📷 Original</button>
                         <button class="tab-button" data-tab="segmentation">🎯 Segmentation</button>
                         <button class="tab-button" data-tab="contours">📐 Contours</button>
                         <button class="tab-button" data-tab="numbered">🔢 Numbered</button>
+                        <button class="tab-button" data-tab="biomass">🌱 Biomass</button>
+                        <button class="tab-button" data-tab="spectral">🌈 Spectral</button>
+                        <button class="tab-button" data-tab="similarity">🔗 Similarity</button>
+                        <button class="tab-button" data-tab="temporal">📈 Temporal</button>
+                        <button class="tab-button" data-tab="histograms">📊 Histograms</button>
                     </div>
 
                     <!-- Tab Contents -->
@@ -158,6 +191,149 @@
                         </div>
                     </div>
 
+                    <!-- Biomass Analysis Tab -->
+                    <div class="tab-content" id="tab-biomass">
+                        <div class="visualization-container">
+                            <div id="biomassCharts">
+                                <div class="chart-container">
+                                    <h4>🌱 Biomass Analysis</h4>
+                                    <div id="biomassChart"></div>
+                                    <div id="biomassValues"></div>
+                                </div>
+                            </div>
+                            <p>Biomass estimation charts will appear here</p>
+                        </div>
+                    </div>
+
+                    <!-- Spectral Analysis Tab -->
+                    <div class="tab-content" id="tab-spectral">
+                        <div class="visualization-container">
+                            <div id="spectralCharts">
+                                <div class="chart-container">
+                                    <h4>🌈 Spectral Analysis</h4>
+                                    <div id="spectralChart"></div>
+                                    <div id="wavelengthDistribution"></div>
+                                </div>
+                            </div>
+                            <p>Spectral analysis and wavelength data will appear here</p>
+                        </div>
+                    </div>
+
+                    <!-- Cell Similarity Tab -->
+                    <div class="tab-content" id="tab-similarity">
+                        <div class="visualization-container">
+                            <div id="similarityCharts">
+                                <div class="chart-container">
+                                    <h4>🔗 Cell Similarity Analysis</h4>
+                                    <div id="similarityMatrix"></div>
+                                    <div id="similarCellGroups"></div>
+                                </div>
+                            </div>
+                            <p>Cell similarity analysis will appear here</p>
+                        </div>
+                    </div>
+
+                    <!-- Temporal Tracking Tab -->
+                    <div class="tab-content" id="tab-temporal">
+                        <div class="visualization-container">
+                            <div id="temporalCharts">
+                                <div class="chart-container">
+                                    <h4>📈 Temporal Analysis & Cell Tracking</h4>
+                                    <div id="growthChart"></div>
+                                    <div id="trackedCells"></div>
+                                    <div id="temporalHighlights"></div>
+                                </div>
+                            </div>
+                            <p>Temporal tracking and growth analysis will appear here</p>
+                        </div>
+                    </div>
+
+                    <!-- Histograms Tab -->
+                    <div class="tab-content" id="tab-histograms">
+                        <div class="visualization-container">
+                            <div id="histogramContainer">
+                                <div class="chart-container">
+                                    <h4>📊 Distribution Analysis</h4>
+                                    <div id="sizeHistogram"></div>
+                                    <div id="colorHistogram"></div>
+                                    <div id="healthHistogram"></div>
+                                    <div id="wavelengthHistogram"></div>
+                                </div>
+                            </div>
+                            <p>Statistical distributions will appear here</p>
+                        </div>
+                    </div>
+
+                    <!-- Comprehensive Results Section -->
+                    <div id="comprehensiveResults" style="display: none; margin-top: 30px;">
+                        <h3>🔬 Advanced Analysis Results</h3>
+                        
+                        <!-- Live Analysis Stats -->
+                        <div class="live-stats-container" id="liveStatsContainer">
+                            <div class="stat-card">
+                                <h5>📊 Real-time Statistics</h5>
+                                <div id="liveStats"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Biomass Results -->
+                        <div class="analysis-section" id="biomassResults">
+                            <h4>🌱 Biomass Estimation</h4>
+                            <div class="results-grid">
+                                <div class="result-card">
+                                    <h6>Fresh Biomass</h6>
+                                    <div id="freshBiomass" class="metric-value">--</div>
+                                </div>
+                                <div class="result-card">
+                                    <h6>Dry Biomass</h6>
+                                    <div id="dryBiomass" class="metric-value">--</div>
+                                </div>
+                                <div class="result-card">
+                                    <h6>Confidence Interval</h6>
+                                    <div id="biomassConfidence" class="metric-value">--</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Spectral Results -->
+                        <div class="analysis-section" id="spectralResults">
+                            <h4>🌈 Spectral Analysis</h4>
+                            <div class="results-grid">
+                                <div class="result-card">
+                                    <h6>Dominant Wavelength</h6>
+                                    <div id="dominantWavelength" class="metric-value">--</div>
+                                </div>
+                                <div class="result-card">
+                                    <h6>Green Intensity</h6>
+                                    <div id="greenIntensity" class="metric-value">--</div>
+                                </div>
+                                <div class="result-card">
+                                    <h6>Chlorophyll Index</h6>
+                                    <div id="chlorophyllIndex" class="metric-value">--</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Cell Tracking Results -->
+                        <div class="analysis-section" id="trackingResults">
+                            <h4>📈 Cell Tracking</h4>
+                            <div class="results-grid">
+                                <div class="result-card">
+                                    <h6>Tracked Cells</h6>
+                                    <div id="trackedCellCount" class="metric-value">--</div>
+                                </div>
+                                <div class="result-card">
+                                    <h6>Growth Rate</h6>
+                                    <div id="averageGrowthRate" class="metric-value">--</div>
+                                </div>
+                                <div class="result-card">
+                                    <h6>Cell Divisions</h6>
+                                    <div id="cellDivisions" class="metric-value">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Cell Data Table -->
                     <div style="margin-top: 20px;">
                         <h3 style="margin-bottom: 15px; color: #2c3e50;">📋 Cell Data</h3>
@@ -171,23 +347,35 @@
                         <button class="btn btn-success" onclick="exportResults('csv')">📄 Export CSV</button>
                         <button class="btn btn-success" onclick="exportResults('excel')">📊 Export Excel</button>
                         <button class="btn btn-success" onclick="exportResults('json')">📋 Export JSON</button>
+                        <button class="btn btn-success" onclick="exportComprehensiveResults()">🚀 Export Complete Analysis</button>
+                        <button class="btn btn-info" onclick="downloadAllVisualizations()">🖼️ Download All Images</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Batch Analysis Section -->
+        <!-- Enhanced Batch Analysis Section -->
         <div class="batch-section">
             <h2 class="panel-title">
-                📦 Batch Analysis
+                📦 Batch Analysis & Temporal Tracking
             </h2>
             
             <div class="batch-upload-area" id="batchUploadArea">
-                <p>📁 Drop multiple images here for batch processing</p>
+                <p>📁 Drop multiple images here for batch processing and temporal analysis</p>
                 <input type="file" id="batchInput" multiple accept="image/*" style="display: none;">
                 <button type="button" class="btn btn-primary" onclick="document.getElementById('batchInput').click()">
                     📂 Select Multiple Images
                 </button>
+                <div class="batch-options" style="margin-top: 15px;">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enableTemporalTracking" checked>
+                        <label for="enableTemporalTracking">Enable temporal cell tracking</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="highlightChanges" checked>
+                        <label for="highlightChanges">Highlight cell changes between timepoints</label>
+                    </div>
+                </div>
             </div>
 
             <div class="batch-file-list" id="batchFileList" style="display: none;">
@@ -210,6 +398,25 @@
                 <div class="progress-text" id="batchProgressText">Ready for batch analysis...</div>
             </div>
         </div>
+
+        <!-- Live Analysis Dashboard -->
+        <div class="live-dashboard" id="liveDashboard" style="display: none;">
+            <h2 class="panel-title">🔄 Live Analysis Dashboard</h2>
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <h4>📊 Current Analysis</h4>
+                    <div id="currentAnalysisInfo"></div>
+                </div>
+                <div class="dashboard-card">
+                    <h4>📈 Real-time Metrics</h4>
+                    <div id="realtimeMetrics"></div>
+                </div>
+                <div class="dashboard-card">
+                    <h4>🎯 Quality Indicators</h4>
+                    <div id="qualityIndicators"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Connection Status -->
@@ -220,10 +427,40 @@
     <!-- Notification Container -->
     <div id="notificationContainer"></div>
 
+    <!-- Enhanced Modals for Advanced Features -->
+    <div class="modal fade" id="biomassModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">🌱 Detailed Biomass Analysis</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body" id="biomassModalBody">
+                    <!-- Detailed biomass content -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="spectralModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">🌈 Detailed Spectral Analysis</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body" id="spectralModalBody">
+                    <!-- Detailed spectral content -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
 
 </body>

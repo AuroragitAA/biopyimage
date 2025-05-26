@@ -1,9 +1,13 @@
 """
 Enhanced Wolffia-Specific Segmentation for Real Petri Dish Analysis
 Optimized for small, round green specimens against light backgrounds
+Production-ready with comprehensive error handling
 """
 
 import logging
+import warnings
+from datetime import datetime
+from pathlib import Path
 
 import cv2
 import matplotlib.pyplot as plt
@@ -12,7 +16,15 @@ from scipy import ndimage
 from skimage import filters, measure, morphology, segmentation
 from skimage.feature import peak_local_max
 
+from analysis_config import AnalysisConfig
+
+# Import safe logging
+from logging_config import setup_production_logging
+
 logger = logging.getLogger(__name__)
+
+warnings.filterwarnings('ignore')
+
 
 class WolffiaSpecificSegmentation:
     """Specialized segmentation tuned for Wolffia arrhiza in petri dishes"""
@@ -23,9 +35,11 @@ class WolffiaSpecificSegmentation:
         self.debug_mode = debug_mode
         self.debug_images = {}
         
-    def segment_wolffia_cells(self, image_rgb, output_debug_path=None):
+        logger.info(f"[INIT] Wolffia segmentation initialized: area range {min_area}-{max_area}")
+        
+    def segment(self, image_rgb, output_debug_path=None):
         """
-        Segment Wolffia cells with diagnostic visualization
+        Main segmentation method with diagnostic visualization
         
         Args:
             image_rgb: RGB image array
@@ -36,7 +50,16 @@ class WolffiaSpecificSegmentation:
             debug_info: Dictionary with intermediate results
         """
         try:
-            logger.info("🔬 Starting Wolffia-specific segmentation")
+            logger.info("[SEGMENT] Starting Wolffia-specific segmentation")
+            
+            # Input validation
+            if image_rgb is None:
+                logger.error("[ERROR] Input image is None")
+                return np.zeros((100, 100), dtype=np.int32), {'error': 'Input image is None'}
+            
+            if len(image_rgb.shape) != 3:
+                logger.error(f"[ERROR] Invalid image shape: {image_rgb.shape}")
+                return np.zeros((100, 100), dtype=np.int32), {'error': 'Invalid image shape'}
             
             # Step 1: Convert and enhance for green organisms
             lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
@@ -71,7 +94,7 @@ class WolffiaSpecificSegmentation:
                 self._save_debug_visualizations(image_rgb, filtered_labels, output_debug_path)
             
             cell_count = np.max(filtered_labels)
-            logger.info(f"✅ Wolffia segmentation complete: {cell_count} cells detected")
+            logger.info(f"[SUCCESS] Wolffia segmentation complete: {cell_count} cells detected")
             
             return filtered_labels, {
                 'cell_count': cell_count,
@@ -79,12 +102,14 @@ class WolffiaSpecificSegmentation:
                 'processing_steps': [
                     'green_extraction', 'preprocessing', 'thresholding', 
                     'morphological_cleanup', 'watershed', 'quality_filtering'
-                ]
+                ],
+                'success': True
             }
             
         except Exception as e:
-            logger.error(f"❌ Wolffia segmentation error: {str(e)}")
-            return np.zeros(image_rgb.shape[:2], dtype=np.int32), {'error': str(e)}
+            logger.error(f"[ERROR] Wolffia segmentation error: {str(e)}")
+            fallback_shape = (100, 100) if image_rgb is None else image_rgb.shape[:2]
+            return np.zeros(fallback_shape, dtype=np.int32), {'error': str(e), 'success': False}
     
     def _extract_wolffia_green(self, rgb, hsv, lab):
         """Extract green channel optimized for Wolffia specimens"""
@@ -119,7 +144,7 @@ class WolffiaSpecificSegmentation:
             return combined_green
             
         except Exception as e:
-            logger.error(f"❌ Green extraction error: {str(e)}")
+            logger.error(f"[ERROR] Green extraction error: {str(e)}")
             return rgb[:,:,1] / 255.0
     
     def _preprocess_for_wolffia(self, green_enhanced):
@@ -142,7 +167,7 @@ class WolffiaSpecificSegmentation:
             return sharpened
             
         except Exception as e:
-            logger.error(f"❌ Preprocessing error: {str(e)}")
+            logger.error(f"[ERROR] Preprocessing error: {str(e)}")
             return green_enhanced
     
     def _adaptive_threshold_wolffia(self, preprocessed):
@@ -154,16 +179,28 @@ class WolffiaSpecificSegmentation:
             # Multiple thresholding approaches
             
             # Otsu thresholding
-            otsu_thresh = filters.threshold_otsu(preprocessed)
-            binary_otsu = preprocessed > otsu_thresh
+            try:
+                otsu_thresh = filters.threshold_otsu(preprocessed)
+                binary_otsu = preprocessed > otsu_thresh
+            except Exception as e:
+                logger.warning(f"[WARN] Otsu thresholding failed: {str(e)}")
+                binary_otsu = preprocessed > np.mean(preprocessed)
             
             # Local adaptive thresholding
-            local_thresh = filters.threshold_local(img_uint8, block_size=25, offset=0.02)
-            binary_local = img_uint8 > local_thresh
+            try:
+                local_thresh = filters.threshold_local(img_uint8, block_size=25, offset=0.02)
+                binary_local = img_uint8 > local_thresh
+            except Exception as e:
+                logger.warning(f"[WARN] Local thresholding failed: {str(e)}")
+                binary_local = binary_otsu
             
             # Percentile-based thresholding (good for varying illumination)
-            percentile_thresh = np.percentile(preprocessed[preprocessed > 0], 75)
-            binary_percentile = preprocessed > percentile_thresh
+            try:
+                percentile_thresh = np.percentile(preprocessed[preprocessed > 0], 75)
+                binary_percentile = preprocessed > percentile_thresh
+            except Exception as e:
+                logger.warning(f"[WARN] Percentile thresholding failed: {str(e)}")
+                binary_percentile = binary_otsu
             
             # Combine thresholds with voting
             vote_sum = binary_otsu.astype(int) + binary_local.astype(int) + binary_percentile.astype(int)
@@ -172,7 +209,7 @@ class WolffiaSpecificSegmentation:
             return binary_combined
             
         except Exception as e:
-            logger.error(f"❌ Thresholding error: {str(e)}")
+            logger.error(f"[ERROR] Thresholding error: {str(e)}")
             return preprocessed > 0.5
     
     def _morphological_cleanup_wolffia(self, binary_mask):
@@ -195,7 +232,7 @@ class WolffiaSpecificSegmentation:
             return closed
             
         except Exception as e:
-            logger.error(f"❌ Morphological cleanup error: {str(e)}")
+            logger.error(f"[ERROR] Morphological cleanup error: {str(e)}")
             return binary_mask
     
     def _watershed_segment_wolffia(self, binary_mask, intensity_image):
@@ -215,7 +252,8 @@ class WolffiaSpecificSegmentation:
                     threshold_abs=0.3 * distance.max(),
                     indices=False
                 )
-            except:
+            except Exception as e:
+                logger.warning(f"[WARN] Peak detection failed: {str(e)}")
                 # Fallback if peak_local_max not available
                 from scipy.ndimage import maximum_filter
                 maxima_mask = maximum_filter(distance, size=min_distance*2+1) == distance
@@ -225,12 +263,17 @@ class WolffiaSpecificSegmentation:
             markers = measure.label(local_maxima)
             
             # Watershed segmentation
-            labels = segmentation.watershed(-distance, markers, mask=binary_mask)
+            try:
+                labels = segmentation.watershed(-distance, markers, mask=binary_mask)
+            except Exception as e:
+                logger.warning(f"[WARN] Watershed failed: {str(e)}")
+                # Fallback to simple labeling
+                labels = measure.label(binary_mask)
             
             return labels
             
         except Exception as e:
-            logger.error(f"❌ Watershed error: {str(e)}")
+            logger.error(f"[ERROR] Watershed error: {str(e)}")
             return measure.label(binary_mask)
     
     def _quality_filter_wolffia(self, labels, image_shape):
@@ -246,39 +289,46 @@ class WolffiaSpecificSegmentation:
             border_width = min(image_shape[0], image_shape[1]) * 0.05
             
             for region in regions:
-                # Size filtering
-                if not (self.min_area <= region.area <= self.max_area):
+                try:
+                    # Size filtering
+                    if not (self.min_area <= region.area <= self.max_area):
+                        continue
+                    
+                    # Shape filtering for Wolffia (roughly circular)
+                    if region.eccentricity > 0.9:  # Too elongated
+                        continue
+                    
+                    if region.solidity < 0.6:  # Too irregular
+                        continue
+                    
+                    # Border filtering
+                    min_row, min_col, max_row, max_col = region.bbox
+                    if (min_row < border_width or min_col < border_width or 
+                        max_row > image_shape[0] - border_width or 
+                        max_col > image_shape[1] - border_width):
+                        continue
+                    
+                    # Aspect ratio check (Wolffia should be roughly round)
+                    if region.major_axis_length / (region.minor_axis_length + 1e-8) > 2.5:
+                        continue
+                    
+                    valid_labels.append(region.label)
+                    
+                except Exception as e:
+                    logger.warning(f"[WARN] Quality filter error for region {region.label}: {str(e)}")
                     continue
-                
-                # Shape filtering for Wolffia (roughly circular)
-                if region.eccentricity > 0.9:  # Too elongated
-                    continue
-                
-                if region.solidity < 0.6:  # Too irregular
-                    continue
-                
-                # Border filtering
-                min_row, min_col, max_row, max_col = region.bbox
-                if (min_row < border_width or min_col < border_width or 
-                    max_row > image_shape[0] - border_width or 
-                    max_col > image_shape[1] - border_width):
-                    continue
-                
-                # Aspect ratio check (Wolffia should be roughly round)
-                if region.major_axis_length / (region.minor_axis_length + 1e-8) > 2.5:
-                    continue
-                
-                valid_labels.append(region.label)
             
             # Create filtered label image
             filtered_labels = np.zeros_like(labels)
             for i, old_label in enumerate(valid_labels, 1):
                 filtered_labels[labels == old_label] = i
             
+            logger.info(f"[FILTER] Quality filtering: {len(valid_labels)} cells passed")
+            
             return filtered_labels
             
         except Exception as e:
-            logger.error(f"❌ Quality filtering error: {str(e)}")
+            logger.error(f"[ERROR] Quality filtering error: {str(e)}")
             return labels
     
     def _save_debug_visualizations(self, original_image, labels, output_path):
@@ -287,6 +337,7 @@ class WolffiaSpecificSegmentation:
             if not self.debug_mode and not output_path:
                 return
             
+            # Create figure with subplots
             fig, axes = plt.subplots(3, 3, figsize=(15, 15))
             fig.suptitle('Wolffia Segmentation Debug Analysis', fontsize=16)
             
@@ -332,13 +383,14 @@ class WolffiaSpecificSegmentation:
                 colored_labels = np.zeros_like(original_image)
                 unique_labels = np.unique(labels)[1:]  # Skip background
                 
-                colors = plt.cm.Set3(np.linspace(0, 1, len(unique_labels)))
-                for i, label_val in enumerate(unique_labels):
-                    mask = labels == label_val
-                    colored_labels[mask] = colors[i][:3] * 255
-                
-                overlay = cv2.addWeighted(original_image, 0.7, 
-                                        colored_labels.astype(np.uint8), 0.3, 0)
+                if len(unique_labels) > 0:
+                    colors = plt.cm.Set3(np.linspace(0, 1, len(unique_labels)))
+                    for i, label_val in enumerate(unique_labels):
+                        mask = labels == label_val
+                        colored_labels[mask] = colors[i][:3] * 255
+                    
+                    overlay = cv2.addWeighted(original_image, 0.7, 
+                                            colored_labels.astype(np.uint8), 0.3, 0)
             
             axes[2,0].imshow(overlay)
             axes[2,0].set_title(f'Final Result ({np.max(labels)} cells)')
@@ -348,36 +400,48 @@ class WolffiaSpecificSegmentation:
             if np.max(labels) > 0:
                 regions = measure.regionprops(labels)
                 areas = [r.area for r in regions]
-                axes[2,1].hist(areas, bins=20, edgecolor='black')
+                if areas:
+                    axes[2,1].hist(areas, bins=min(20, len(areas)), edgecolor='black')
+                    axes[2,1].set_title('Cell Size Distribution')
+                    axes[2,1].set_xlabel('Area (pixels)')
+                    axes[2,1].set_ylabel('Count')
+                else:
+                    axes[2,1].text(0.5, 0.5, 'No cells detected', ha='center', va='center', transform=axes[2,1].transAxes)
+                    axes[2,1].set_title('Cell Size Distribution')
+            else:
+                axes[2,1].text(0.5, 0.5, 'No cells detected', ha='center', va='center', transform=axes[2,1].transAxes)
                 axes[2,1].set_title('Cell Size Distribution')
-                axes[2,1].set_xlabel('Area (pixels)')
-                axes[2,1].set_ylabel('Count')
             
             # Detection overlay with numbers
             axes[2,2].imshow(original_image)
             if np.max(labels) > 0:
                 regions = measure.regionprops(labels)
-                for region in regions:
+                for region in regions[:20]:  # Limit to first 20 for clarity
                     y, x = region.centroid
                     axes[2,2].plot(x, y, 'r+', markersize=8, markeredgewidth=2)
                     axes[2,2].text(x+5, y-5, str(region.label), 
                                   color='red', fontsize=8, fontweight='bold')
-            axes[2,2].set_title('Detected Cells with IDs')
+            axes[2,2].set_title(f'Detected Cells with IDs (max 20 shown)')
             axes[2,2].axis('off')
             
             plt.tight_layout()
             
+            # Save if output path provided
             if output_path:
                 plt.savefig(output_path, dpi=300, bbox_inches='tight')
-                logger.info(f"📊 Debug visualization saved to: {output_path}")
+                logger.info(f"[VIZ] Debug visualization saved to: {output_path}")
             
+            # Show if debug mode
             if self.debug_mode:
                 plt.show()
             else:
                 plt.close()
                 
         except Exception as e:
-            logger.error(f"❌ Debug visualization error: {str(e)}")
+            logger.error(f"[ERROR] Debug visualization error: {str(e)}")
+            if 'fig' in locals():
+                plt.close(fig)
+
 
 def run_pipeline(image_path_or_array, debug_mode=True, output_debug_path=None):
     """
@@ -385,17 +449,21 @@ def run_pipeline(image_path_or_array, debug_mode=True, output_debug_path=None):
     Compatible with existing run_pipeline calls
     """
     try:
+        logger.info(f"[PIPELINE] Starting segmentation pipeline")
+        
         # Handle both file paths and arrays
         if isinstance(image_path_or_array, str):
             image = cv2.imread(image_path_or_array)
             if image is None:
                 raise ValueError(f"Could not load image: {image_path_or_array}")
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            logger.info(f"[PIPELINE] Loaded image from file: {image.shape}")
         else:
             image = image_path_or_array
             # Ensure proper format
             if len(image.shape) != 3 or image.shape[2] != 3:
                 raise ValueError(f"Invalid image shape: {image.shape}")
+            logger.info(f"[PIPELINE] Using provided image array: {image.shape}")
         
         # Initialize segmenter
         segmenter = WolffiaSpecificSegmentation(
@@ -405,11 +473,16 @@ def run_pipeline(image_path_or_array, debug_mode=True, output_debug_path=None):
         )
         
         # Run segmentation
-        labels, debug_info = segmenter.segment_wolffia_cells(image, output_debug_path)
+        labels, debug_info = segmenter.segment(image, output_debug_path)
         
         # Extract cell measurements (compatible with existing code)
         gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY) if len(image.shape) == 3 else image
-        regions = measure.regionprops(labels, intensity_image=gray_image)
+        
+        try:
+            regions = measure.regionprops(labels, intensity_image=gray_image)
+        except Exception as e:
+            logger.error(f"[ERROR] Region props failed: {str(e)}")
+            regions = []
         
         results = {
             "cell_id": [],
@@ -420,19 +493,27 @@ def run_pipeline(image_path_or_array, debug_mode=True, output_debug_path=None):
         }
         
         for region in regions:
-            results["cell_id"].append(region.label)
-            results["cell_area"].append(region.area)
-            results["int_mem_mean"].append(region.mean_intensity)
-            results["int_mean"].append(region.mean_intensity)
-            results["cell_edge"].append(region.perimeter)
+            try:
+                results["cell_id"].append(region.label)
+                results["cell_area"].append(region.area)
+                results["int_mem_mean"].append(region.mean_intensity)
+                results["int_mean"].append(region.mean_intensity)
+                results["cell_edge"].append(region.perimeter)
+            except Exception as e:
+                logger.warning(f"[WARN] Region measurement failed for label {region.label}: {str(e)}")
+                continue
         
-        logger.info(f"✅ Segmentation pipeline complete: {len(results['cell_id'])} cells")
+        logger.info(f"[SUCCESS] Segmentation pipeline complete: {len(results['cell_id'])} cells")
         return labels, results
         
     except Exception as e:
-        logger.error(f"❌ Pipeline error: {str(e)}")
+        logger.error(f"[ERROR] Pipeline error: {str(e)}")
         # Return properly sized empty results to prevent crashes
-        default_shape = (400, 400) if isinstance(image_path_or_array, str) else image_path_or_array.shape[:2]
+        if isinstance(image_path_or_array, str):
+            default_shape = (400, 400)
+        else:
+            default_shape = image_path_or_array.shape[:2] if hasattr(image_path_or_array, 'shape') else (400, 400)
+        
         empty_labels = np.zeros(default_shape, dtype=np.int32)
         empty_results = {
             "cell_id": [],
@@ -442,10 +523,82 @@ def run_pipeline(image_path_or_array, debug_mode=True, output_debug_path=None):
             "cell_edge": []
         }
         return empty_labels, empty_results
+
+
+# Additional helper functions for enhanced functionality
+class EnhancedSegmentation(WolffiaSpecificSegmentation):
+    """Enhanced segmentation with additional features"""
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.processing_log = []
+    
+    def log_step(self, step_name, details=None):
+        """Log processing step"""
+        self.processing_log.append({
+            'step': step_name,
+            'details': details,
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    def get_processing_log(self):
+        """Get processing log"""
+        return self.processing_log
+    
+    def segment_with_quality_metrics(self, image_rgb, **kwargs):
+        """Segment with additional quality metrics"""
+        try:
+            # Run standard segmentation
+            labels, debug_info = self.segment(image_rgb, **kwargs)
+            
+            # Add quality metrics
+            quality_metrics = self._calculate_segmentation_quality(labels, image_rgb)
+            debug_info['quality_metrics'] = quality_metrics
+            
+            return labels, debug_info
+            
+        except Exception as e:
+            logger.error(f"[ERROR] Enhanced segmentation failed: {str(e)}")
+            return self.segment(image_rgb, **kwargs)
+    
+    def _calculate_segmentation_quality(self, labels, image_rgb):
+        """Calculate segmentation quality metrics"""
+        try:
+            if np.max(labels) == 0:
+                return {'quality_score': 0.0, 'metrics': {}}
+            
+            regions = measure.regionprops(labels)
+            
+            # Calculate various quality metrics
+            area_cv = np.std([r.area for r in regions]) / (np.mean([r.area for r in regions]) + 1e-8)
+            circularity_mean = np.mean([4 * np.pi * r.area / (r.perimeter ** 2 + 1e-8) for r in regions])
+            solidity_mean = np.mean([r.solidity for r in regions])
+            
+            # Overall quality score
+            quality_score = (
+                min(1.0, 1.0 - area_cv) * 0.4 +  # Size consistency
+                circularity_mean * 0.3 +          # Shape quality
+                solidity_mean * 0.3               # Boundary quality
+            )
+            
+            return {
+                'quality_score': float(quality_score),
+                'metrics': {
+                    'area_coefficient_variation': float(area_cv),
+                    'mean_circularity': float(circularity_mean),
+                    'mean_solidity': float(solidity_mean),
+                    'cell_count': len(regions)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"[ERROR] Quality calculation failed: {str(e)}")
+            return {'quality_score': 0.5, 'metrics': {}}
+
+
 # Test the pipeline
 if __name__ == "__main__":
-    print("🧪 Testing Wolffia-specific segmentation pipeline...")
+    print("[TEST] Testing Wolffia-specific segmentation pipeline...")
     
     # Create test image similar to Wolffia plate
     test_image = np.ones((500, 500, 3), dtype=np.uint8) * 240  # Light background
@@ -457,7 +610,21 @@ if __name__ == "__main__":
         cv2.circle(test_image, center, 12, (30, 180, 30), -1)  # Brighter center
     
     # Test the pipeline
-    labels, results = run_pipeline(test_image, debug_mode=True)
-    
-    print(f"✅ Test complete: {len(results['cell_id'])} cells detected")
-    print(f"   Cell areas: {results['cell_area']}")
+    try:
+        labels, results = run_pipeline(test_image, debug_mode=True)
+        
+        print(f"[SUCCESS] Test complete: {len(results['cell_id'])} cells detected")
+        print(f"   Cell areas: {results['cell_area']}")
+        print(f"   Label range: {np.min(labels)} to {np.max(labels)}")
+        
+        # Test enhanced segmentation
+        enhanced_seg = EnhancedSegmentation(debug_mode=True)
+        enhanced_labels, enhanced_info = enhanced_seg.segment_with_quality_metrics(test_image)
+        
+        print(f"[SUCCESS] Enhanced test complete")
+        print(f"   Quality score: {enhanced_info.get('quality_metrics', {}).get('quality_score', 0):.3f}")
+        
+    except Exception as e:
+        print(f"[ERROR] Test failed: {str(e)}")
+        import traceback
+        traceback.print_exc()

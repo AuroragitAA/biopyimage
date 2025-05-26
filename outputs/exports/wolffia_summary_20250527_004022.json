@@ -1,0 +1,34 @@
+{
+  "analysis_info": {
+    "timestamp": "20250527_004022",
+    "processing_time": 4.44519,
+    "quality_score": 0.8
+  },
+  "summary_statistics": {
+    "total_cells": 2,
+    "avg_area": 4198.0,
+    "chlorophyll_ratio": 50.0,
+    "coverage_percent": 1.3126954346466542,
+    "cell_density": 3.1269543464665417,
+    "total_biomass_estimate": 8.396,
+    "morphological_statistics": {
+      "mean_area": 4198.0,
+      "std_area": 2787.4149314373703,
+      "median_area": 4198.0,
+      "total_area": 8396.0,
+      "mean_perimeter": 326.3122292025696,
+      "mean_circularity": 0.45772647990371973,
+      "mean_aspect_ratio": 1.5070723415100595
+    },
+    "spatial_analysis": {
+      "image_coverage": 1.3126954346466542,
+      "cell_density": 3.1269543464665417
+    },
+    "quality_metrics": {
+      "total_cells": 2,
+      "high_quality_cells": "1",
+      "outlier_cells": "0"
+    }
+  },
+  "cell_count": 2
+}

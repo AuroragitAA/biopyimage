@@ -1,0 +1,83 @@
+{
+  "executive_summary": {
+    "job_name": "batch_job_20250526_190005",
+    "analysis_date": "2025-05-26 19:06:24",
+    "operator": "",
+    "project_id": "",
+    "total_images_processed": 1,
+    "successful_analyses": 1,
+    "success_rate_percentage": 100.0
+  },
+  "aggregate_statistics": {
+    "total_cells_all_images": 45,
+    "average_cells_per_image": 45.0,
+    "cell_size_statistics": {
+      "mean_area": 12.311111111111112,
+      "median_area": 4.0,
+      "std_area": 16.689081223924983,
+      "min_area": 1.0,
+      "max_area": 73.0
+    },
+    "chlorophyll_statistics": {
+      "mean_chlorophyll": 0,
+      "high_chlorophyll_percentage": 0
+    }
+  },
+  "quality_control_summary": {
+    "total_images_assessed": 15,
+    "average_quality_score": 0.6665444794464978,
+    "quality_distribution": {
+      "excellent": 0,
+      "good": 12,
+      "fair": 3,
+      "poor": 0
+    },
+    "common_issues": {
+      "most_common_issues": [
+        [
+          "Motion blur detected",
+          15
+        ],
+        [
+          "Image resolution too low",
+          8
+        ],
+        [
+          "Low contrast detected",
+          4
+        ],
+        [
+          "Low sharpness detected",
+          3
+        ]
+      ],
+      "total_unique_issues": 4
+    },
+    "outliers_detected": 0,
+    "quality_trend": "stable"
+  },
+  "recommendations": [
+    "\u26a0\ufe0f Low success rate detected. Review image quality and processing parameters."
+  ],
+  "processing_performance": {
+    "total_processing_time": 0.871998,
+    "average_processing_time": 0.871998,
+    "fastest_analysis": 0.871998,
+    "slowest_analysis": 0.871998,
+    "processing_efficiency": 100.0
+  },
+  "export_information": {
+    "timestamp": "2025-05-26T19:06:24.277020",
+    "job_name": "batch_job_20250526_190005",
+    "total_results": 1,
+    "exported_formats": [
+      "csv",
+      "excel"
+    ],
+    "export_paths": {
+      "cell_data_csv": "batch_results\\exports\\batch_job_20250526_190005_cell_data.csv",
+      "summary_csv": "batch_results\\exports\\batch_job_20250526_190005_summary.csv",
+      "excel": "batch_results\\exports\\batch_job_20250526_190005_complete_analysis.xlsx"
+    }
+  }
+}

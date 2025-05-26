@@ -29,7 +29,10 @@ import pandas as pd
 warnings.filterwarnings('ignore')
 
 # Machine Learning imports
+import plotly.graph_objects as go
+import seaborn as sns
 import xgboost as xgb
+from plotly.subplots import make_subplots
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.decomposition import PCA
 from sklearn.ensemble import (
@@ -55,6 +58,27 @@ from sklearn.svm import SVC
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+import logging
+import os
+
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("logs/bioimagin_app.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
+
+try:
+    from wolffia_analyzer import AnalysisConfig, WolffiaAnalyzer
+    ANALYZER_AVAILABLE = True
+    logger.info("[OK] Core analyzer imported successfully")
+except ImportError as e:
+    logger.error(f"[ERROR] Core analyzer not available: {e}")
+    ANALYZER_AVAILABLE = False
 
 @dataclass
 class MLConfig:
@@ -757,28 +781,7 @@ class MLEnhancedAnalyzer:
         
         logger.info("🤖 ML-Enhanced Analyzer initialized")
     
-    def analyze_with_ml_enhancement(self, image_path: str) -> Dict:
-        """Analyze image with ML enhancements."""
-        try:
-            # Get base analysis
-            base_result = self.base_analyzer.analyze_image_professional(image_path)
-            
-            if not base_result.get('success'):
-                return base_result
-            
-            # Add ML enhancements if models are trained
-            if self.models_trained and 'cell_data' in base_result:
-                ml_enhancements = self._apply_ml_enhancements(base_result['cell_data'])
-                base_result['ml_enhancements'] = ml_enhancements
-            
-            # Store data for future training
-            self._store_training_data(base_result)
-            
-            return base_result
-            
-        except Exception as e:
-            logger.error(f"❌ ML-enhanced analysis error: {str(e)}")
-            return {'error': str(e), 'success': False}
+    # Removed redundant definition of analyze_with_ml_enhancement
     
     def train_ml_models(self) -> Dict:
         """Train all ML models using accumulated data."""
@@ -981,6 +984,7 @@ class MLEnhancedAnalyzer:
 
             # Add these methods to the MLEnhancedAnalyzer class in ml_enhancement.py
 
+    # Add to ml_enhancement.py - MLEnhancedAnalyzer class
     def analyze_single_image(self, image_path: str, **kwargs) -> Dict:
         """
         Analyze a single image using the base analyzer with ML enhancements.

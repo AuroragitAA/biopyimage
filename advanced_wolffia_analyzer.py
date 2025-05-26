@@ -16,26 +16,30 @@ Author: Senior Bioinformatics Developer
 Version: 2.0.0
 """
 
-import numpy as np
-import pandas as pd
-import cv2
-from datetime import datetime, timedelta
 import json
 import logging
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union
+import warnings
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
+
+import cv2
+import numpy as np
+import pandas as pd
 from scipy import ndimage, stats
+from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import pdist, squareform
-from scipy.cluster.hierarchy import linkage, fcluster
-from skimage import measure, morphology, segmentation, filters, feature, restoration
-from skimage.color import rgb2lab, lab2rgb, rgb2hsv
+from skimage import feature, filters, measure, morphology, restoration, segmentation
+from skimage.color import lab2rgb, rgb2hsv, rgb2lab
 from skimage.util import img_as_float, img_as_ubyte
 from sklearn.cluster import DBSCAN, KMeans
-from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.ensemble import IsolationForest
-import warnings
+from sklearn.preprocessing import StandardScaler
+
+from analysis_config import AnalysisConfig
+
 warnings.filterwarnings('ignore')
 
 # Configure professional logging
@@ -49,49 +53,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+import os
 
-@dataclass
-class AnalysisConfig:
-    """Configuration parameters for analysis pipeline."""
-    
-    # Image Processing Parameters
-    pixel_to_micron: float = 1.0
-    noise_reduction_sigma: float = 0.8
-    contrast_enhancement_clip: float = 0.03
-    multi_scale_levels: int = 3
-    
-    # Segmentation Parameters
-    min_cell_area: int = 30
-    max_cell_area: int = 8000
-    watershed_min_distance: int = 8
-    adaptive_block_size: int = 21
-    
-    # Biological Parameters
-    chlorophyll_threshold: float = 0.6
-    health_score_weights: Dict[str, float] = None
-    growth_analysis_window: int = 24  # hours
-    
-    # Quality Control
-    min_image_quality_score: float = 0.7
-    outlier_detection_contamination: float = 0.1
-    confidence_interval: float = 0.95
-    
-    def __post_init__(self):
-        if self.health_score_weights is None:
-            self.health_score_weights = {
-                'chlorophyll_content': 0.3,
-                'cell_integrity': 0.25,
-                'size_consistency': 0.2,
-                'texture_uniformity': 0.15,
-                'shape_regularity': 0.1
-            }
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("logs/bioimagin_app.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
 
 
 class AdvancedImageProcessor:
     """Advanced image processing with multi-scale analysis and quality assessment."""
     
     def __init__(self, config: AnalysisConfig):
-        self.config = config
+        self.config = AnalysisConfig
         logger.info("🔬 Advanced Image Processor initialized")
     
     def process_image_advanced(self, image_input: Union[str, np.ndarray]) -> Dict:
@@ -474,7 +454,7 @@ class BiologicalFeatureExtractor:
     """Advanced biological feature extraction with machine learning enhancement."""
     
     def __init__(self, config: AnalysisConfig):
-        self.config = config
+        self.config = AnalysisConfig
         self.scaler = StandardScaler()
         logger.info("🧬 Biological Feature Extractor initialized")
     
@@ -842,7 +822,7 @@ class StatisticalAnalyzer:
     """Advanced statistical analysis and reporting."""
     
     def __init__(self, config: AnalysisConfig):
-        self.config = config
+        self.config = AnalysisConfig
         logger.info("📊 Statistical Analyzer initialized")
     
     def generate_comprehensive_report(self, results_list: List[Dict]) -> Dict:

@@ -25,11 +25,26 @@ from skimage.morphology import closing, disk, opening
 from skimage.restoration import denoise_bilateral, denoise_wavelet
 
 warnings.filterwarnings('ignore')
+from analysis_config import AnalysisConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+
+import logging
+import os
+
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("logs/bioimagin_app.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
 
 class ImageProcessor:
     """

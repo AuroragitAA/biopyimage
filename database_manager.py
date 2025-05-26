@@ -15,25 +15,53 @@ Features:
 - User management and access control
 """
 
-import sqlite3
+import hashlib
 import json
 import logging
+import shutil
+import sqlite3
+import threading
+import warnings
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any, Union
-from dataclasses import dataclass, asdict
-import pandas as pd
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
-import hashlib
-import shutil
-import threading
-from contextlib import contextmanager
-import warnings
+import pandas as pd
+import plotly.graph_objects as go
+import seaborn as sns
+from flask import jsonify, request
+from plotly.subplots import make_subplots
+
 warnings.filterwarnings('ignore')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+import logging
+import os
+
+try:
+    from wolffia_analyzer import AnalysisConfig, WolffiaAnalyzer
+    ANALYZER_AVAILABLE = True
+    logger.info("[OK] Core analyzer imported successfully")
+except ImportError as e:
+    logger.error(f"[ERROR] Core analyzer not available: {e}")
+    ANALYZER_AVAILABLE = False
+
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("logs/bioimagin_app.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
 
 
 @dataclass
@@ -744,13 +772,16 @@ class DatabaseManager:
             raise
     
     def _calculate_file_hash(self, file_path: str) -> str:
-        """Calculate SHA-256 hash of file."""
+        """FIXED: Calculate SHA-256 hash of file with proper error handling."""
+
         try:
-            if not Path(file_path).exists():
-                return ""
+            path = Path(file_path)
+            if not path.exists():
+                logger.warning(f"⚠️ File not found for hash calculation: {file_path}")
+                return "file_not_found"
             
             hash_sha256 = hashlib.sha256()
-            with open(file_path, "rb") as f:
+            with open(path, "rb") as f:
                 for chunk in iter(lambda: f.read(4096), b""):
                     hash_sha256.update(chunk)
             
@@ -758,7 +789,7 @@ class DatabaseManager:
             
         except Exception as e:
             logger.error(f"❌ File hash calculation error: {str(e)}")
-            return ""
+            return f"hash_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
     def create_backup(self) -> str:
         """Create database backup."""

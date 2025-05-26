@@ -32,6 +32,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 import h5py
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from flask import jsonify, request  # MAKE SURE these are imported
 from tqdm import tqdm
 
@@ -40,6 +41,37 @@ warnings.filterwarnings('ignore')
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+import logging
+import os
+
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("logs/bioimagin_app.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
+try:
+    from wolffia_analyzer import AnalysisConfig, WolffiaAnalyzer
+    ANALYZER_AVAILABLE = True
+    logger.info("[OK] Core analyzer imported successfully")
+except ImportError as e:
+    logger.error(f"[ERROR] Core analyzer not available: {e}")
+    ANALYZER_AVAILABLE = False
+
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler("logs/bioimagin_app.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
 
 
 @dataclass
@@ -132,7 +164,7 @@ class QualityController:
     """Advanced quality control for batch processing."""
     
     def __init__(self, config: BatchJobConfig):
-        self.config = config
+        self.config = AnalysisConfig
         self.quality_metrics = []
         self.outliers_detected = []
         
@@ -338,7 +370,7 @@ class BatchExporter:
     """Handle export of batch results to multiple formats."""
     
     def __init__(self, config: BatchJobConfig):
-        self.config = config
+        self.config = AnalysisConfig
         self.export_directory = Path(config.output_directory) / "exports"
         self.export_directory.mkdir(parents=True, exist_ok=True)
     
