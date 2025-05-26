@@ -1,817 +1,662 @@
-/**
- * Wolffia Bioimage Analysis Dashboard - Enhanced Frontend
- * Professional implementation with robust error handling and user experience
- */
+        // Global variables
+        let socket;
+        let currentAnalysisId = null;
+        let currentBatchId = null;
+        let selectedFiles = [];
 
-class WolffiaAnalyzerApp {
-    constructor() {
-        this.state = {
-            currentFiles: [],
-            analysisResults: [],
-            selectedColorMethod: 'green_wolffia',
-            currentAnalysisId: null,
-            isAnalyzing: false,
-            apiBaseUrl: window.location.origin
-        };
-
-        this.config = {
-            maxFileSize: 16 * 1024 * 1024, // 16MB
-            supportedFormats: ['image/jpeg', 'image/png', 'image/tiff', 'image/bmp'],
-            maxFiles: 10
-        };
-
-        this.selectors = this.initializeSelectors();
-        this.init();
-    }
-
-    initializeSelectors() {
-        const selectors = {};
-        const elements = [
-            'uploadArea', 'fileInput', 'analyzeBtn', 'batchBtn', 'exportBtn',
-            'analysisMethodSelect', 'colorMethodsDiv', 'progressContainer',
-            'progressFill', 'progressText', 'statsGrid', 'imageDisplay',
-            'visualizationTab', 'originalCanvas', 'segmentedCanvas'
-        ];
-
-        elements.forEach(id => {
-            const element = document.getElementById(id);
-            if (!element) {
-                console.warn(`⚠️ Element not found: ${id}`);
-            }
-            selectors[id] = element;
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWebSocket();
+            setupEventListeners();
+            checkSystemStatus();
         });
 
-        return selectors;
-    }
-
-    init() {
-        console.log('🚀 Initializing Wolffia Analyzer App...');
-        this.setupEventListeners();
-        this.setupTabs();
-        this.updateUI();
-        this.checkServerHealth();
-        console.log('✅ Wolffia Analyzer App initialized');
-    }
-
-    async checkServerHealth() {
-        try {
-            const response = await fetch('/api/system/status');
-            const health = await response.json();
-            
-            if (health.status === 'healthy') {
-                this.showNotification('🔬 Analysis system ready', 'success');
-            } else {
-                this.showNotification('⚠️ Some components may not be available', 'warning');
-            }
-        } catch (error) {
-            console.error('Health check failed:', error);
-            this.showNotification('❌ Unable to connect to analysis server', 'error');
-        }
-    }
-
-    setupEventListeners() {
-        // File upload handlers
-        if (this.selectors.uploadArea) {
-            this.selectors.uploadArea.addEventListener('click', () => {
-                if (this.selectors.fileInput) this.selectors.fileInput.click();
+        // WebSocket initialization
+        function initializeWebSocket() {
+            socket = io({
+                transports: ['websocket', 'polling']
             });
-            
-            this.selectors.uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
-            this.selectors.uploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
-            this.selectors.uploadArea.addEventListener('drop', this.handleDrop.bind(this));
+
+            socket.on('connect', function() {
+                updateConnectionStatus(true);
+                showNotification('Connected to live analysis system', 'success');
+            });
+
+            socket.on('disconnect', function() {
+                updateConnectionStatus(false);
+                showNotification('Disconnected from server', 'error');
+            });
+
+            socket.on('status', function(data) {
+                updateSystemStatus(data.analyzer_ready);
+            });
+
+            socket.on('analysis_progress', function(data) {
+                updateAnalysisProgress(data.progress, data.stage);
+            });
+
+            socket.on('analysis_complete', function(data) {
+                handleAnalysisComplete(data);
+            });
+
+            socket.on('analysis_error', function(data) {
+                handleAnalysisError(data.error);
+            });
+
+            socket.on('batch_progress', function(data) {
+                updateBatchProgress(data.progress, data.stage, data.completed, data.total);
+            });
+
+            socket.on('batch_complete', function(data) {
+                handleBatchComplete(data);
+            });
+
+            socket.on('batch_error', function(data) {
+                handleBatchError(data.error);
+            });
         }
 
-        if (this.selectors.fileInput) {
-            this.selectors.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+        // Event listeners setup
+        function setupEventListeners() {
+            // File input
+            const imageInput = document.getElementById('imageInput');
+            imageInput.addEventListener('change', handleFileSelect);
+
+            // Batch file input
+            const batchInput = document.getElementById('batchInput');
+            batchInput.addEventListener('change', handleBatchFileSelect);
+
+            // Upload area drag and drop
+            setupDragAndDrop('uploadArea', 'imageInput');
+            setupDragAndDrop('batchUploadArea', 'batchInput');
+
+            // Analysis button
+            document.getElementById('analyzeBtn').addEventListener('click', startAnalysis);
+
+            // Batch analysis button
+            document.getElementById('batchAnalyzeBtn').addEventListener('click', startBatchAnalysis);
+
+            // Tab switching
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            // Cancel button
+            document.getElementById('cancelBtn').addEventListener('click', cancelAnalysis);
         }
 
-        // Analysis controls
-        if (this.selectors.analysisMethodSelect) {
-            this.selectors.analysisMethodSelect.addEventListener('change', this.handleMethodChange.bind(this));
-        }
+        // Drag and drop setup
+        function setupDragAndDrop(areaId, inputId) {
+            const area = document.getElementById(areaId);
+            const input = document.getElementById(inputId);
 
-        document.querySelectorAll('.color-method').forEach(method => {
-            method.addEventListener('click', this.handleColorMethodSelect.bind(this));
-        });
+            area.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                area.classList.add('dragover');
+            });
 
-        // Action buttons
-        if (this.selectors.analyzeBtn) {
-            this.selectors.analyzeBtn.addEventListener('click', this.runSingleAnalysis.bind(this));
-        }
-        
-        if (this.selectors.batchBtn) {
-            this.selectors.batchBtn.addEventListener('click', this.runBatchAnalysis.bind(this));
-        }
-        
-        if (this.selectors.exportBtn) {
-            this.selectors.exportBtn.addEventListener('click', this.exportResults.bind(this));
-        }
+            area.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                area.classList.remove('dragover');
+            });
 
-        // Global error handler
-        window.addEventListener('error', this.handleGlobalError.bind(this));
-        window.addEventListener('unhandledrejection', this.handleUnhandledRejection.bind(this));
-    }
-
-    handleGlobalError(event) {
-        console.error('Global error:', event.error);
-        this.showNotification(`Unexpected error: ${event.message}`, 'error');
-    }
-
-    handleUnhandledRejection(event) {
-        console.error('Unhandled promise rejection:', event.reason);
-        this.showNotification('Network or processing error occurred', 'error');
-    }
-
-    // Event Handlers
-    handleDragOver(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.selectors.uploadArea?.classList.add('dragover');
-    }
-
-    handleDragLeave(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.selectors.uploadArea?.classList.remove('dragover');
-    }
-
-    handleDrop(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.selectors.uploadArea?.classList.remove('dragover');
-        this.processFiles(Array.from(e.dataTransfer.files));
-    }
-
-    handleFileSelect(e) {
-        this.processFiles(Array.from(e.target.files));
-    }
-
-    handleMethodChange() {
-        const method = this.selectors.analysisMethodSelect?.value;
-        if (this.selectors.colorMethodsDiv) {
-            this.selectors.colorMethodsDiv.style.display = method === 'color' ? 'grid' : 'none';
-        }
-    }
-
-    handleColorMethodSelect(e) {
-        const method = e.currentTarget;
-        document.querySelectorAll('.color-method').forEach(m => m.classList.remove('selected'));
-        method.classList.add('selected');
-        this.state.selectedColorMethod = method.dataset.color;
-    }
-
-    // File Processing
-    validateFile(file) {
-        const errors = [];
-
-        // Check file size
-        if (file.size > this.config.maxFileSize) {
-            errors.push(`File "${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 16MB.`);
-        }
-
-        // Check file type
-        const isValidType = this.config.supportedFormats.includes(file.type) ||
-            /\.(jpg|jpeg|png|tif|tiff|bmp|jfif)$/i.test(file.name);
-        
-        if (!isValidType) {
-            errors.push(`File "${file.name}" has unsupported format. Supported: JPG, PNG, TIF, BMP`);
-        }
-
-        return errors;
-    }
-
-    async processFiles(files) {
-        if (!files || files.length === 0) {
-            this.showNotification('No files selected', 'warning');
-            return;
-        }
-
-        // Validate files
-        const allErrors = [];
-        const validFiles = [];
-
-        files.forEach(file => {
-            const errors = this.validateFile(file);
-            if (errors.length > 0) {
-                allErrors.push(...errors);
-            } else {
-                validFiles.push(file);
-            }
-        });
-
-        // Show validation errors
-        if (allErrors.length > 0) {
-            this.showNotification(allErrors.join('\n'), 'error');
-            if (validFiles.length === 0) return;
-        }
-
-        // Check file count limit
-        if (validFiles.length > this.config.maxFiles) {
-            this.showNotification(`Too many files selected. Maximum is ${this.config.maxFiles}.`, 'warning');
-            validFiles.splice(this.config.maxFiles);
-        }
-
-        this.state.currentFiles = validFiles;
-        this.updateUploadArea();
-        this.updateUI();
-        
-        if (validFiles.length > 0) {
-            this.previewImage(validFiles[0]);
-            this.showNotification(`✅ ${validFiles.length} image(s) loaded successfully`, 'success');
-        }
-    }
-
-    // Analysis Methods
-    async runSingleAnalysis() {
-        if (!this.state.currentFiles.length) {
-            this.showNotification('Please select an image first', 'warning');
-            return;
-        }
-        
-        await this.analyzeFiles([this.state.currentFiles[0]], false);
-    }
-
-        async runBatchAnalysis() {
-        const formData = new FormData();
-        this.state.currentFiles.forEach(file => formData.append("images", file));
-
-        const res = await fetch("/batch", { method: "POST", body: formData });
-        const json = await res.json();
-        // handle results like: json.results, json.qc_report, json.export_info
-        }
-
-
-    async analyzeFiles(files, isBatch = false) {
-        if (this.state.isAnalyzing) {
-            this.showNotification('Analysis already in progress', 'warning');
-            return;
-        }
-
-        try {
-            this.state.isAnalyzing = true;
-            this.toggleLoadingState(true);
-            
-            const results = [];
-            
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                this.updateProgressText(`Analyzing ${file.name} (${i + 1}/${files.length})`);
+            area.addEventListener('drop', function(e) {
+                e.preventDefault();
+                area.classList.remove('dragover');
                 
-                const result = await this.analyzeSingleFile(file);
-                if (result) {
-                    results.push({
-                        ...result,
-                        timestamp: Date.now(),
-                        image_name: file.name
-                    });
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    if (inputId === 'imageInput') {
+                        input.files = files;
+                        handleFileSelect({ target: input });
+                    } else {
+                        input.files = files;
+                        handleBatchFileSelect({ target: input });
+                    }
                 }
-                
-                // Update progress
-                const progress = ((i + 1) / files.length) * 100;
-                this.updateProgress(progress);
-            }
-
-            this.handleAnalysisResults(results, isBatch);
-            
-        } catch (error) {
-            console.error('Analysis error:', error);
-            this.showNotification(`Analysis failed: ${error.message}`, 'error');
-        } finally {
-            this.state.isAnalyzing = false;
-            this.toggleLoadingState(false);
-        }
-    }
-
-    async analyzeSingleFile(file) {
-        try {
-            const formData = new FormData();
-            const params = this.getAnalysisParams();
-
-            // Add file
-            formData.append('image', file);
-
-            // Add parameters
-            Object.entries(params).forEach(([key, value]) => {
-                formData.append(key, value.toString());
             });
+        }
 
-            const response = await fetch('/api/analyze', {
-                method: 'POST',
-                body: formData
+        // File selection handling
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                document.getElementById('analyzeBtn').disabled = false;
+                showNotification(`Image selected: ${file.name}`, 'info');
+            }
+        }
+
+        function handleBatchFileSelect(event) {
+            const files = Array.from(event.target.files);
+            selectedFiles = files;
+            
+            if (files.length > 0) {
+                updateBatchFileList(files);
+                document.getElementById('batchAnalyzeBtn').disabled = false;
+                showNotification(`${files.length} images selected for batch analysis`, 'info');
+            }
+        }
+
+        function updateBatchFileList(files) {
+            const fileList = document.getElementById('batchFileList');
+            fileList.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <span>${file.name} (${formatFileSize(file.size)})</span>
+                    <button class="btn btn-secondary" style="padding: 5px 10px;" onclick="removeFile(${index})">❌</button>
+                `;
+                fileList.appendChild(fileItem);
             });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Server error' }));
-                throw new Error(errorData.error || `Server error: ${response.status}`);
-            }
-
-            const result = await response.json();
             
-            if (result.error) {
-                throw new Error(result.error);
-            }
-
-            return result;
-
-        } catch (error) {
-            console.error(`Error analyzing ${file.name}:`, error);
-            this.showNotification(`Failed to analyze ${file.name}: ${error.message}`, 'error');
-            return null;
-        }
-    }
-
-    handleAnalysisResults(results, isBatch) {
-        if (!results || results.length === 0) {
-            this.showNotification('No successful analyses completed', 'warning');
-            return;
+            fileList.style.display = files.length > 0 ? 'block' : 'none';
         }
 
-        this.state.analysisResults.push(...results);
-
-        if (isBatch) {
-            this.updateHistoryPanel();
-            this.showNotification(`✅ Batch analysis complete: ${results.length} images processed`, 'success');
-        } else {
-            this.updateResultsDisplay(results[0]);
-            this.updateHistoryPanel();
-            this.showNotification('✅ Analysis complete! 🎉', 'success');
-        }
-
-        this.updateUI();
-    }
-
-    // UI Updates
-    updateResultsDisplay(result) {
-        if (!result) {
-            this.showNotification('No result data to display', 'error');
-            return;
-        }
-
-        try {
-            // Update statistics
-            const stats = result.stats || result.summary || {};
-            if (this.selectors.statsGrid) {
-                this.selectors.statsGrid.innerHTML = this.generateStatsHTML(stats);
-            }
-
-            // Update visualizations
-            this.drawCanvas(this.selectors.originalCanvas, result.original_image);
-            this.drawCanvas(this.selectors.segmentedCanvas, result.visualization);
-
-            // Update details table
-            this.populateDetailsTable(result.cell_data || []);
-
-            // Show visualization section
-            const visualizations = document.getElementById('visualizations');
-            const noVizMessage = document.getElementById('noVisualizationMessage');
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateBatchFileList(selectedFiles);
             
-            if (visualizations) visualizations.style.display = 'block';
-            if (noVizMessage) noVizMessage.style.display = 'none';
-
-        } catch (error) {
-            console.error('Error updating results display:', error);
-            this.showNotification('Error displaying results', 'error');
-        }
-    }
-
-    drawCanvas(canvas, imageData) {
-        if (!canvas || !imageData) {
-            console.warn('Canvas or image data missing');
-            return;
+            if (selectedFiles.length === 0) {
+                document.getElementById('batchAnalyzeBtn').disabled = true;
+            }
         }
 
-        try {
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-
-            img.onload = () => {
-                // Set canvas size to match image
-                canvas.width = Math.min(img.width, 800);  // Limit max width
-                canvas.height = (canvas.width / img.width) * img.height;
-                
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            };
-
-            img.onerror = (error) => {
-                console.error('Failed to load image:', error);
-                this.showCanvasError(canvas, 'Failed to load image');
-            };
-
-            img.src = `data:image/png;base64,${imageData}`;
-
-        } catch (error) {
-            console.error('Error drawing canvas:', error);
-            this.showCanvasError(canvas, 'Error displaying image');
+        function clearBatchFiles() {
+            selectedFiles = [];
+            document.getElementById('batchFileList').style.display = 'none';
+            document.getElementById('batchInput').value = '';
+            document.getElementById('batchAnalyzeBtn').disabled = true;
         }
-    }
 
-    showCanvasError(canvas, message) {
-        if (!canvas) return;
-        
-        const ctx = canvas.getContext('2d');
-        canvas.width = 400;
-        canvas.height = 200;
-        
-        ctx.fillStyle = '#f3f4f6';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = '#6b7280';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(message, canvas.width / 2, canvas.height / 2);
-    }
-
-    generateStatsHTML(stats) {
-        const formatNumber = (num, decimals = 1) => {
-            return typeof num === 'number' ? num.toFixed(decimals) : '0';
-        };
-
-        return `
-            <div class="stat-card">
-                <div class="stat-value">${stats.total_cells || 0}</div>
-                <div class="stat-label">Total Cells</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${formatNumber(stats.avg_area)}</div>
-                <div class="stat-label">Avg Area (px²)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${formatNumber(stats.total_biomass, 2)}</div>
-                <div class="stat-label">Biomass Est.</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${formatNumber(stats.chlorophyll_ratio)}%</div>
-                <div class="stat-label">High Chlorophyll</div>
-            </div>
-        `;
-    }
-
-    populateDetailsTable(cellData) {
-        try {
-            const tbody = document.getElementById('tableBody');
-            const resultsTable = document.getElementById('resultsTable');
-            const noDetailsMessage = document.getElementById('noDetailsMessage');
-
-            if (!tbody) return;
-
-            if (!cellData || cellData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #6b7280;">No cell data available</td></tr>';
-                if (resultsTable) resultsTable.style.display = 'table';
-                if (noDetailsMessage) noDetailsMessage.style.display = 'none';
+        // Analysis functions
+        async function startAnalysis() {
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showNotification('Please select an image file', 'error');
                 return;
             }
 
-            const formatNumber = (num, decimals = 1) => {
-                return typeof num === 'number' ? num.toFixed(decimals) : '0';
-            };
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('pixel_ratio', document.getElementById('pixelRatio').value);
+            formData.append('debug_mode', document.getElementById('debugMode').checked);
+            formData.append('auto_export', document.getElementById('autoExport').checked);
 
-            tbody.innerHTML = cellData.slice(0, 50).map(cell => `
-                <tr>
-                    <td>${cell.cell_id || 'N/A'}</td>
-                    <td>${formatNumber(cell.area)}</td>
-                    <td>${formatNumber(cell.perimeter)}</td>
-                    <td>${formatNumber(cell.chlorophyll, 2)}</td>
-                    <td>${cell.classification || 'Unknown'}</td>
-                </tr>
-            `).join('');
+            try {
+                setAnalysisInProgress(true);
+                
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            if (resultsTable) resultsTable.style.display = 'table';
-            if (noDetailsMessage) noDetailsMessage.style.display = 'none';
-
-            if (cellData.length > 50) {
-                tbody.innerHTML += `
-                    <tr style="background-color: #f9fafb;">
-                        <td colspan="5" style="text-align: center; font-style: italic; color: #6b7280;">
-                            Showing first 50 of ${cellData.length} cells
-                        </td>
-                    </tr>
-                `;
-            }
-
-        } catch (error) {
-            console.error('Error populating details table:', error);
-        }
-    }
-
-    // Utility Methods
-    getAnalysisParams() {
-        const getElementValue = (id, defaultValue, type = 'string') => {
-            const element = document.getElementById(id);
-            if (!element) return defaultValue;
-            
-            const value = element.value;
-            if (type === 'float') return parseFloat(value) || defaultValue;
-            if (type === 'int') return parseInt(value) || defaultValue;
-            return value || defaultValue;
-        };
-
-        return {
-            pixel_ratio: getElementValue('pixelRatio', 1.0, 'float'),
-            chlorophyll_threshold: getElementValue('chlorophyllThreshold', 0.6, 'float'),
-            min_cell_area: getElementValue('minCellArea', 30, 'int'),
-            max_cell_area: getElementValue('maxCellArea', 8000, 'int'),
-            analysis_method: this.selectors.analysisMethodSelect?.value || 'auto',
-            color_method: this.state.selectedColorMethod
-        };
-    }
-
-    toggleLoadingState(isLoading) {
-        // Update progress container
-        if (this.selectors.progressContainer) {
-            this.selectors.progressContainer.style.display = isLoading ? 'block' : 'none';
-        }
-
-        // Update buttons
-        const buttons = [this.selectors.analyzeBtn, this.selectors.batchBtn];
-        buttons.forEach(btn => {
-            if (btn) {
-                btn.disabled = isLoading;
-                if (isLoading) {
-                    btn.textContent = btn === this.selectors.analyzeBtn ? 'Analyzing...' : 'Processing...';
+                const result = await response.json();
+                
+                if (result.analysis_id) {
+                    currentAnalysisId = result.analysis_id;
+                    socket.emit('join_analysis', { analysis_id: result.analysis_id });
+                    showNotification('Analysis started - receiving live updates', 'success');
                 } else {
-                    btn.textContent = btn === this.selectors.analyzeBtn ? 'Analyze Image' : 'Batch Analysis';
+                    throw new Error(result.error || 'Failed to start analysis');
                 }
+
+            } catch (error) {
+                setAnalysisInProgress(false);
+                showNotification(`Analysis failed: ${error.message}`, 'error');
             }
-        });
-
-        if (isLoading) {
-            this.resetProgress();
-        }
-    }
-
-    resetProgress() {
-        this.updateProgress(0);
-        this.updateProgressText('Preparing analysis...');
-    }
-
-    updateProgress(percentage) {
-        if (this.selectors.progressFill) {
-            this.selectors.progressFill.style.width = `${Math.min(100, Math.max(0, percentage))}%`;
-        }
-    }
-
-    updateProgressText(text) {
-        if (this.selectors.progressText) {
-            this.selectors.progressText.textContent = text;
-        }
-    }
-
-    showNotification(message, type = 'info') {
-        console.log(`[${type.toUpperCase()}] ${message}`);
-        
-        const notification = document.getElementById('notification');
-        if (!notification) {
-            // Fallback to console if notification element doesn't exist
-            return;
         }
 
-        // Clear any existing timeout
-        if (notification.timeout) {
-            clearTimeout(notification.timeout);
-        }
+        async function startBatchAnalysis() {
+            if (selectedFiles.length === 0) {
+                showNotification('Please select images for batch analysis', 'error');
+                return;
+            }
 
-        notification.textContent = message;
-        notification.className = `notification ${type}`;
-        notification.style.display = 'block';
-        notification.style.opacity = '1';
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('images', file);
+            });
 
-        // Auto-hide after delay (longer for errors)
-        const delay = type === 'error' ? 8000 : type === 'warning' ? 5000 : 3000;
-        
-        notification.timeout = setTimeout(() => {
-            notification.style.opacity = '0';
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 300);
-        }, delay);
-    }
-
-    updateUI() {
-        const hasFiles = this.state.currentFiles.length > 0;
-        const hasResults = this.state.analysisResults.length > 0;
-        const isAnalyzing = this.state.isAnalyzing;
-
-        // Update button states
-        if (this.selectors.analyzeBtn) {
-            this.selectors.analyzeBtn.disabled = !hasFiles || isAnalyzing;
-        }
-        
-        if (this.selectors.batchBtn) {
-            this.selectors.batchBtn.disabled = !hasFiles || this.state.currentFiles.length < 2 || isAnalyzing;
-        }
-        
-        if (this.selectors.exportBtn) {
-            this.selectors.exportBtn.disabled = !hasResults || isAnalyzing;
-        }
-    }
-
-    updateUploadArea() {
-        if (!this.selectors.uploadArea) return;
-
-        const files = this.state.currentFiles;
-        
-        if (files.length === 0) {
-            this.selectors.uploadArea.innerHTML = `
-                <div class="upload-icon">📷</div>
-                <p><strong>Drop images here</strong></p>
-                <p>or click to browse</p>
-                <p style="font-size: 0.8rem; color: #a1a1aa; margin-top: 10px;">
-                    Supported: JPG, PNG, TIF, BMP (Max 16MB each)
-                </p>
-            `;
-        } else {
-            const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-            const totalSizeMB = (totalSize / 1024 / 1024).toFixed(1);
-            
-            this.selectors.uploadArea.innerHTML = `
-                <div class="upload-icon">✅</div>
-                <p><strong>${files.length} image(s) selected</strong></p>
-                <p style="font-size: 0.9rem;">${files[0].name}${files.length > 1 ? ` +${files.length - 1} more` : ''}</p>
-                <p style="font-size: 0.8rem; color: #a1a1aa; margin-top: 5px;">
-                    Total size: ${totalSizeMB} MB
-                </p>
-                <p style="font-size: 0.8rem; color: #a1a1aa; margin-top: 10px;">
-                    Click to select different images
-                </p>
-            `;
-        }
-    }
-
-    previewImage(file) {
-        if (!this.selectors.imageDisplay || !file) return;
-
-        try {
-            const reader = new FileReader();
-            
-            reader.onload = (e) => {
-                this.selectors.imageDisplay.innerHTML = `
-                    <img src="${e.target.result}" alt="Preview" style="max-height: 300px; max-width: 100%; border-radius: 8px;">
-                    <p style="margin-top: 10px; color: #6b7280; font-size: 0.9rem;">${file.name}</p>
-                    <p style="color: #9ca3af; font-size: 0.8rem;">${(file.size / 1024).toFixed(1)} KB</p>
-                `;
-            };
-            
-            reader.onerror = () => {
-                this.selectors.imageDisplay.innerHTML = `
-                    <div style="padding: 20px; text-align: center; color: #ef4444;">
-                        ❌ Failed to load image preview
-                    </div>
-                `;
-            };
-            
-            reader.readAsDataURL(file);
-            
-        } catch (error) {
-            console.error('Error previewing image:', error);
-        }
-    }
-
-    setupTabs() {
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                // Remove active class from all tabs and content
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.classList.remove('active');
+            try {
+                setBatchAnalysisInProgress(true);
+                
+                const response = await fetch('/api/batch/analyze', {
+                    method: 'POST',
+                    body: formData
                 });
 
-                // Add active class to clicked tab and corresponding content
-                tab.classList.add('active');
-                const tabContent = document.getElementById(`${tab.dataset.tab}Tab`);
-                if (tabContent) {
-                    tabContent.classList.add('active');
+                const result = await response.json();
+                
+                if (result.batch_id) {
+                    currentBatchId = result.batch_id;
+                    socket.emit('join_analysis', { analysis_id: result.batch_id });
+                    showNotification(`Batch analysis started: ${result.total_images} images`, 'success');
+                } else {
+                    throw new Error(result.error || 'Failed to start batch analysis');
                 }
-            });
-        });
-    }
 
-    updateHistoryPanel() {
-        const historyList = document.getElementById('historyList');
-        if (!historyList) return;
-
-        if (this.state.analysisResults.length === 0) {
-            historyList.innerHTML = `
-                <p style="text-align: center; color: #a1a1aa; padding: 20px;">
-                    📝 Your analysis history will appear here
-                </p>
-            `;
-            return;
+            } catch (error) {
+                setBatchAnalysisInProgress(false);
+                showNotification(`Batch analysis failed: ${error.message}`, 'error');
+            }
         }
 
-        try {
-            historyList.innerHTML = this.state.analysisResults
-                .slice(-10) // Show last 10 results
-                .reverse() // Most recent first
-                .map((result, index) => {
-                    const stats = result.stats || result.summary || {};
-                    const date = result.timestamp ? new Date(result.timestamp).toLocaleDateString() : 'Unknown';
-                    
-                    return `
-                        <div class="history-item" data-index="${index}">
-                            <div class="history-header">
-                                <span class="history-date">${date}</span>
-                                <span class="history-name">${result.image_name || 'Unknown Image'}</span>
-                            </div>
-                            <div class="history-stats">
-                                <span>${stats.total_cells || 0} cells</span>
-                                <span>${(stats.avg_area || 0).toFixed(1)} px²</span>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+        function cancelAnalysis() {
+            if (currentAnalysisId) {
+                socket.emit('leave_analysis', { analysis_id: currentAnalysisId });
+                currentAnalysisId = null;
+            }
+            setAnalysisInProgress(false);
+            showNotification('Analysis cancelled', 'info');
+        }
 
-            // Add click handlers for history items
-            historyList.querySelectorAll('.history-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    const index = parseInt(item.dataset.index);
-                    const result = this.state.analysisResults[this.state.analysisResults.length - 1 - index];
-                    this.updateResultsDisplay(result);
+        // Progress update functions
+        function updateAnalysisProgress(progress, stage) {
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('progressText').textContent = stage;
+            
+            if (progress > 0) {
+                document.getElementById('liveUpdateIndicator').style.display = 'inline-flex';
+            }
+        }
+
+        function updateBatchProgress(progress, stage, completed, total) {
+            document.getElementById('batchProgressFill').style.width = progress + '%';
+            document.getElementById('batchProgressText').textContent = `${stage} (${completed}/${total})`;
+        }
+
+        // Analysis completion handlers
+        async function handleAnalysisComplete(data) {
+            setAnalysisInProgress(false);
+            document.getElementById('liveUpdateIndicator').style.display = 'none';
+            
+            showNotification(`Analysis complete: ${data.total_cells} cells detected`, 'success');
+            
+            // Fetch full results
+            try {
+                const response = await fetch(`/api/analysis/${data.analysis_id}`);
+                const result = await response.json();
+                displayResults(result);
+            } catch (error) {
+                showNotification('Failed to load analysis results', 'error');
+            }
+        }
+
+        function handleAnalysisError(error) {
+            setAnalysisInProgress(false);
+            document.getElementById('liveUpdateIndicator').style.display = 'none';
+            showNotification(`Analysis error: ${error}`, 'error');
+        }
+
+        async function handleBatchComplete(data) {
+            setBatchAnalysisInProgress(false);
+            
+            showNotification(`Batch complete: ${data.success_rate.toFixed(1)}% success rate`, 'success');
+            
+            // Fetch batch results
+            try {
+                const response = await fetch(`/api/analysis/${data.batch_id}`);
+                const result = await response.json();
+                displayBatchResults(result);
+            } catch (error) {
+                showNotification('Failed to load batch results', 'error');
+            }
+        }
+
+        function handleBatchError(error) {
+            setBatchAnalysisInProgress(false);
+            showNotification(`Batch error: ${error}`, 'error');
+        }
+
+        // Display functions
+        function displayResults(result) {
+            if (!result.success) {
+                showNotification(`Analysis failed: ${result.error}`, 'error');
+                return;
+            }
+
+            // Show results panel
+            document.getElementById('resultsEmpty').style.display = 'none';
+            document.getElementById('resultsContent').style.display = 'block';
+
+            // Update summary
+            updateSummary(result.summary);
+
+            // Load visualizations
+            loadVisualizations(result.analysis_id);
+
+            // Update cell data table
+            updateCellDataTable(result.cell_data);
+        }
+
+        function updateSummary(summary) {
+            const summaryGrid = document.getElementById('summaryGrid');
+            summaryGrid.innerHTML = `
+                <div class="summary-item">
+                    <span class="summary-value">${summary.total_cells}</span>
+                    <span class="summary-label">Total Cells</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-value">${summary.avg_area.toFixed(1)}</span>
+                    <span class="summary-label">Avg Area (px)</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-value">${summary.chlorophyll_ratio.toFixed(1)}%</span>
+                    <span class="summary-label">Chlorophyll</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-value">${summary.coverage_percent ? summary.coverage_percent.toFixed(1) : 'N/A'}%</span>
+                    <span class="summary-label">Coverage</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-value">${summary.cell_density ? summary.cell_density.toFixed(2) : 'N/A'}</span>
+                    <span class="summary-label">Density</span>
+                </div>
+            `;
+        }
+
+        async function loadVisualizations(analysisId) {
+            try {
+                const response = await fetch(`/api/visualizations/${analysisId}`);
+                const visualizations = await response.json();
+
+                // Load each visualization
+                Object.keys(visualizations).forEach(key => {
+                    const imgElement = document.getElementById(key + 'Image');
+                    if (imgElement && visualizations[key]) {
+                        imgElement.src = 'data:image/png;base64,' + visualizations[key];
+                        imgElement.style.display = 'block';
+                        imgElement.nextElementSibling.style.display = 'none';
+                    }
                 });
+
+            } catch (error) {
+                showNotification('Failed to load visualizations', 'error');
+            }
+        }
+
+        function updateCellDataTable(cellData) {
+            const tableContainer = document.getElementById('cellDataTable');
+            
+            if (!cellData || cellData.length === 0) {
+                tableContainer.innerHTML = '<p style="text-align: center; padding: 20px; color: #7f8c8d;">No cell data available</p>';
+                return;
+            }
+
+            // Create table
+            const table = document.createElement('table');
+            
+            // Headers
+            const headers = ['Cell ID', 'Area (px)', 'Perimeter', 'Circularity', 'Chlorophyll', 'Health Score'];
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // Body
+            const tbody = document.createElement('tbody');
+            cellData.forEach(cell => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${cell.cell_id || 'N/A'}</td>
+                    <td>${(cell.area_pixels || cell.area || 0).toFixed(1)}</td>
+                    <td>${(cell.perimeter || 0).toFixed(1)}</td>
+                    <td>${(cell.circularity || 0).toFixed(3)}</td>
+                    <td>${(cell.chlorophyll_content || 0).toFixed(3)}</td>
+                    <td>${(cell.health_score || 0).toFixed(3)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+
+            tableContainer.innerHTML = '';
+            tableContainer.appendChild(table);
+        }
+
+        // UI state functions
+        function setAnalysisInProgress(inProgress) {
+            document.getElementById('analyzeBtn').disabled = inProgress;
+            document.getElementById('cancelBtn').style.display = inProgress ? 'inline-flex' : 'none';
+            document.getElementById('progressContainer').style.display = inProgress ? 'block' : 'none';
+            
+            if (!inProgress) {
+                document.getElementById('progressFill').style.width = '0%';
+                document.getElementById('progressText').textContent = 'Ready to analyze...';
+            }
+        }
+
+        function setBatchAnalysisInProgress(inProgress) {
+            document.getElementById('batchAnalyzeBtn').disabled = inProgress;
+            document.getElementById('batchProgressContainer').style.display = inProgress ? 'block' : 'none';
+            
+            if (!inProgress) {
+                document.getElementById('batchProgressFill').style.width = '0%';
+                document.getElementById('batchProgressText').textContent = 'Ready for batch analysis...';
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'connection-status connected';
+                status.innerHTML = '🔗 Connected';
+            } else {
+                status.className = 'connection-status disconnected';
+                status.innerHTML = '🔌 Disconnected';
+            }
+        }
+
+        function updateSystemStatus(analyzerReady) {
+            const status = document.getElementById('systemStatus');
+            if (analyzerReady) {
+                status.className = 'status-indicator status-ready';
+                status.innerHTML = '<span>✅</span><span>System Ready</span>';
+            } else {
+                status.className = 'status-indicator status-error';
+                status.innerHTML = '<span>❌</span><span>System Error</span>';
+            }
+        }
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        // Export functions
+        async function exportResults(format) {
+            if (!currentAnalysisId) {
+                showNotification('No analysis results to export', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/export/${currentAnalysisId}/${format}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `wolffia_analysis_${currentAnalysisId}.${format}`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    
+                    showNotification(`Results exported as ${format.toUpperCase()}`, 'success');
+                } else {
+                    throw new Error('Export failed');
+                }
+            } catch (error) {
+                showNotification(`Export failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Utility functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.getElementById('notificationContainer').appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 4000);
+        }
+
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                updateSystemStatus(data.status === 'healthy');
+            } catch (error) {
+                updateSystemStatus(false);
+            }
+        }
+
+        function displayBatchResults(result) {
+            if (result.batch_summary) {
+                const summary = result.batch_summary;
+                showNotification(
+                    `Batch complete: ${summary.successful}/${summary.total_images} successful (${summary.success_rate.toFixed(1)}%)`,
+                    'success'
+                );
+            }
+        }
+
+
+        // WebSocket initialization
+        function initializeWebSocket() {
+            // Check if Socket.IO is available
+            if (typeof io === 'undefined') {
+                console.warn('Socket.IO not available - using polling fallback');
+                updateConnectionStatus(false);
+                // Set up polling fallback for progress updates
+                setupPollingFallback();
+                return;
+            }
+
+            socket = io({
+                transports: ['websocket', 'polling']
             });
 
-        } catch (error) {
-            console.error('Error updating history panel:', error);
-            historyList.innerHTML = `
-                <p style="text-align: center; color: #ef4444; padding: 20px;">
-                    ❌ Error loading history
-                </p>
-            `;
-        }
-    }
+            socket.on('connect', function() {
+                updateConnectionStatus(true);
+                showNotification('Connected to live analysis system', 'success');
+            });
 
-    async exportResults() {
-        if (this.state.analysisResults.length === 0) {
-            this.showNotification('No results to export', 'warning');
-            return;
+            socket.on('disconnect', function() {
+                updateConnectionStatus(false);
+                showNotification('Disconnected from server', 'error');
+            });
+
+            socket.on('status', function(data) {
+                updateSystemStatus(data.analyzer_ready);
+            });
+
+            socket.on('analysis_progress', function(data) {
+                updateAnalysisProgress(data.progress, data.stage);
+            });
+
+            socket.on('analysis_complete', function(data) {
+                handleAnalysisComplete(data);
+            });
+
+            socket.on('analysis_error', function(data) {
+                handleAnalysisError(data.error);
+            });
+
+            socket.on('batch_progress', function(data) {
+                updateBatchProgress(data.progress, data.stage, data.completed, data.total);
+            });
+
+            socket.on('batch_complete', function(data) {
+                handleBatchComplete(data);
+            });
+
+            socket.on('batch_error', function(data) {
+                handleBatchError(data.error);
+            });
         }
 
-        try {
-            this.showNotification('Preparing export...', 'info');
+        // Polling fallback for when WebSocket is not available
+        function setupPollingFallback() {
+            console.log('Setting up polling fallback for progress updates');
             
-            // For now, create a simple CSV export
-            const csvData = this.generateCSVExport();
-            this.downloadCSV(csvData, `wolffia_analysis_${Date.now()}.csv`);
+            // This will be used to poll for progress when WebSocket is not available
+            window.pollingInterval = null;
             
-            this.showNotification('✅ Results exported successfully', 'success');
+            window.startProgressPolling = function(analysisId) {
+                if (window.pollingInterval) {
+                    clearInterval(window.pollingInterval);
+                }
+                
+                window.pollingInterval = setInterval(async function() {
+                    try {
+                        const response = await fetch(`/api/analysis/${analysisId}`);
+                        const data = await response.json();
+                        
+                        if (data.status === 'running') {
+                            updateAnalysisProgress(data.progress, data.stage);
+                        } else if (data.success !== undefined) {
+                            clearInterval(window.pollingInterval);
+                            if (data.success) {
+                                handleAnalysisComplete({
+                                    analysis_id: analysisId,
+                                    total_cells: data.total_cells,
+                                    quality_score: data.quality_score,
+                                    processing_time: data.processing_time
+                                });
+                            } else {
+                                handleAnalysisError(data.error || 'Analysis failed');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Polling error:', error);
+                    }
+                }, 1000); // Poll every second
+            };
             
-        } catch (error) {
-            console.error('Export error:', error);
-            this.showNotification(`Export failed: ${error.message}`, 'error');
+            window.stopProgressPolling = function() {
+                if (window.pollingInterval) {
+                    clearInterval(window.pollingInterval);
+                    window.pollingInterval = null;
+                }
+            };
         }
-    }
-
-    generateCSVExport() {
-        const headers = ['Image Name', 'Date', 'Total Cells', 'Avg Area', 'Total Biomass', 'Chlorophyll Ratio'];
-        const rows = this.state.analysisResults.map(result => {
-            const stats = result.stats || result.summary || {};
-            return [
-                result.image_name || 'Unknown',
-                result.timestamp ? new Date(result.timestamp).toISOString() : '',
-                stats.total_cells || 0,
-                (stats.avg_area || 0).toFixed(2),
-                (stats.total_biomass || 0).toFixed(3),
-                (stats.chlorophyll_ratio || 0).toFixed(1)
-            ];
-        });
-
-        return [headers, ...rows].map(row => 
-            row.map(cell => `"${cell}"`).join(',')
-        ).join('\n');
-    }
-
-    downloadCSV(csvContent, filename) {
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        
-        if (link.download !== undefined) {
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', filename);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
-    }
-}
-
-// Initialize application when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🌱 Starting Wolffia Analyzer...');
-    try {
-        window.wolffiaApp = new WolffiaAnalyzerApp();
-    } catch (error) {
-        console.error('❌ Failed to initialize Wolffia Analyzer:', error);
-        
-        // Show fallback error message
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #ef4444; color: white; padding: 15px; border-radius: 8px; z-index: 1000; max-width: 300px;';
-        errorDiv.innerHTML = `
-            <strong>⚠️ Application Error</strong><br>
-            Failed to initialize. Please check the console and refresh the page.
-        `;
-        document.body.appendChild(errorDiv);
-    }
-});

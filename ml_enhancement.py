@@ -14,30 +14,42 @@ Features:
 - Automated parameter optimization
 """
 
-import numpy as np
-import pandas as pd
-import joblib
 import json
 import logging
+import warnings
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-from dataclasses import dataclass
-import warnings
+from typing import Any, Dict, List, Optional, Tuple
+
+import joblib
+import numpy as np
+import pandas as pd
+
 warnings.filterwarnings('ignore')
 
 # Machine Learning imports
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingRegressor, IsolationForest
-from sklearn.svm import SVC
-from sklearn.neural_network import MLPClassifier
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import classification_report, confusion_matrix, mean_squared_error, r2_score
-from sklearn.feature_selection import SelectKBest, f_classif, RFE
-from sklearn.cluster import KMeans, DBSCAN
-from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression, LogisticRegression
 import xgboost as xgb
+from sklearn.cluster import DBSCAN, KMeans
+from sklearn.decomposition import PCA
+from sklearn.ensemble import (
+    GradientBoostingRegressor,
+    IsolationForest,
+    RandomForestClassifier,
+    RandomForestRegressor,
+)
+from sklearn.feature_selection import RFE, SelectKBest, f_classif
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    mean_squared_error,
+    r2_score,
+)
+from sklearn.model_selection import GridSearchCV, cross_val_score, train_test_split
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.svm import SVC
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +67,7 @@ class MLConfig:
     
     # Feature selection
     max_features: int = 20
-    feature_selection_method: str = 'rfe'  # 'rfe', 'univariate', 'pca'
+    feature_selection_method: str = 'auto'  # will be resolved intelligently
     
     # Model types to use
     classification_models: List[str] = None
@@ -63,7 +75,7 @@ class MLConfig:
     
     # Training parameters
     enable_hyperparameter_tuning: bool = True
-    max_training_time: int = 300  # seconds
+    max_training_time: int = 900  # seconds
     
     # Output settings
     model_save_path: str = "models"
@@ -74,6 +86,11 @@ class MLConfig:
             self.classification_models = ['random_forest', 'svm', 'neural_network', 'xgboost']
         if self.regression_models is None:
             self.regression_models = ['random_forest', 'gradient_boosting', 'xgboost']
+        
+        # Smart feature selection decision (optional, moved to training time)
+        if self.feature_selection_method == 'auto':
+            # will be resolved dynamically later in training
+            pass
 
 
 class CellClassificationModel:
@@ -165,6 +182,16 @@ class CellClassificationModel:
             X_train_scaled = self.feature_scaler.fit_transform(X_train)
             X_test_scaled = self.feature_scaler.transform(X_test)
             
+            # Just before feature selection
+            if self.config.feature_selection_method == 'auto':
+                num_features = X_train.shape[1]
+                if num_features > 100:
+                    self.config.feature_selection_method = 'pca'
+                elif num_features > 30:
+                    self.config.feature_selection_method = 'univariate'
+                else:
+                    self.config.feature_selection_method = 'rfe'
+
             # Feature selection
             X_train_selected, X_test_selected = self._select_features(X_train_scaled, X_test_scaled, y_train)
             
@@ -957,31 +984,42 @@ class MLEnhancedAnalyzer:
     def analyze_single_image(self, image_path: str, **kwargs) -> Dict:
         """
         Analyze a single image using the base analyzer with ML enhancements.
-        This method ensures compatibility with the standard analyzer interface.
+        Passes analysis parameters such as pixel_ratio, min_cell_area, etc. via kwargs.
+        Compatible with both standard and professional analyzers.
         """
         try:
-            # Use the base analyzer's method
+            # Step 1: Delegate to base analyzer using flexible method signature
             if hasattr(self.base_analyzer, 'analyze_single_image'):
                 base_result = self.base_analyzer.analyze_single_image(image_path, **kwargs)
             elif hasattr(self.base_analyzer, 'analyze_image_professional'):
                 base_result = self.base_analyzer.analyze_image_professional(image_path, **kwargs)
+            elif hasattr(self.base_analyzer, 'analyze_image'):
+                base_result = self.base_analyzer.analyze_image(image_path)  # May not support kwargs
             else:
-                # Fallback to generic analyze method if available
-                base_result = self.base_analyzer.analyze_image(image_path)
-            
+                return {
+                    'success': False,
+                    'error': 'No valid analysis method found in base analyzer.',
+                    'timestamp': datetime.now().isoformat()
+                }
+
+            # Step 2: Check for success before continuing
             if not base_result or not base_result.get('success', False):
                 return base_result
-            
-            # Add ML enhancements if models are trained
+
+            # Step 3: Inject ML enhancements if model is trained and cell data exists
             if self.models_trained and 'cell_data' in base_result:
-                ml_enhancements = self._apply_ml_enhancements(base_result['cell_data'])
-                base_result['ml_enhancements'] = ml_enhancements
-            
-            # Store data for future training
+                try:
+                    ml_enhancements = self._apply_ml_enhancements(base_result['cell_data'])
+                    base_result['ml_enhancements'] = ml_enhancements
+                except Exception as ml_error:
+                    logger.warning(f"ML enhancement failed: {str(ml_error)}")
+                    base_result['ml_enhancements'] = {'error': str(ml_error)}
+
+            # Step 4: Store data for incremental training
             self._store_training_data(base_result)
-            
+
             return base_result
-            
+
         except Exception as e:
             logger.error(f"❌ ML-enhanced single image analysis error: {str(e)}")
             return {
@@ -989,6 +1027,27 @@ class MLEnhancedAnalyzer:
                 'error': str(e),
                 'timestamp': datetime.now().isoformat()
             }
+    
+    def analyze_with_ml_enhancement(self, image_path: str, **kwargs) -> Dict:
+        """
+        Analyze image with ML enhancements - alias for analyze_single_image
+        """
+        return self.analyze_single_image(image_path, **kwargs)
+
+    def classify_cells(self, result):
+        if not result.get('success'):
+            return result
+
+        # Add classification if available
+        if 'cell_data' in result and hasattr(self, 'classification_model'):
+            df = pd.DataFrame(result['cell_data'])
+            X, _ = self.classification_model.prepare_features(df)
+            predictions = self.classification_model.predict_classification(X)
+            df['classification'] = predictions
+            result['cell_data'] = df.to_dict(orient='records')
+
+        return result
+
     
     def analyze_image_professional(self, image_path: str, **kwargs) -> Dict:
         """

@@ -1,32 +1,32 @@
-    # bioimaging.py
-    
-    import cv2
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    from scipy import ndimage
-    from skimage import filters, morphology, measure, segmentation, feature
-    from skimage.color import rgb2gray, rgb2hsv
-    from skimage.exposure import equalize_adapthist
-    from skimage.filters import gaussian, threshold_otsu, threshold_local
-    from skimage.morphology import remove_small_objects, disk, opening, closing  # <-- without watershed
-    from skimage.segmentation import watershed
-    from skimage.segmentation import clear_border
-    from sklearn.cluster import KMeans
-    from sklearn.preprocessing import StandardScaler
-    import os
-    import json
-    from datetime import datetime
-    import warnings
-    warnings.filterwarnings('ignore')
+# bioimaging.py
 
-    class WolffiaAnalyzer:
+import cv2
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy import ndimage
+from skimage import filters, morphology, measure, segmentation, feature
+from skimage.color import rgb2gray, rgb2hsv
+from skimage.exposure import equalize_adapthist
+from skimage.filters import gaussian, threshold_otsu, threshold_local
+from skimage.morphology import remove_small_objects, disk, opening, closing  # <-- without watershed
+from skimage.segmentation import watershed
+from skimage.segmentation import clear_border
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import os
+import json
+from datetime import datetime
+import warnings
+warnings.filterwarnings('ignore')
+
+class WolffiaAnalyzer:
     """
     Advanced Wolffia bioimage analysis pipeline for automated cell counting,
     morphological analysis, chlorophyll content assessment, and biomass estimation.
     """
 
-    def __init__(self, pixel_to_micron_ratio=1.0, chlorophyll_threshold=0.6):
+def __init__(self, pixel_to_micron_ratio=1.0, chlorophyll_threshold=0.6):
     """
     Initialize Wolffia analyzer
 
@@ -38,70 +38,70 @@
     self.chlorophyll_threshold = chlorophyll_threshold
     self.results_history = []
 
-       def preprocess_image(self, image_path, enhance_contrast=True, denoise=True):
-        """
-        Enhanced image preprocessing for Wolffia detection.
-        Focuses on isolating green floating structures and suppressing background/dust.
-        """
-        try:
-            # Load image
-            if isinstance(image_path, str):
-                image = cv2.imread(image_path)
-                if image is None:
-                    raise ValueError(f"Could not load image from {image_path}")
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            else:
-                image = image_path
+def preprocess_image(self, image_path, enhance_contrast=True, denoise=True):
+    """
+    Enhanced image preprocessing for Wolffia detection.
+    Focuses on isolating green floating structures and suppressing background/dust.
+    """
+    try:
+        # Load image
+        if isinstance(image_path, str):
+            image = cv2.imread(image_path)
+            if image is None:
+                raise ValueError(f"Could not load image from {image_path}")
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        else:
+            image = image_path
 
-            original = image.copy()
+        original = image.copy()
 
-            # Convert to color spaces
-            gray = rgb2gray(image)
-            hsv = rgb2hsv(image)
+        # Convert to color spaces
+        gray = rgb2gray(image)
+        hsv = rgb2hsv(image)
 
-            # Extract color channels (normalized)
-            red_channel = image[:, :, 0] / 255.0
-            green_channel = image[:, :, 1] / 255.0
-            blue_channel = image[:, :, 2] / 255.0
+        # Extract color channels (normalized)
+        red_channel = image[:, :, 0] / 255.0
+        green_channel = image[:, :, 1] / 255.0
+        blue_channel = image[:, :, 2] / 255.0
 
-            # Create green color mask using HSV
-            lower_green_h = 35 / 360  # Hue range in [0, 1]
-            upper_green_h = 85 / 360
-            green_mask = (
-                (hsv[:, :, 0] >= lower_green_h) & (hsv[:, :, 0] <= upper_green_h) &
-                (hsv[:, :, 1] >= 0.3) &  # minimum saturation
-                (hsv[:, :, 2] >= 0.2)    # minimum brightness
-            )
+        # Create green color mask using HSV
+        lower_green_h = 35 / 360  # Hue range in [0, 1]
+        upper_green_h = 85 / 360
+        green_mask = (
+            (hsv[:, :, 0] >= lower_green_h) & (hsv[:, :, 0] <= upper_green_h) &
+            (hsv[:, :, 1] >= 0.3) &  # minimum saturation
+            (hsv[:, :, 2] >= 0.2)    # minimum brightness
+        )
 
-            # Enhanced chlorophyll detection
-            chlorophyll_enhanced = green_channel - 0.5 * (red_channel + blue_channel)
-            chlorophyll_enhanced = np.clip(chlorophyll_enhanced, 0, 1)
+        # Enhanced chlorophyll detection
+        chlorophyll_enhanced = green_channel - 0.5 * (red_channel + blue_channel)
+        chlorophyll_enhanced = np.clip(chlorophyll_enhanced, 0, 1)
 
-            # Apply green mask to focus only on likely Wolffia regions
-            chlorophyll_enhanced = chlorophyll_enhanced * green_mask
-            green_channel = green_channel * green_mask
-            gray = gray * green_mask
+        # Apply green mask to focus only on likely Wolffia regions
+        chlorophyll_enhanced = chlorophyll_enhanced * green_mask
+        green_channel = green_channel * green_mask
+        gray = gray * green_mask
 
-            # Adaptive contrast enhancement
-            if enhance_contrast:
-                gray = equalize_adapthist(gray, clip_limit=0.03)
-                green_channel = equalize_adapthist(green_channel, clip_limit=0.03)
-                chlorophyll_enhanced = equalize_adapthist(chlorophyll_enhanced, clip_limit=0.03)
+        # Adaptive contrast enhancement
+        if enhance_contrast:
+            gray = equalize_adapthist(gray, clip_limit=0.03)
+            green_channel = equalize_adapthist(green_channel, clip_limit=0.03)
+            chlorophyll_enhanced = equalize_adapthist(chlorophyll_enhanced, clip_limit=0.03)
 
-            # Denoising
-            if denoise:
-                gray = gaussian(gray, sigma=0.5)
-                green_channel = gaussian(green_channel, sigma=0.5)
-                chlorophyll_enhanced = gaussian(chlorophyll_enhanced, sigma=0.5)
+        # Denoising
+        if denoise:
+            gray = gaussian(gray, sigma=0.5)
+            green_channel = gaussian(green_channel, sigma=0.5)
+            chlorophyll_enhanced = gaussian(chlorophyll_enhanced, sigma=0.5)
 
-            return original, gray, green_channel, chlorophyll_enhanced, hsv
+        return original, gray, green_channel, chlorophyll_enhanced, hsv
 
-        except Exception as e:
-            print(f"Error in preprocessing: {str(e)}")
-            return None, None, None, None, None
+    except Exception as e:
+        print(f"Error in preprocessing: {str(e)}")
+        return None, None, None, None, None
 
-    def advanced_segmentation(self, gray_image, green_channel, chlorophyll_enhanced, 
-        min_cell_area=30, max_cell_area=8000):
+def advanced_segmentation(self, gray_image, green_channel, chlorophyll_enhanced, 
+    min_cell_area=30, max_cell_area=8000):
     """
     Advanced multi-modal segmentation for better cell detection
     """
@@ -180,7 +180,7 @@
     print(f"Error in segmentation: {str(e)}")
     return np.zeros_like(gray_image)
 
-    def extract_comprehensive_features(self, labels, original_image, green_channel, chlorophyll_enhanced):
+def extract_comprehensive_features(self, labels, original_image, green_channel, chlorophyll_enhanced):
     """
     Extract comprehensive morphological and biochemical features
     """
@@ -280,7 +280,7 @@
     print(f"Error in feature extraction: {str(e)}")
     return pd.DataFrame()
 
-    def advanced_cell_classification(self, df):
+def advanced_cell_classification(self, df):
     """
     Advanced cell classification using multiple features and clustering
     """
@@ -352,7 +352,7 @@
     print(f"Error in classification: {str(e)}")
     return df
 
-    def analyze_single_image(self, image_path, timestamp=None, save_visualization=True):
+def analyze_single_image(self, image_path, timestamp=None, save_visualization=True):
     """
     Complete analysis pipeline for a single image with error handling
     """
@@ -417,7 +417,7 @@
     print(f"Error in analysis: {str(e)}")
     return None
 
-    def calculate_comprehensive_stats(self, df):
+def calculate_comprehensive_stats(self, df):
     """
     Calculate comprehensive summary statistics
     """
@@ -472,7 +472,7 @@
     print(f"Error calculating statistics: {str(e)}")
     return {}
 
-    def analyze_time_series(self, image_paths, timestamps=None):
+def analyze_time_series(self, image_paths, timestamps=None):
     """
     Analyze multiple images for comprehensive time-series analysis
     """
@@ -499,7 +499,7 @@
     print(f"Time series analysis complete: {len(results)} images processed successfully")
     return results
 
-    def calculate_temporal_changes(self, results):
+def calculate_temporal_changes(self, results):
     """
     Calculate comprehensive temporal changes and growth rates
     """
@@ -539,7 +539,7 @@
     except Exception as e:
     print(f"Error in temporal analysis: {str(e)}")
 
-    def create_comprehensive_visualization(self, original_image, labels, df, output_path=None):
+def create_comprehensive_visualization(self, original_image, labels, df, output_path=None):
     """
     Create comprehensive visualization with multiple panels
     """
@@ -623,7 +623,7 @@
     except Exception as e:
     print(f"Error creating visualization: {str(e)}")
 
-    def create_time_series_plots(self, results):
+def create_time_series_plots(self, results):
     """
     Create time series plots for temporal analysis
     """
@@ -683,7 +683,7 @@
     except Exception as e:
     print(f"Error creating time series plots: {str(e)}")
 
-    def export_comprehensive_results(self, output_dir="wolffia_analysis_results"):
+def export_comprehensive_results(self, output_dir="wolffia_analysis_results"):
     """
     Export comprehensive analysis results to multiple formats
     """
@@ -754,7 +754,7 @@
     except Exception as e:
     print(f"Error exporting results: {str(e)}")
 
-    def export_growth_analysis(self, output_dir, timestamp):
+def export_growth_analysis(self, output_dir, timestamp):
     """
     Export detailed growth analysis
     """
@@ -792,7 +792,7 @@
     except Exception as e:
     print(f"Error exporting growth analysis: {str(e)}")
 
-    def create_analysis_report(self, output_dir, timestamp):
+def create_analysis_report(self, output_dir, timestamp):
     """
     Create a comprehensive analysis report
     """
@@ -871,7 +871,7 @@
 
 
     # Advanced usage functions
-    def batch_analyze_directory(directory_path, analyzer=None, pattern="*.jpg"):
+def batch_analyze_directory(directory_path, analyzer=None, pattern="*.jpg"):
     """
     Batch analyze all images in a directory
     """
@@ -905,7 +905,7 @@
 
     return results
 
-    def calibrate_pixel_to_micron(image_path, known_distance_pixels, known_distance_microns):
+def calibrate_pixel_to_micron(image_path, known_distance_pixels, known_distance_microns):
     """
     Helper function to calibrate pixel to micron conversion
     """
@@ -914,7 +914,7 @@
     return ratio
 
     # Example usage and demonstration
-    def demo_comprehensive_analysis():
+def demo_comprehensive_analysis():
     """
     Comprehensive demonstration of the Wolffia analysis pipeline
     """
@@ -1031,17 +1031,17 @@
     - Classification criteria: Modify cell type definitions
     """)
 
-    if __name__ == "__main__":
-    analyzer = WolffiaAnalyzer(pixel_to_micron_ratio=0.5, chlorophyll_threshold=0.6)
+if __name__ == "__main__":
+analyzer = WolffiaAnalyzer(pixel_to_micron_ratio=0.5, chlorophyll_threshold=0.6)
 
-    image_paths = [
-    r"C:\Users\Aun\Desktop\Projects\bioimaging\1-2205.jfif",
-    r"C:\Users\Aun\Desktop\Projects\bioimaging\1-2305.jfif",
-    r"C:\Users\Aun\Desktop\Projects\bioimaging\1-2305 - Copy.jfif",
-    r"C:\Users\Aun\Desktop\Projects\bioimaging\2-2205.jfif"
-    ]
+image_paths = [
+r"C:\Users\Aun\Desktop\Projects\bioimaging\1-2205.jfif",
+r"C:\Users\Aun\Desktop\Projects\bioimaging\1-2305.jfif",
+r"C:\Users\Aun\Desktop\Projects\bioimaging\1-2305 - Copy.jfif",
+r"C:\Users\Aun\Desktop\Projects\bioimaging\2-2205.jfif"
+]
 
-    timestamps = ["Day1_Morning", "Day2_Morning", "Day2_Evening", "Day3_Morning"]
+timestamps = ["Day1_Morning", "Day2_Morning", "Day2_Evening", "Day3_Morning"]
 
-    results = analyzer.analyze_time_series(image_paths, timestamps)
-    analyzer.export_comprehensive_results("C:/Users/Aun/Desktop/Projects/bioimaging/wolffia_results")
+results = analyzer.analyze_time_series(image_paths, timestamps)
+analyzer.export_comprehensive_results("C:/Users/Aun/Desktop/Projects/bioimaging/wolffia_results")

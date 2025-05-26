@@ -1,0 +1,63 @@
+{
+  "executive_summary": {
+    "job_name": "batch_20250526_014154",
+    "analysis_date": "2025-05-26 01:41:55",
+    "operator": "",
+    "project_id": "",
+    "total_images_processed": 0,
+    "successful_analyses": 0,
+    "success_rate_percentage": 0
+  },
+  "aggregate_statistics": {},
+  "quality_control_summary": {
+    "total_images_assessed": 8,
+    "average_quality_score": 0.6118545528360998,
+    "quality_distribution": {
+      "excellent": 0,
+      "good": 5,
+      "fair": 2,
+      "poor": 1
+    },
+    "common_issues": {
+      "most_common_issues": [
+        [
+          "Motion blur detected",
+          8
+        ],
+        [
+          "Image resolution too low",
+          4
+        ],
+        [
+          "Low sharpness detected",
+          3
+        ],
+        [
+          "Low contrast detected",
+          1
+        ]
+      ],
+      "total_unique_issues": 4
+    },
+    "outliers_detected": 0,
+    "quality_trend": "insufficient_data"
+  },
+  "recommendations": [
+    "No successful analyses to evaluate"
+  ],
+  "processing_performance": {
+    "message": "No processing time data available"
+  },
+  "export_information": {
+    "timestamp": "2025-05-26T01:41:55.057827",
+    "job_name": "batch_20250526_014154",
+    "total_results": 0,
+    "exported_formats": [
+      "csv",
+      "excel"
+    ],
+    "export_paths": {
+      "excel": "batch_results\\exports\\batch_20250526_014154_complete_analysis.xlsx"
+    }
+  }
+}

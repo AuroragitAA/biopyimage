@@ -8,22 +8,22 @@ This module handles all image preprocessing operations to optimize images for
 accurate cell detection and morphological analysis of Wolffia specimens.
 """
 
+import logging
+import warnings
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
+
 import cv2
 import numpy as np
-import logging
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Union
 
 # Scientific computing imports
-from scipy import ndimage
 from skimage.color import rgb2gray, rgb2hsv, rgb2lab
 from skimage.exposure import equalize_adapthist, rescale_intensity
-from skimage.filters import gaussian, median, unsharp_mask
+from skimage.filters import gaussian
+from skimage.morphology import closing, disk, opening
 from skimage.restoration import denoise_bilateral, denoise_wavelet
-from skimage.morphology import disk, opening, closing
-from skimage.util import img_as_float, img_as_ubyte
 
-import warnings
 warnings.filterwarnings('ignore')
 
 # Configure logging
@@ -92,7 +92,7 @@ class ImageProcessor:
             Processed image components optimized for analysis
         """
         try:
-            logger.info(f"🔍 Starting professional image preprocessing")
+            logger.info("🔍 Starting professional image preprocessing")
             
             # Step 1: Load and validate image
             load_result = self._load_and_validate_image(image_input)
@@ -363,12 +363,12 @@ class ImageProcessor:
             gray = rgb2gray(image.astype(np.float32) / 255.0)
             
             # 1. Sharpness (Laplacian variance)
-            laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+            laplacian = cv2.Laplacian(gray.astype(np.float32), cv2.CV_32F)
             sharpness = np.var(laplacian)
             sharpness_score = min(sharpness * 10, 1.0)
             
             # 2. Contrast assessment
-            contrast = np.std(gray)
+            contrast = np.std(gray.astype(np.float32))
             contrast_score = min(contrast * 3, 1.0)
             
             # 3. Brightness assessment
@@ -556,10 +556,10 @@ class ImageProcessor:
         """Apply advanced denoising based on strategy."""
         try:
             strength = strategy.get('denoising_strength', 'moderate')
-            
+
             if strength == 'light':
                 # Light Gaussian denoising
-                denoised = gaussian(image, sigma=0.5, multichannel=True)
+                denoised = gaussian(image, sigma=0.5, channel_axis=-1)
             elif strength == 'moderate':
                 # Bilateral filtering to preserve edges
                 denoised = np.zeros_like(image, dtype=np.float32)
@@ -571,7 +571,7 @@ class ImageProcessor:
                 # Advanced wavelet denoising
                 try:
                     denoised = denoise_wavelet(
-                        image, sigma=None, wavelet='db4', multichannel=True,
+                        image, sigma=None, wavelet='db4', channel_axis=-1,
                         method='BayesShrink', mode='soft'
                     )
                 except ImportError:
@@ -581,15 +581,15 @@ class ImageProcessor:
                         denoised[:, :, i] = denoise_bilateral(
                             image[:, :, i], sigma_color=0.15, sigma_spatial=2.0
                         )
-            
+
             # Ensure proper format
             if denoised.max() <= 1.0:
                 denoised = (denoised * 255).astype(np.uint8)
             else:
                 denoised = np.clip(denoised, 0, 255).astype(np.uint8)
-            
+
             return denoised
-            
+
         except Exception as e:
             logger.error(f"❌ Denoising error: {e}")
             return image
@@ -681,36 +681,32 @@ class ImageProcessor:
     def _create_green_mask(self, hsv_image: np.ndarray) -> np.ndarray:
         """Create sophisticated green mask for biological relevance."""
         try:
+            hsv_image = hsv_image.astype(np.float32)
             h, s, v = hsv_image[:, :, 0], hsv_image[:, :, 1], hsv_image[:, :, 2]
-            
-            # Multiple green detection criteria
-            green_hue = (h >= 0.25) & (h <= 0.45)  # Green hue range
+
+            green_hue = (h >= 0.25) & (h <= 0.45)
             sufficient_saturation = s >= 0.2
             sufficient_brightness = v >= 0.15
-            
-            # Additional biological relevance criteria
-            not_too_bright = v <= 0.95  # Avoid overexposed regions
-            balanced_saturation = (s >= 0.1) & (s <= 0.9)  # Avoid artificial colors
-            
-            # Combine criteria
-            mask = (green_hue & sufficient_saturation & sufficient_brightness & 
-                   not_too_bright & balanced_saturation)
-            
-            # Morphological cleanup
+            not_too_bright = v <= 0.95
+            balanced_saturation = (s >= 0.1) & (s <= 0.9)
+
+            mask = (green_hue & sufficient_saturation & sufficient_brightness &
+                    not_too_bright & balanced_saturation)
+
             try:
                 kernel = disk(2)
                 mask = opening(mask, kernel)
                 mask = closing(mask, disk(3))
             except:
-                # Fallback morphological operations
                 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-                mask = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel) > 0
-            
+                mask = mask.astype(np.uint8) * 255
+                mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+                mask = mask > 0
+
             return mask
-            
+
         except Exception as e:
             logger.error(f"❌ Green mask error: {e}")
-            # Fallback: simple green detection
             try:
                 hsv_uint8 = (hsv_image * 255).astype(np.uint8)
                 lower_green = np.array([35, 50, 40])
@@ -719,6 +715,7 @@ class ImageProcessor:
                 return mask
             except:
                 return np.ones(hsv_image.shape[:2], dtype=bool)
+
 
     def _enhance_contrast_adaptive(self, gray: np.ndarray, green: np.ndarray, 
                                  chlorophyll: np.ndarray, strategy: Dict) -> Dict:
@@ -804,8 +801,8 @@ class ImageProcessor:
             
             # Try to get additional EXIF data if available
             try:
-                import PIL.Image
                 import PIL.ExifTags
+                import PIL.Image
                 
                 with PIL.Image.open(image_path) as img:
                     metadata.update({
@@ -856,8 +853,9 @@ class ImageProcessor:
                     'median': float(np.median(channel_data))
                 }
 
-            # HSV analysis
-            hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+            # Ensure compatible type for OpenCV color conversion
+            image_safe = image.astype(np.uint8) if image.dtype != np.uint8 else image
+            hsv = cv2.cvtColor(image_safe, cv2.COLOR_RGB2HSV)
             green_mask = self._create_green_mask(hsv.astype(np.float32) / 255.0)
 
             # Quality assessment
@@ -985,7 +983,7 @@ if __name__ == "__main__":
         
         if result:
             original, gray, green_channel, chlorophyll_enhanced, hsv = result
-            print(f"✅ Preprocessing successful:")
+            print("✅ Preprocessing successful:")
             print(f"   Original shape: {original.shape}")
             print(f"   Gray range: {gray.min():.3f} - {gray.max():.3f}")
             print(f"   Green channel range: {green_channel.min():.3f} - {green_channel.max():.3f}")

@@ -95,7 +95,7 @@ function showError(message) {
         errorDiv.style.display = 'block';
     }
 }
-
+ 
 function hideError() {
     const errorDiv = safeGetElement('error');
     if (errorDiv) {

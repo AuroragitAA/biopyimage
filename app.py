@@ -1,379 +1,261 @@
 """
-app.py - BIOIMAGIN Professional Wolffia Analysis System
-Production-Grade Flask Application with Full Integration
-
-This is the final, complete Flask application that integrates all professional
-components of the Wolffia bioimage analysis system into a single, deployable solution.
-
-Author: BIOIMAGIN Project Team
-Version: 3.0.0 - Production Ready
+Enhanced Flask App for BIOIMAGIN Wolffia Analysis System
+Production-ready with live analysis, real-time updates, and robust error handling
+Fixed integration issues and standardized interfaces
 """
 
-import os
-import sys
+import base64
+import io
 import json
 import logging
-from logging_config import setup_logging, get_safe_logger, safe_log_message
+import os
+import shutil
+import sys
+import tempfile
 import threading
 import time
 import traceback
-import tempfile
-import shutil
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
-import uuid
+from typing import Any, Dict, List, Optional, Union
 
-# Core Flask and web framework
-from flask import Flask, request, jsonify, render_template, send_file, send_from_directory
-from werkzeug.utils import secure_filename
-from werkzeug.exceptions import RequestEntityTooLarge
-
-# Scientific computing and image processing
+import cv2
 import numpy as np
 import pandas as pd
-import cv2
+from flask import (
+    Flask,
+    jsonify,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+    session,
+)
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from matplotlib import pyplot as plt
+from PIL import Image
+from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.utils import secure_filename
 
-# Professional System Integration
-try:
-    from professional_integrator import get_professional_system, ProfessionalWolffiaSystem
-    PROFESSIONAL_SYSTEM_AVAILABLE = True
-    print("✅ Professional system integration available")
-except ImportError as e:
-    print(f"⚠️ Professional system not available: {e}")
-    PROFESSIONAL_SYSTEM_AVAILABLE = False
-
-# Individual component fallbacks
+# Import enhanced analyzer with proper error handling
 try:
     from wolffia_analyzer import WolffiaAnalyzer
-    from image_processor import ImageProcessor
-    from segmentation import EnhancedCellSegmentation
-    BASIC_COMPONENTS_AVAILABLE = True
+    ANALYZER_AVAILABLE = True
+    print("✅ Core analyzer imported successfully")
 except ImportError as e:
-    print(f"⚠️ Basic components not fully available: {e}")
-    BASIC_COMPONENTS_AVAILABLE = False
+    print(f"❌ Core analyzer not available: {e}")
+    ANALYZER_AVAILABLE = False
 
-# Advanced components (optional)
+# Try to import professional components
 try:
-    from database_manager import DatabaseManager, DatabaseFlaskIntegration
+    from database_manager import DatabaseConfig, DatabaseManager
     DATABASE_AVAILABLE = True
+    print("✅ Database manager available")
 except ImportError:
     DATABASE_AVAILABLE = False
+    print("⚠️ Database manager not available")
 
 try:
-    from batch_processor import BatchProcessor, BatchProcessorFlaskIntegration
-    BATCH_PROCESSING_AVAILABLE = True
+    from ml_enhancement import MLConfig, MLEnhancedAnalyzer
+    ML_AVAILABLE = True
+    print("✅ ML enhancement available")
 except ImportError:
-    BATCH_PROCESSING_AVAILABLE = False
+    ML_AVAILABLE = False
+    print("⚠️ ML enhancement not available")
 
-try:
-    from ml_enhancement import MLEnhancedAnalyzer, MLConfig
-    ML_ENHANCEMENT_AVAILABLE = True
-except ImportError:
-    ML_ENHANCEMENT_AVAILABLE = False
-
-# Configure comprehensive logging
-# Configure comprehensive logging
-setup_logging(
-    log_level=logging.INFO,
-    log_file='logs/bioimagin_system.log',
-    force_no_emoji=False  # Will auto-detect
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/bioimagin_app.log'),
+        logging.StreamHandler()
+    ]
 )
-logger = get_safe_logger(__name__)
+logger = logging.getLogger(__name__)
 
-# Initialize Flask application with professional configuration
+# Initialize Flask app
 app = Flask(__name__)
 app.config.update({
-    'MAX_CONTENT_LENGTH': 32 * 1024 * 1024,  # 32MB max file size
+    'MAX_CONTENT_LENGTH': 50 * 1024 * 1024,  # 50MB max file size
     'UPLOAD_FOLDER': 'temp_uploads',
-    'SECRET_KEY': os.environ.get('SECRET_KEY', 'bioimagin-wolffia-analysis-2024'),
+    'SECRET_KEY': os.environ.get('SECRET_KEY', 'bioimagin-wolffia-live-analysis-2024'),
     'JSON_SORT_KEYS': False,
     'JSONIFY_PRETTYPRINT_REGULAR': True,
-    'PROFESSIONAL_MODE': True,
     'DEBUG': os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
 })
 
-# Global system state
-professional_system = None
-background_tasks = {}
-system_metrics = {
-    'startup_time': datetime.now(),
-    'total_analyses': 0,
-    'successful_analyses': 0,
-    'total_processing_time': 0.0,
-    'last_analysis_time': None,
-    'system_health': 'initializing'
-}
+# Initialize SocketIO for real-time updates
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=False)
 
-def create_required_directories():
-    """Create all necessary directories for system operation."""
+# Global variables
+analyzer = None
+database_manager = None
+active_analyses = {}  # Track ongoing analyses
+analysis_results_cache = {}  # Cache recent results
+
+def ensure_directories():
+    """Ensure all required directories exist"""
     directories = [
-        'temp_uploads', 'logs', 'results', 'exports', 'batch_jobs',
-        'ml_models', 'database_backups', 'quality_reports', 'config',
-        'static', 'templates'
+        'temp_uploads', 'logs', 'results', 'exports', 'outputs',
+        'outputs/debug_images', 'outputs/results', 'outputs/exports',
+        'static/temp_images'
     ]
     
     for directory in directories:
-        Path(directory).mkdir(exist_ok=True)
-    
-    logger.info("📁 All required directories created/verified", logger)
+        Path(directory).mkdir(parents=True, exist_ok=True)
 
-def initialize_professional_system() -> Optional[ProfessionalWolffiaSystem]:
-    """Initialize the professional Wolffia analysis system."""
-    global professional_system
+def initialize_system():
+    """Initialize the analysis system with all available components"""
+    global analyzer, database_manager
     
     try:
-        logger.info("🚀 Initializing BIOIMAGIN Professional System...", logger)
-        
-        if PROFESSIONAL_SYSTEM_AVAILABLE:
-            # Use the integrated professional system
-            professional_system = get_professional_system('config/system_config.json')
-            
-            # Verify system status
-            status = professional_system.get_system_status()
-            logger.info("✅ Professional system initialized", logger)
-            logger.info(f"   Components: {len(status.get('components_available', []))}", logger)
-            logger.info(f"   Professional mode: {status.get('professional_features', {}).get('database_integration', False)}", logger)
-            
-            # Ensure all workflows are properly initialized
-            if hasattr(professional_system, 'workflows') and professional_system.workflows:
-                safe_log_message(f"   Workflows available: {list(professional_system.workflows.keys())}", logger)
-            else:
-                logger.warning("⚠️ No workflows initialized, recreating...")
-                professional_system._setup_integrated_workflows()
-            
-            return professional_system
-            
-        else:
-            logger.warning("⚠️ Professional system not available, creating fallback")
-            return create_fallback_system()
-            
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize professional system: {str(e)}")
-        logger.error(f"   Traceback: {traceback.format_exc()}")
-        
-        # Try fallback system
-        return create_fallback_system()
-
-def create_fallback_system():
-    """Create a fallback system when professional components aren't available."""
-    logger.info("🔄 Creating fallback analysis system...")
-    
-    try:
-        if BASIC_COMPONENTS_AVAILABLE:
-            # Create a simple wrapper around basic components
-            class FallbackSystem:
-                def __init__(self):
-                    self.analyzer = WolffiaAnalyzer()
-                    self.system_name = "Wolffia Analysis System (Basic Mode)"
-                    self.version = "2.0.0-fallback"
-                
-                def analyze_image(self, image_path, **kwargs):
-                    return self.analyzer.analyze_single_image(image_path, **kwargs)
-                
-                def analyze_batch(self, image_paths, **kwargs):
-                    return self.analyzer.batch_analyze_images(image_paths)
-                
-                def get_system_status(self):
-                    return {
-                        'system_name': self.system_name,
-                        'version': self.version,
-                        'mode': 'fallback',
-                        'analyzer_available': True,
-                        'professional_features': {
-                            'database_integration': False,
-                            'ml_enhancement': False,
-                            'batch_processing': True,
-                            'quality_control': False
-                        }
-                    }
-            
-            return FallbackSystem()
-        else:
-            logger.error("❌ No analysis components available")
-            return None
-            
-    except Exception as e:
-        logger.error(f"❌ Fallback system creation failed: {str(e)}")
-        return None
-
-def start_background_services():
-    """Start background services for system maintenance."""
-    global background_tasks
-    
-    logger.info("🔄 Starting background services...", logger)
-    
-    # System health monitoring
-    def health_monitor():
-        while True:
+        if ANALYZER_AVAILABLE:
+            # Initialize core analyzer with robust error handling
             try:
-                time.sleep(30)  # Check every 30 seconds
-                update_system_health()
+                analyzer = WolffiaAnalyzer(
+                    pixel_to_micron_ratio=1.0,
+                    debug_mode=True,
+                    output_dir="outputs"
+                )
+                logger.info("✅ Core analyzer initialized")
+                
+                # Try to enhance with ML if available
+                if ML_AVAILABLE:
+                    try:
+                        ml_config = MLConfig()
+                        # Test if ML analyzer can be created
+                        ml_analyzer = MLEnhancedAnalyzer(analyzer, ml_config)
+                        analyzer = ml_analyzer
+                        logger.info("✅ ML-enhanced analyzer initialized")
+                    except Exception as e:
+                        logger.warning(f"⚠️ ML enhancement failed, using basic analyzer: {e}")
+                        # Keep the basic analyzer
+                
             except Exception as e:
-                logger.error(f"Health monitor error: {str(e)}")
-                time.sleep(60)
-    
-    # Database backup (if available)
-    def backup_scheduler():
-        while True:
-            try:
-                time.sleep(3600)  # Every hour
-                if professional_system and hasattr(professional_system, 'components'):
-                    components = professional_system.components
-                    if 'database' in components:
-                        backup_path = components['database'].create_backup()
-                        logger.info(f"📦 Automated backup created: {backup_path}", logger)
-            except Exception as e:
-                logger.error(f"Backup scheduler error: {str(e)}")
-                time.sleep(3600)
-    
-    # ML model training scheduler
-    def ml_training_scheduler():
-        while True:
-            try:
-                time.sleep(1800)  # Every 30 minutes
-                if professional_system and hasattr(professional_system, 'components'):
-                    components = professional_system.components
-                    if 'ml_analyzer' in components:
-                        ml_analyzer = components['ml_analyzer']
-                        if len(ml_analyzer.training_data) >= 50:
-                            logger.info("🤖 Starting scheduled ML training...", logger)
-                            training_result = ml_analyzer.train_ml_models()
-                            if not training_result.get('error'):
-                                logger.info("✅ Scheduled ML training completed", logger)
-            except Exception as e:
-                logger.error(f"ML training scheduler error: {str(e)}")
-                time.sleep(1800)
-    
-    # Start background threads
-    background_tasks['health_monitor'] = threading.Thread(target=health_monitor, daemon=True)
-    background_tasks['backup_scheduler'] = threading.Thread(target=backup_scheduler, daemon=True)
-    background_tasks['ml_scheduler'] = threading.Thread(target=ml_training_scheduler, daemon=True)
-    
-    for task_name, task_thread in background_tasks.items():
-        task_thread.start()
-        logger.info(f"✅ Started {task_name}", logger)
-
-def update_system_health():
-    """Update system health metrics."""
-    global system_metrics
-    
-    try:
-        # Calculate uptime
-        uptime = datetime.now() - system_metrics['startup_time']
-        
-        # Calculate success rate
-        success_rate = 0.0
-        if system_metrics['total_analyses'] > 0:
-            success_rate = system_metrics['successful_analyses'] / system_metrics['total_analyses']
-        
-        # Determine health status
-        if professional_system is None:
-            health = 'degraded'
-        elif success_rate >= 0.9 and system_metrics['total_analyses'] > 0:
-            health = 'excellent'
-        elif success_rate >= 0.7:
-            health = 'good'
-        elif success_rate >= 0.5:
-            health = 'fair'
+                logger.error(f"❌ Core analyzer initialization failed: {e}")
+                return False
+            
+            # Initialize database if available
+            if DATABASE_AVAILABLE:
+                try:
+                    db_config = DatabaseConfig()
+                    database_manager = DatabaseManager(db_config)
+                    logger.info("✅ Database system initialized")
+                except Exception as e:
+                    logger.warning(f"⚠️ Database initialization failed: {e}")
+                    database_manager = None
+            
+            return True
         else:
-            health = 'poor'
-        
-        system_metrics.update({
-            'uptime_hours': uptime.total_seconds() / 3600,
-            'success_rate': success_rate,
-            'system_health': health
-        })
-        
+            logger.error("❌ Core analyzer not available")
+            return False
     except Exception as e:
-        logger.error(f"Health update error: {str(e)}")
-        system_metrics['system_health'] = 'unknown'
+        logger.error(f"❌ System initialization failed: {str(e)}")
+        return False
+
+# Initialize system
+ensure_directories()
+analyzer_ready = initialize_system()
 
 # ============================================================================
-# FLASK ROUTES - REST API ENDPOINTS
+# WEBSOCKET EVENTS FOR REAL-TIME UPDATES
+# ============================================================================
+
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    logger.info(f"🔗 Client connected: {request.sid}")
+    emit('status', {'message': 'Connected to BIOIMAGIN Live Analysis', 'analyzer_ready': analyzer_ready})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Handle client disconnection"""
+    logger.info(f"🔌 Client disconnected: {request.sid}")
+
+@socketio.on('join_analysis')
+def handle_join_analysis(data):
+    """Join analysis room for real-time updates"""
+    analysis_id = data.get('analysis_id')
+    if analysis_id:
+        join_room(analysis_id)
+        logger.info(f"👥 Client {request.sid} joined analysis room: {analysis_id}")
+
+@socketio.on('leave_analysis')
+def handle_leave_analysis(data):
+    """Leave analysis room"""
+    analysis_id = data.get('analysis_id')
+    if analysis_id:
+        leave_room(analysis_id)
+        logger.info(f"👤 Client {request.sid} left analysis room: {analysis_id}")
+
+# ============================================================================
+# FLASK ROUTES
 # ============================================================================
 
 @app.route('/')
 def home():
-    """Serve the main application dashboard."""
+    """Serve the main application dashboard"""
     try:
-        # Get system status for template
         system_status = {
-            'system_available': professional_system is not None,
-            'professional_mode': PROFESSIONAL_SYSTEM_AVAILABLE,
-            'startup_time': system_metrics['startup_time'].isoformat(),
-            'health': system_metrics['system_health']
+            'analyzer_ready': analyzer_ready,
+            'system_time': datetime.now().isoformat(),
+            'recent_analyses': len(analysis_results_cache),
+            'features': {
+                'live_analysis': True,
+                'batch_processing': True,
+                'real_time_updates': True,
+                'debug_visualization': True,
+                'ml_enhancement': ML_AVAILABLE,
+                'database_integration': DATABASE_AVAILABLE
+            }
         }
         
         return render_template('index.html', system_status=system_status)
         
     except Exception as e:
         logger.error(f"❌ Home route error: {str(e)}")
-        return render_template('index.html', system_status={'system_available': False})
+        return render_template('index.html', system_status={'analyzer_ready': False})
 
 @app.route('/api/health')
 def api_health():
-    """Comprehensive system health check endpoint."""
+    """System health check"""
     try:
         health_data = {
-            'status': 'healthy' if professional_system else 'degraded',
+            'status': 'healthy' if analyzer_ready else 'degraded',
             'timestamp': datetime.now().isoformat(),
-            'system_metrics': system_metrics,
-            'components': {
-                'professional_system': PROFESSIONAL_SYSTEM_AVAILABLE,
-                'basic_components': BASIC_COMPONENTS_AVAILABLE,
-                'database': DATABASE_AVAILABLE,
-                'batch_processing': BATCH_PROCESSING_AVAILABLE,
-                'ml_enhancement': ML_ENHANCEMENT_AVAILABLE
-            }
+            'analyzer_available': ANALYZER_AVAILABLE,
+            'ml_available': ML_AVAILABLE,
+            'database_available': DATABASE_AVAILABLE,
+            'active_analyses': len(active_analyses),
+            'cached_results': len(analysis_results_cache),
+            'uptime': 'running'
         }
         
-        if professional_system:
+        if analyzer and hasattr(analyzer, 'get_analysis_summary'):
             try:
-                system_status = professional_system.get_system_status()
-                health_data['system_details'] = system_status
-            except Exception as e:
-                health_data['system_error'] = str(e)
+                summary = analyzer.get_analysis_summary()
+                health_data['analysis_stats'] = summary
+            except:
+                pass
         
-        status_code = 200 if professional_system else 503
-        return jsonify(health_data), status_code
+        return jsonify(health_data), 200 if analyzer_ready else 503
         
     except Exception as e:
         logger.error(f"❌ Health check error: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'timestamp': datetime.now().isoformat(),
-            'error': str(e)
-        }), 500
-
-@app.route('/api/system/status')
-def api_system_status():
-    """Get detailed system status and metrics."""
-    try:
-        if not professional_system:
-            return jsonify({'error': 'System not available'}), 503
-        
-        status = professional_system.get_system_status()
-        status['metrics'] = system_metrics
-        status['background_tasks'] = {
-            name: task.is_alive() for name, task in background_tasks.items()
-        }
-        
-        return jsonify(status)
-        
-    except Exception as e:
-        logger.error(f"❌ System status error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
 @app.route('/api/analyze', methods=['POST'])
 def api_analyze_single():
-    """Advanced single image analysis endpoint."""
+    """Enhanced single image analysis with real-time updates"""
+    if not analyzer_ready:
+        return jsonify({'error': 'Analyzer not available'}), 503
+    
     temp_path = None
+    analysis_id = str(uuid.uuid4())
     
     try:
-        if not professional_system:
-            return jsonify({'error': 'Analysis system not available'}), 503
-        
         # Validate request
         if 'image' not in request.files:
             return jsonify({'error': 'No image file provided'}), 400
@@ -382,117 +264,161 @@ def api_analyze_single():
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
         
-        # Validate file type and size
-        if not _validate_image_file(file):
-            return jsonify({'error': 'Invalid file type or size'}), 400
+        # Extract parameters
+        params = {
+            'pixel_ratio': float(request.form.get('pixel_ratio', 1.0)),
+            'debug_mode': request.form.get('debug_mode', 'false').lower() == 'true',
+            'auto_export': request.form.get('auto_export', 'false').lower() == 'true'
+        }
         
-        # Extract analysis parameters
-        params = _extract_analysis_parameters(request.form)
-        
-        # Save uploaded file securely
+        # Save uploaded file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         secure_name = secure_filename(file.filename)
         temp_filename = f"analysis_{timestamp}_{secure_name}"
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
-        
         file.save(temp_path)
-        logger.info(f"📁 File saved for analysis: {temp_path}", logger)
         
-        # Perform professional analysis
-        analysis_start = datetime.now()
+        logger.info(f"📁 File saved for analysis: {temp_path}")
         
-        try:
-            # Use the professional system's analyze_image method
-            if hasattr(professional_system, 'analyze_image'):
-                result = professional_system.analyze_image(
-                    temp_path, 
-                    workflow='comprehensive',
-                    **params
-                )
-            else:
-                # Fallback to direct workflow call
-                if hasattr(professional_system, 'workflows') and 'comprehensive' in professional_system.workflows:
-                    result = professional_system.workflows['comprehensive'](temp_path, **params)
-                else:
-                    # Ultimate fallback
-                    result = {
-                        'success': False,
-                        'error': 'No analysis workflow available',
-                        'timestamp': datetime.now().isoformat()
-                    }
-        except Exception as analysis_error:
-            logger.error(f"❌ Analysis failed: {str(analysis_error)}")
-            result = {
-                'success': False,
-                'error': str(analysis_error),
-                'timestamp': datetime.now().isoformat()
-            }
+        # Initialize analysis tracking
+        active_analyses[analysis_id] = {
+            'status': 'starting',
+            'progress': 0,
+            'stage': 'initialization',
+            'start_time': datetime.now(),
+            'image_path': temp_path
+        }
         
-        analysis_time = (datetime.now() - analysis_start).total_seconds()
-        
-        # Update system metrics
-        system_metrics['total_analyses'] += 1
-        system_metrics['total_processing_time'] += analysis_time
-        system_metrics['last_analysis_time'] = datetime.now()
-        
-        if result.get('success', False):
-            system_metrics['successful_analyses'] += 1
-        
-        # Enhance result with additional metadata
-        result.update({
-            'analysis_metadata': {
-                'processing_time': analysis_time,
-                'file_size_mb': round(os.path.getsize(temp_path) / (1024*1024), 2),
-                'analysis_id': str(uuid.uuid4()),
-                'system_version': '3.0.0'
-            }
-        })
-        
-        # Create visualizations if successful
-        if result.get('success') and 'labels' in result:
+        # Start analysis in background thread
+        def run_analysis():
             try:
-                visualizations = _create_analysis_visualizations(temp_path, result)
-                result['visualizations'] = visualizations
-            except Exception as viz_error:
-                logger.warning(f"⚠️ Visualization creation failed: {str(viz_error)}")
+                # Set up progress callback for WebSocket updates
+                def progress_callback(progress, stage, **kwargs):
+                    active_analyses[analysis_id]['progress'] = progress
+                    active_analyses[analysis_id]['stage'] = stage
+                    socketio.emit('analysis_progress', {
+                        'analysis_id': analysis_id,
+                        'progress': progress,
+                        'stage': stage
+                    }, room=analysis_id)
+                
+                # Set progress callback on analyzer
+                if hasattr(analyzer, 'set_progress_callback'):
+                    analyzer.set_progress_callback(progress_callback)
+                
+                # Run analysis
+                result = analyzer.analyze_single_image(temp_path, **params)
+                
+                # Add analysis metadata
+                result['analysis_id'] = analysis_id
+                
+                # Add visualizations
+                if result.get('success'):
+                    result['visualizations'] = create_analysis_visualizations(temp_path, result)
+                
+                # Store in database if available
+                if database_manager and result.get('success'):
+                    try:
+                        store_analysis_in_database(result)
+                    except Exception as db_error:
+                        logger.warning(f"Database storage failed: {str(db_error)}")
+                
+                # Cache result
+                analysis_results_cache[analysis_id] = result
+                
+                # Notify completion
+                socketio.emit('analysis_complete', {
+                    'analysis_id': analysis_id,
+                    'success': result.get('success', False),
+                    'total_cells': result.get('total_cells', 0),
+                    'quality_score': result.get('quality_score', 0),
+                    'processing_time': result.get('processing_time', 0)
+                }, room=analysis_id)
+                
+                # Clean up
+                if analysis_id in active_analyses:
+                    del active_analyses[analysis_id]
+                
+            except Exception as e:
+                logger.error(f"❌ Background analysis error: {str(e)}")
+                
+                # Notify error
+                socketio.emit('analysis_error', {
+                    'analysis_id': analysis_id,
+                    'error': str(e)
+                }, room=analysis_id)
+                
+                # Clean up
+                if analysis_id in active_analyses:
+                    del active_analyses[analysis_id]
         
-        logger.info(f"✅ Analysis complete: {result.get('total_cells', 0)} cells in {analysis_time:.2f}s", logger)
-        
-        return jsonify(result)
-        
-    except RequestEntityTooLarge:
-        return jsonify({'error': 'File too large. Maximum size is 32MB.'}), 413
-    
-    except Exception as e:
-        logger.error(f"❌ Analysis endpoint error: {str(e)}")
-        logger.error(f"   Traceback: {traceback.format_exc()}")
-        
-        # Update metrics for failed analysis
-        system_metrics['total_analyses'] += 1
+        # Start background analysis
+        analysis_thread = threading.Thread(target=run_analysis)
+        analysis_thread.daemon = True
+        analysis_thread.start()
         
         return jsonify({
-            'success': False,
-            'error': f'Analysis failed: {str(e)}',
+            'analysis_id': analysis_id,
+            'status': 'started',
+            'message': 'Analysis started - connect to WebSocket for real-time updates'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Analysis start error: {str(e)}")
+        
+        # Clean up
+        if analysis_id in active_analyses:
+            del active_analyses[analysis_id]
+        
+        return jsonify({
+            'error': f'Analysis failed to start: {str(e)}',
             'timestamp': datetime.now().isoformat()
         }), 500
     
     finally:
-        # Clean up temporary file
+        # Schedule cleanup of temp file
         if temp_path and os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-                logger.info(f"🗑️ Cleaned up temporary file: {temp_path}", logger)
-            except Exception as cleanup_error:
-                logger.error(f"❌ Failed to clean up temp file: {cleanup_error}")
+            def cleanup_later():
+                time.sleep(300)  # Keep for 5 minutes
+                try:
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+                except:
+                    pass
+            
+            cleanup_thread = threading.Thread(target=cleanup_later)
+            cleanup_thread.daemon = True
+            cleanup_thread.start()
+
+@app.route('/api/analysis/<analysis_id>')
+def api_get_analysis_result(analysis_id):
+    """Get analysis result by ID"""
+    try:
+        if analysis_id in analysis_results_cache:
+            result = analysis_results_cache[analysis_id]
+            return jsonify(result)
+        elif analysis_id in active_analyses:
+            return jsonify({
+                'analysis_id': analysis_id,
+                'status': 'running',
+                'progress': active_analyses[analysis_id]['progress'],
+                'stage': active_analyses[analysis_id]['stage']
+            })
+        else:
+            return jsonify({'error': 'Analysis not found'}), 404
+            
+    except Exception as e:
+        logger.error(f"❌ Get analysis result error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/batch/analyze', methods=['POST'])
 def api_batch_analyze():
-    """Advanced batch analysis endpoint with progress tracking."""
+    """Enhanced batch analysis with progress tracking"""
+    if not analyzer_ready:
+        return jsonify({'error': 'Analyzer not available'}), 503
+    
     try:
-        if not professional_system:
-            return jsonify({'error': 'Batch analysis system not available'}), 503
-        
-        # Check for uploaded files
+        # Validate files
         if 'images' not in request.files:
             return jsonify({'error': 'No image files provided'}), 400
         
@@ -500,413 +426,292 @@ def api_batch_analyze():
         if not files or all(f.filename == '' for f in files):
             return jsonify({'error': 'No valid files selected'}), 400
         
-        # Validate file count
-        if len(files) > 50:
-            return jsonify({'error': 'Too many files. Maximum 50 images per batch.'}), 400
+        if len(files) > 20:  # Reasonable limit for web interface
+            return jsonify({'error': 'Too many files. Maximum 20 images per batch.'}), 400
         
-        logger.info(f"🔄 Starting batch analysis of {len(files)} images")
+        batch_id = str(uuid.uuid4())
+        logger.info(f"🔄 Starting batch analysis: {len(files)} images (ID: {batch_id})")
         
-        # Validate all files first
-        valid_files = []
-        validation_errors = []
-        
-        for file in files:
-            if _validate_image_file(file):
-                valid_files.append(file)
-            else:
-                validation_errors.append(f"Invalid file: {file.filename}")
-        
-        if not valid_files:
-            return jsonify({
-                'error': 'No valid image files found',
-                'validation_errors': validation_errors
-            }), 400
-        
-        # Save files temporarily
+        # Save files
         temp_paths = []
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        try:
-            for i, file in enumerate(valid_files):
-                secure_name = secure_filename(file.filename)
-                temp_filename = f"batch_{timestamp}_{i:03d}_{secure_name}"
-                temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
-                file.save(temp_path)
-                temp_paths.append(temp_path)
-            
-            # Perform batch analysis
-            batch_start = datetime.now()
-            
-            # Use professional batch analysis if available
-            if hasattr(professional_system, 'analyze_batch'):
-                result = professional_system.analyze_batch(temp_paths)
-            else:
-                # Fallback to sequential analysis
-                result = _fallback_batch_analysis(temp_paths)
-            
-            batch_time = (datetime.now() - batch_start).total_seconds()
-            
-            # Update system metrics
-            system_metrics['total_analyses'] += len(temp_paths)
-            system_metrics['total_processing_time'] += batch_time
-            system_metrics['last_analysis_time'] = datetime.now()
-            
-            successful_count = result.get('summary', {}).get('successful_analyses', 0)
-            system_metrics['successful_analyses'] += successful_count
-            
-            # Enhance result
-            result.update({
-                'batch_metadata': {
-                    'total_processing_time': batch_time,
-                    'batch_id': f"batch_{timestamp}",
-                    'validation_errors': validation_errors,
-                    'files_processed': len(temp_paths)
-                }
-            })
-            
-            logger.info(f"✅ Batch analysis complete: {successful_count}/{len(temp_paths)} successful")
-            
-            return jsonify(result)
-            
-        finally:
-            # Clean up temporary files
-            for temp_path in temp_paths:
-                if os.path.exists(temp_path):
+        for i, file in enumerate(files):
+            secure_name = secure_filename(file.filename)
+            temp_filename = f"batch_{timestamp}_{i:03d}_{secure_name}"
+            temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
+            file.save(temp_path)
+            temp_paths.append(temp_path)
+        
+        # Initialize batch tracking
+        active_analyses[batch_id] = {
+            'type': 'batch',
+            'status': 'starting',
+            'progress': 0,
+            'stage': 'initialization',
+            'start_time': datetime.now(),
+            'total_images': len(temp_paths),
+            'completed_images': 0
+        }
+        
+        def run_batch_analysis():
+            try:
+                # Set up progress callback for batch processing
+                def batch_progress_callback(progress, stage, **kwargs):
+                    socketio.emit('batch_progress', {
+                        'batch_id': batch_id,
+                        'progress': progress,
+                        'stage': stage,
+                        'completed': kwargs.get('completed', 0),
+                        'total': len(temp_paths)
+                    }, room=batch_id)
+                
+                # Use the analyzer's batch processing if available
+                if hasattr(analyzer, 'batch_analyze_images'):
+                    result = analyzer.batch_analyze_images(temp_paths, batch_progress_callback)
+                else:
+                    # Fallback to sequential processing
+                    results = []
+                    for i, temp_path in enumerate(temp_paths):
+                        try:
+                            single_result = analyzer.analyze_single_image(temp_path)
+                            results.append(single_result)
+                            
+                            # Update progress
+                            progress = int(((i + 1) / len(temp_paths)) * 100)
+                            batch_progress_callback(progress, f'Completed {i+1}/{len(temp_paths)}', completed=i+1)
+                            
+                        except Exception as img_error:
+                            logger.error(f"❌ Batch image error: {str(img_error)}")
+                            results.append({
+                                'success': False,
+                                'error': str(img_error),
+                                'image_path': temp_path
+                            })
+                    
+                    # Calculate batch summary
+                    successful = [r for r in results if r.get('success')]
+                    result = {
+                        'success': True,
+                        'batch_summary': {
+                            'total_images': len(temp_paths),
+                            'successful': len(successful),
+                            'failed': len(temp_paths) - len(successful),
+                            'success_rate': len(successful) / len(temp_paths) * 100,
+                            'total_cells_detected': sum(r.get('total_cells', 0) for r in successful),
+                            'processing_time': (datetime.now() - active_analyses[batch_id]['start_time']).total_seconds()
+                        },
+                        'individual_results': results
+                    }
+                
+                # Add batch metadata
+                result['batch_id'] = batch_id
+                
+                # Cache result
+                analysis_results_cache[batch_id] = result
+                
+                # Notify completion
+                socketio.emit('batch_complete', {
+                    'batch_id': batch_id,
+                    'success_rate': result['batch_summary']['success_rate'],
+                    'total_cells': result['batch_summary']['total_cells_detected'],
+                    'processing_time': result['batch_summary']['processing_time']
+                }, room=batch_id)
+                
+                # Clean up
+                if batch_id in active_analyses:
+                    del active_analyses[batch_id]
+                
+                # Clean up temp files
+                for temp_path in temp_paths:
                     try:
                         os.unlink(temp_path)
-                    except Exception as cleanup_error:
-                        logger.error(f"❌ Failed to clean up {temp_path}: {cleanup_error}")
-    
-    except Exception as e:
-        logger.error(f"❌ Batch analysis error: {str(e)}")
-        return jsonify({
-            'error': f'Batch analysis failed: {str(e)}',
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-@app.route('/api/ml/train', methods=['POST'])
-def api_ml_train():
-    """Trigger ML model training."""
-    try:
-        if not professional_system:
-            return jsonify({'error': 'ML system not available'}), 503
-        
-        # Check if ML components are available
-        if not hasattr(professional_system, 'components') or 'ml_analyzer' not in professional_system.components:
-            return jsonify({'error': 'ML enhancement not available'}), 503
-        
-        ml_analyzer = professional_system.components['ml_analyzer']
-        
-        # Check training data availability
-        if len(ml_analyzer.training_data) < 50:
-            return jsonify({
-                'error': 'Insufficient training data',
-                'current_samples': len(ml_analyzer.training_data),
-                'required_samples': 50
-            }), 400
-        
-        logger.info("🤖 Starting ML model training...")
-        
-        # Start training in background
-        def train_models():
-            try:
-                training_result = ml_analyzer.train_ml_models()
-                # Store result for retrieval
-                training_result['training_id'] = str(uuid.uuid4())
-                training_result['completed_at'] = datetime.now().isoformat()
-                # In a full implementation, you'd store this in a job queue or database
+                    except:
+                        pass
                 
             except Exception as e:
-                logger.error(f"❌ ML training failed: {str(e)}")
+                logger.error(f"❌ Batch analysis error: {str(e)}")
+                socketio.emit('batch_error', {
+                    'batch_id': batch_id,
+                    'error': str(e)
+                }, room=batch_id)
+                
+                if batch_id in active_analyses:
+                    del active_analyses[batch_id]
         
-        training_thread = threading.Thread(target=train_models, daemon=True)
-        training_thread.start()
+        # Start batch analysis
+        batch_thread = threading.Thread(target=run_batch_analysis)
+        batch_thread.daemon = True
+        batch_thread.start()
         
         return jsonify({
-            'message': 'ML training started',
-            'training_samples': len(ml_analyzer.training_data),
-            'estimated_time_minutes': 5,
-            'status': 'training'
+            'batch_id': batch_id,
+            'status': 'started',
+            'total_images': len(files),
+            'message': 'Batch analysis started - connect to WebSocket for progress updates'
         })
         
     except Exception as e:
-        logger.error(f"❌ ML training endpoint error: {str(e)}")
+        logger.error(f"❌ Batch analysis start error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/ml/status')
-def api_ml_status():
-    """Get ML system status and model information."""
+@app.route('/api/export/<analysis_id>/<format>')
+def api_export_analysis(analysis_id, format):
+    """Export analysis results"""
     try:
-        if not professional_system:
-            return jsonify({'error': 'ML system not available'}), 503
+        if analysis_id not in analysis_results_cache:
+            return jsonify({'error': 'Analysis not found'}), 404
         
-        if not hasattr(professional_system, 'components') or 'ml_analyzer' not in professional_system.components:
-            return jsonify({'ml_available': False})
+        result = analysis_results_cache[analysis_id]
         
-        ml_analyzer = professional_system.components['ml_analyzer']
-        ml_insights = ml_analyzer.get_ml_insights()
+        if not result.get('success') or not result.get('cell_data'):
+            return jsonify({'error': 'No data to export'}), 400
         
-        return jsonify({
-            'ml_available': True,
-            'training_data_size': len(ml_analyzer.training_data),
-            'models_trained': ml_analyzer.models_trained,
-            'insights': ml_insights
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ ML status error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/database/query', methods=['POST'])
-def api_database_query():
-    """Query the analysis database."""
-    try:
-        if not professional_system or not DATABASE_AVAILABLE:
-            return jsonify({'error': 'Database not available'}), 503
-        
-        if not hasattr(professional_system, 'components') or 'database' not in professional_system.components:
-            return jsonify({'error': 'Database not initialized'}), 503
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No query data provided'}), 400
-        
-        query_type = data.get('type', 'summary')
-        database = professional_system.components['database']
-        
-        if query_type == 'summary':
-            # Get overall database summary
-            stats = database.get_database_statistics()
-            return jsonify(stats)
-        
-        elif query_type == 'project':
-            project_id = data.get('project_id')
-            if not project_id:
-                return jsonify({'error': 'Project ID required'}), 400
-            
-            summary = database.get_project_summary(project_id)
-            return jsonify(summary)
-        
-        elif query_type == 'experiment':
-            experiment_id = data.get('experiment_id')
-            include_cells = data.get('include_cells', False)
-            
-            if not experiment_id:
-                return jsonify({'error': 'Experiment ID required'}), 400
-            
-            data = database.get_experiment_data(experiment_id, include_cells)
-            return jsonify(data)
-        
-        else:
-            return jsonify({'error': f'Unknown query type: {query_type}'}), 400
-            
-    except Exception as e:
-        logger.error(f"❌ Database query error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/export/<export_type>', methods=['POST'])
-def api_export_data(export_type):
-    """Export analysis data in various formats."""
-    try:
-        if not professional_system:
-            return jsonify({'error': 'Export system not available'}), 503
-        
-        data = request.get_json() or {}
+        # Create DataFrame
+        df = pd.DataFrame(result['cell_data'])
         
         # Generate export
-        if export_type == 'csv':
-            export_path = _export_to_csv(data)
-        elif export_type == 'excel':
-            export_path = _export_to_excel(data)
-        elif export_type == 'json':
-            export_path = _export_to_json(data)
-        else:
-            return jsonify({'error': f'Unsupported export type: {export_type}'}), 400
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        if export_path and os.path.exists(export_path):
-            return send_file(
-                export_path,
-                as_attachment=True,
-                download_name=os.path.basename(export_path)
-            )
+        if format.lower() == 'csv':
+            export_path = f"exports/wolffia_analysis_{analysis_id}_{timestamp}.csv"
+            df.to_csv(export_path, index=False)
+            return send_file(export_path, as_attachment=True)
+            
+        elif format.lower() == 'excel':
+            export_path = f"exports/wolffia_analysis_{analysis_id}_{timestamp}.xlsx"
+            with pd.ExcelWriter(export_path, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Cell_Data', index=False)
+                
+                # Add summary sheet
+                summary_df = pd.DataFrame([result['summary']])
+                summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            
+            return send_file(export_path, as_attachment=True)
+            
+        elif format.lower() == 'json':
+            export_data = {
+                'analysis_info': {
+                    'analysis_id': analysis_id,
+                    'timestamp': result.get('timestamp'),
+                    'image_path': result.get('image_path'),
+                    'total_cells': result.get('total_cells'),
+                    'quality_score': result.get('quality_score')
+                },
+                'summary': result.get('summary'),
+                'cell_data': result.get('cell_data')
+            }
+            
+            export_path = f"exports/wolffia_analysis_{analysis_id}_{timestamp}.json"
+            with open(export_path, 'w') as f:
+                json.dump(export_data, f, indent=2, default=str)
+            
+            return send_file(export_path, as_attachment=True)
+        
         else:
-            return jsonify({'error': 'Export generation failed'}), 500
+            return jsonify({'error': f'Unsupported format: {format}'}), 400
             
     except Exception as e:
         logger.error(f"❌ Export error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/export/list')
-def api_list_exports():
-    """List available export files."""
+@app.route('/api/visualizations/<analysis_id>')
+def api_get_visualizations(analysis_id):
+    """Get analysis visualizations"""
     try:
-        export_dir = Path('exports')
-        if not export_dir.exists():
-            return jsonify({'exports': []})
+        if analysis_id not in analysis_results_cache:
+            return jsonify({'error': 'Analysis not found'}), 404
         
-        exports = []
-        for file_path in export_dir.glob('*'):
-            if file_path.is_file():
-                stat = file_path.stat()
-                exports.append({
-                    'filename': file_path.name,
-                    'size_mb': round(stat.st_size / (1024*1024), 2),
-                    'created': datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                    'download_url': f'/api/export/download/{file_path.name}'
-                })
+        result = analysis_results_cache[analysis_id]
+        visualizations = result.get('visualizations', {})
         
-        # Sort by creation time (newest first)
-        exports.sort(key=lambda x: x['created'], reverse=True)
-        
-        return jsonify({'exports': exports})
+        return jsonify(visualizations)
         
     except Exception as e:
-        logger.error(f"❌ Export list error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/export/download/<filename>')
-def api_download_export(filename):
-    """Download an export file."""
-    try:
-        export_dir = Path('exports')
-        file_path = export_dir / secure_filename(filename)
-        
-        if not file_path.exists():
-            return jsonify({'error': 'File not found'}), 404
-        
-        return send_file(file_path, as_attachment=True)
-        
-    except Exception as e:
-        logger.error(f"❌ Export download error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/system/backup', methods=['POST'])
-def api_create_backup():
-    """Create system backup."""
-    try:
-        if not professional_system or not DATABASE_AVAILABLE:
-            return jsonify({'error': 'Backup system not available'}), 503
-        
-        if not hasattr(professional_system, 'components') or 'database' not in professional_system.components:
-            return jsonify({'error': 'Database not available for backup'}), 503
-        
-        database = professional_system.components['database']
-        backup_path = database.create_backup()
-        
-        return jsonify({
-            'message': 'Backup created successfully',
-            'backup_path': backup_path,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-    except Exception as e:
-        logger.error(f"❌ Backup creation error: {str(e)}")
+        logger.error(f"❌ Visualizations error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
 
-def _validate_image_file(file) -> bool:
-    """Validate uploaded image file."""
+def create_analysis_visualizations(image_path, result):
+    """Create visualizations for analysis results"""
     try:
-        if not file or file.filename == '':
-            return False
-        
-        # Check file extension
-        allowed_extensions = {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp', '.jfif'}
-        file_ext = Path(file.filename).suffix.lower()
-        
-        if file_ext not in allowed_extensions:
-            return False
-        
-        # Check file size (additional check)
-        if hasattr(file, 'content_length') and file.content_length:
-            if file.content_length > app.config['MAX_CONTENT_LENGTH']:
-                return False
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ File validation error: {str(e)}")
-        return False
-
-def _extract_analysis_parameters(form_data) -> Dict:
-    """Extract and validate analysis parameters from form data."""
-    try:
-        params = {
-            'pixel_ratio': float(form_data.get('pixel_ratio', 1.0)),
-            'chlorophyll_threshold': float(form_data.get('chlorophyll_threshold', 0.6)),
-            'min_cell_area': int(form_data.get('min_cell_area', 30)),
-            'max_cell_area': int(form_data.get('max_cell_area', 8000)),
-            'analysis_method': form_data.get('analysis_method', 'auto'),
-            'color_method': form_data.get('color_method', 'green_wolffia')
-        }
-        
-        # Validate ranges
-        params['pixel_ratio'] = max(0.1, min(10.0, params['pixel_ratio']))
-        params['chlorophyll_threshold'] = max(0.0, min(1.0, params['chlorophyll_threshold']))
-        params['min_cell_area'] = max(10, min(1000, params['min_cell_area']))
-        params['max_cell_area'] = max(100, min(50000, params['max_cell_area']))
-        
-        return params
-        
-    except (ValueError, TypeError) as e:
-        logger.error(f"❌ Parameter extraction error: {str(e)}")
-        # Return default parameters
-        return {
-            'pixel_ratio': 1.0,
-            'chlorophyll_threshold': 0.6,
-            'min_cell_area': 30,
-            'max_cell_area': 8000,
-            'analysis_method': 'auto',
-            'color_method': 'green_wolffia'
-        }
-
-def _create_analysis_visualizations(image_path: str, result: Dict) -> Dict:
-    """Create analysis visualizations."""
-    try:
-        import base64
-        
         visualizations = {}
         
         # Load original image
         original_image = cv2.imread(image_path)
-        if original_image is not None:
-            original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+        if original_image is None:
+            return visualizations
+        
+        original_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2RGB)
+        
+        # Convert to base64 for web display
+        def image_to_base64(img):
+            """Convert image to base64 string"""
+            try:
+                if len(img.shape) == 3:
+                    img_pil = Image.fromarray(img)
+                else:
+                    img_pil = Image.fromarray(img, mode='L')
+                
+                buffer = io.BytesIO()
+                img_pil.save(buffer, format='PNG')
+                img_str = base64.b64encode(buffer.getvalue()).decode()
+                return img_str
+            except:
+                return None
+        
+        # Original image
+        visualizations['original'] = image_to_base64(original_image)
+        
+        # Segmentation overlay
+        labels = result.get('labels')
+        if labels is not None and np.max(labels) > 0:
+            try:
+                # Create colored overlay
+                overlay = original_image.copy()
+                
+                # Generate colors for each cell
+                unique_labels = np.unique(labels)[1:]  # Skip background
+                colors = plt.cm.Set3(np.linspace(0, 1, len(unique_labels)))
+                
+                for i, label_val in enumerate(unique_labels):
+                    mask = labels == label_val
+                    color = (colors[i][:3] * 255).astype(np.uint8)
+                    overlay[mask] = color
+                
+                # Blend with original
+                blended = cv2.addWeighted(original_image, 0.6, overlay, 0.4, 0)
+                visualizations['segmentation'] = image_to_base64(blended)
+                
+                # Contour overlay
+                contour_overlay = original_image.copy()
+                for label_val in unique_labels:
+                    mask = (labels == label_val).astype(np.uint8)
+                    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    cv2.drawContours(contour_overlay, contours, -1, (255, 0, 0), 2)
+                
+                visualizations['contours'] = image_to_base64(contour_overlay)
+                
+            except Exception as viz_error:
+                logger.warning(f"⚠️ Visualization creation failed: {str(viz_error)}")
+        
+        # Cell detection overlay with numbers
+        if result.get('cell_data'):
+            numbered_overlay = original_image.copy()
+            for cell in result['cell_data']:
+                if 'centroid_x' in cell and 'centroid_y' in cell:
+                    x, y = int(cell['centroid_x']), int(cell['centroid_y'])
+                    cell_id = cell.get('cell_id', 0)
+                    
+                    # Draw marker
+                    cv2.circle(numbered_overlay, (x, y), 8, (255, 0, 0), 2)
+                    cv2.putText(numbered_overlay, str(cell_id), (x+10, y-10),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
             
-            # Encode original image
-            _, orig_buffer = cv2.imencode('.png', cv2.cvtColor(original_image, cv2.COLOR_RGB2BGR))
-            visualizations['original_image'] = base64.b64encode(orig_buffer).decode('utf-8')
-            
-            # Create segmentation overlay if labels available
-            if 'labels' in result and isinstance(result['labels'], (list, np.ndarray)):
-                try:
-                    labels = np.array(result['labels']) if isinstance(result['labels'], list) else result['labels']
-                    
-                    # Create colored overlay
-                    overlay = np.zeros_like(original_image)
-                    unique_labels = np.unique(labels)[1:]  # Skip background
-                    
-                    # Use different colors for each cell
-                    colors = [
-                        [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0],
-                        [255, 0, 255], [0, 255, 255], [255, 128, 0], [128, 0, 255]
-                    ]
-                    
-                    for i, label_val in enumerate(unique_labels[:len(colors)]):
-                        color = colors[i % len(colors)]
-                        overlay[labels == label_val] = color
-                    
-                    # Blend with original
-                    visualization = cv2.addWeighted(original_image, 0.6, overlay, 0.4, 0)
-                    
-                    # Encode visualization
-                    _, viz_buffer = cv2.imencode('.png', cv2.cvtColor(visualization, cv2.COLOR_RGB2BGR))
-                    visualizations['segmentation'] = base64.b64encode(viz_buffer).decode('utf-8')
-                    
-                except Exception as viz_error:
-                    logger.warning(f"⚠️ Segmentation visualization failed: {str(viz_error)}")
+            visualizations['numbered'] = image_to_base64(numbered_overlay)
         
         return visualizations
         
@@ -914,124 +719,68 @@ def _create_analysis_visualizations(image_path: str, result: Dict) -> Dict:
         logger.error(f"❌ Visualization creation error: {str(e)}")
         return {}
 
-def _fallback_batch_analysis(image_paths: List[str]) -> Dict:
-    """Fallback batch analysis when professional system doesn't support it."""
+def store_analysis_in_database(result):
+    """Store analysis result in database if available"""
     try:
-        results = []
-        successful = 0
+        if not database_manager:
+            logger.info("📝 Database not available, skipping storage")
+            return
         
-        for image_path in image_paths:
-            try:
-                result = professional_system.analyze_image(image_path)
-                results.append(result)
-                if result.get('success', False):
-                    successful += 1
-            except Exception as e:
-                results.append({
-                    'success': False,
-                    'error': str(e),
-                    'image_path': image_path
-                })
+        # Ensure we have default project/experiment
+        try:
+            # Try to create or get default project
+            with database_manager.get_connection() as conn:
+                # Check if default project exists
+                project = conn.execute("SELECT id FROM projects WHERE name = ?", ("Default Project",)).fetchone()
+                if not project:
+                    project_id = database_manager.create_project(
+                        name="Default Project",
+                        description="Default project for Wolffia analysis",
+                        operator_name="System"
+                    )
+                else:
+                    project_id = project['id']
+                
+                # Check if default experiment exists
+                experiment = conn.execute(
+                    "SELECT id FROM experiments WHERE project_id = ? AND experiment_name = ?", 
+                    (project_id, "Default Experiment")
+                ).fetchone()
+                if not experiment:
+                    experiment_id = database_manager.create_experiment(
+                        project_id=project_id,
+                        experiment_name="Default Experiment",
+                        description="Default experiment for analysis"
+                    )
+                else:
+                    experiment_id = experiment['id']
         
-        return {
-            'success': True,
-            'summary': {
-                'total_images': len(image_paths),
-                'successful_analyses': successful,
-                'failed_analyses': len(image_paths) - successful,
-                'success_rate': successful / len(image_paths) * 100 if image_paths else 0
-            },
-            'individual_results': results
+        except Exception as setup_error:
+            logger.warning(f"⚠️ Database setup failed: {setup_error}")
+            # Use fallback IDs
+            project_id = 1
+            experiment_id = 1
+        
+        # Store image
+        image_id = database_manager.store_image(
+            experiment_id=experiment_id,
+            filename=Path(result['image_path']).name,
+            file_path=result['image_path']
+        )
+        
+        # Store analysis result
+        analysis_id = database_manager.store_analysis_result(image_id, result)
+        
+        result['database_ids'] = {
+            'image_id': image_id,
+            'analysis_id': analysis_id
         }
+        
+        logger.info(f"✅ Analysis stored in database: {analysis_id}")
         
     except Exception as e:
-        logger.error(f"❌ Fallback batch analysis error: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e),
-            'summary': {'total_images': len(image_paths), 'successful_analyses': 0}
-        }
-
-def _export_to_csv(data: Dict) -> Optional[str]:
-    """Export data to CSV format."""
-    try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_path = f"exports/wolffia_analysis_{timestamp}.csv"
-        
-        # Create sample CSV (in production, use actual analysis data)
-        sample_data = {
-            'Analysis_ID': ['ANALYSIS_001', 'ANALYSIS_002'],
-            'Image_Name': ['sample1.jpg', 'sample2.jpg'],
-            'Total_Cells': [15, 23],
-            'Avg_Area': [245.6, 189.3],
-            'Chlorophyll_Ratio': [67.5, 82.1]
-        }
-        
-        df = pd.DataFrame(sample_data)
-        df.to_csv(export_path, index=False)
-        
-        return export_path
-        
-    except Exception as e:
-        logger.error(f"❌ CSV export error: {str(e)}")
-        return None
-
-def _export_to_excel(data: Dict) -> Optional[str]:
-    """Export data to Excel format."""
-    try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_path = f"exports/wolffia_analysis_{timestamp}.xlsx"
-        
-        # Create sample Excel (in production, use actual analysis data)
-        sample_data = {
-            'Analysis_ID': ['ANALYSIS_001', 'ANALYSIS_002'],
-            'Image_Name': ['sample1.jpg', 'sample2.jpg'],
-            'Total_Cells': [15, 23],
-            'Avg_Area': [245.6, 189.3],
-            'Chlorophyll_Ratio': [67.5, 82.1]
-        }
-        
-        df = pd.DataFrame(sample_data)
-        df.to_excel(export_path, index=False, engine='openpyxl')
-        
-        return export_path
-        
-    except Exception as e:
-        logger.error(f"❌ Excel export error: {str(e)}")
-        return None
-
-def _export_to_json(data: Dict) -> Optional[str]:
-    """Export data to JSON format."""
-    try:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_path = f"exports/wolffia_analysis_{timestamp}.json"
-        
-        # Create sample JSON (in production, use actual analysis data)
-        export_data = {
-            'export_info': {
-                'timestamp': datetime.now().isoformat(),
-                'system': 'BIOIMAGIN Wolffia Analysis',
-                'version': '3.0.0'
-            },
-            'analyses': [
-                {
-                    'analysis_id': 'ANALYSIS_001',
-                    'image_name': 'sample1.jpg',
-                    'total_cells': 15,
-                    'avg_area': 245.6,
-                    'chlorophyll_ratio': 67.5
-                }
-            ]
-        }
-        
-        with open(export_path, 'w') as f:
-            json.dump(export_data, f, indent=2)
-        
-        return export_path
-        
-    except Exception as e:
-        logger.error(f"❌ JSON export error: {str(e)}")
-        return None
+        logger.warning(f"⚠️ Database storage failed (continuing without): {str(e)}")
+        # Don't raise - system should continue working without database
 
 # ============================================================================
 # ERROR HANDLERS
@@ -1039,118 +788,54 @@ def _export_to_json(data: Dict) -> Optional[str]:
 
 @app.errorhandler(413)
 def handle_file_too_large(e):
-    """Handle file too large error."""
-    return jsonify({'error': 'File too large. Maximum size is 32MB.'}), 413
+    return jsonify({'error': 'File too large. Maximum size is 50MB.'}), 413
 
 @app.errorhandler(404)
 def handle_not_found(e):
-    """Handle 404 errors."""
     if request.path.startswith('/api/'):
         return jsonify({'error': 'API endpoint not found'}), 404
     return render_template('index.html'), 404
 
 @app.errorhandler(500)
 def handle_internal_error(e):
-    """Handle internal server errors."""
     logger.error(f"Internal server error: {str(e)}")
     if request.path.startswith('/api/'):
-        return jsonify({'error': 'Internal server error occurred'}), 500
-    return render_template('index.html'), 500
-
-@app.errorhandler(Exception)
-def handle_unexpected_error(e):
-    """Handle unexpected errors."""
-    logger.error(f"Unexpected error: {str(e)}")
-    logger.error(f"Traceback: {traceback.format_exc()}")
-    
-    if request.path.startswith('/api/'):
-        return jsonify({
-            'error': 'An unexpected error occurred',
-            'timestamp': datetime.now().isoformat()
-        }), 500
+        return jsonify({'error': 'Internal server error'}), 500
     return render_template('index.html'), 500
 
 # ============================================================================
-# SYSTEM INITIALIZATION AND STARTUP
-# ============================================================================
-
-def initialize_system():
-    """Initialize the complete BIOIMAGIN system."""
-    global professional_system
-    
-    logger.info("=" * 70)
-    logger.info("🌱 BIOIMAGIN PROFESSIONAL WOLFFIA ANALYSIS SYSTEM")
-    logger.info("   Production-Grade Bioimage Analysis Platform")
-    logger.info("=" * 70)
-    
-    # Create required directories
-    create_required_directories()
-    
-    # Initialize professional system
-    professional_system = initialize_professional_system()
-    
-    if not professional_system:
-        logger.error("❌ Critical: No analysis system available")
-        logger.error("   System will not function properly")
-        return False
-    
-    # Start background services
-    start_background_services()
-    
-    # Initial health check
-    update_system_health()
-    
-    # Log system status
-    logger.info("📊 SYSTEM STATUS SUMMARY:")
-    logger.info(f"   Professional System: {'✅ Available' if PROFESSIONAL_SYSTEM_AVAILABLE else '❌ Limited'}")
-    logger.info(f"   Database Integration: {'✅ Enabled' if DATABASE_AVAILABLE else '❌ Disabled'}")
-    logger.info(f"   ML Enhancement: {'✅ Enabled' if ML_ENHANCEMENT_AVAILABLE else '❌ Disabled'}")
-    logger.info(f"   Batch Processing: {'✅ Enabled' if BATCH_PROCESSING_AVAILABLE else '❌ Disabled'}")
-    logger.info(f"   System Health: {system_metrics['system_health'].upper()}")
-    
-    logger.info("✅ BIOIMAGIN System initialization complete")
-    logger.info("🌐 Server ready to accept requests")
-    
-    return True
-
-# ============================================================================
-# MAIN APPLICATION ENTRY POINT
+# MAIN ENTRY POINT
 # ============================================================================
 
 if __name__ == '__main__':
     try:
-        # Initialize the complete system
-        system_ready = initialize_system()
-        
-        if not system_ready:
-            logger.error("❌ System initialization failed")
-            sys.exit(1)
-        
-        # Display startup information
         print("\n" + "=" * 70)
-        print("🚀 BIOIMAGIN PROFESSIONAL WOLFFIA ANALYSIS SYSTEM")
-        print("   🌐 Server starting...")
-        print(f"   📍 URL: http://localhost:5000")
-        print(f"   📊 API: http://localhost:5000/api/health")
-        print(f"   🔬 Dashboard: http://localhost:5000/")
+        print("🌱 BIOIMAGIN ENHANCED WOLFFIA ANALYSIS SYSTEM")
+        print("   🔬 Production-Ready Live Analysis Platform")
+        print("=" * 70)
+        print(f"   📊 Analyzer Ready: {'✅ YES' if analyzer_ready else '❌ NO'}")
+        print(f"   🤖 ML Enhancement: {'✅ YES' if ML_AVAILABLE else '❌ NO'}")
+        print(f"   🗄️ Database Ready: {'✅ YES' if DATABASE_AVAILABLE else '❌ NO'}")
+        print(f"   🌐 Server URL: http://localhost:5000")
+        print(f"   📡 WebSocket: ws://localhost:5000")
+        print(f"   🎯 Features: Live Analysis, Real-time Updates, Debug Mode")
         print("=" * 70)
         print("   Press Ctrl+C to stop the server")
         print("-" * 70)
         
-        # Start Flask development server
-        app.run(
+        # Run with SocketIO
+        socketio.run(
+            app,
             host='0.0.0.0',
             port=5000,
             debug=app.config['DEBUG'],
-            threaded=True,
-            use_reloader=False  # Disable reloader to prevent double initialization
+            use_reloader=False
         )
         
     except KeyboardInterrupt:
-        logger.info("\n👋 Server stopped by user")
-        print("\n✅ BIOIMAGIN System shutdown complete")
-    
+        print("\n👋 Server stopped by user")
+        print("✅ BIOIMAGIN System shutdown complete")
     except Exception as startup_error:
         logger.error(f"❌ Server startup failed: {startup_error}")
-        logger.error(f"   Traceback: {traceback.format_exc()}")
+        print(f"❌ Server startup failed: {startup_error}")
         sys.exit(1)

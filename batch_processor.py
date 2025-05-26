@@ -14,24 +14,27 @@ Features:
 - Error handling and recovery
 """
 
-import os
 import json
+import logging
+import os
+import pickle
 import threading
 import time
-import logging
+import warnings
+import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Callable, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, asdict
-import pandas as pd
-import numpy as np
+from queue import Empty, Queue
+from typing import Callable, Dict, List, Optional, Tuple
+
 import h5py
-from queue import Queue, Empty
-import pickle
-import zipfile
+import numpy as np
+import pandas as pd
+from flask import jsonify, request  # MAKE SURE these are imported
 from tqdm import tqdm
-import warnings
+
 warnings.filterwarnings('ignore')
 
 # Configure logging
@@ -691,94 +694,131 @@ class BatchProcessor:
         logger.info(f"🚀 Batch Processor initialized: {self.config.job_name}")
     
     def process_batch(self, image_paths: List[str], progress_callback: Callable = None) -> Dict:
-        """Process a batch of images with progress tracking."""
+        """Process a batch of images with progress tracking and export."""
         try:
             self.is_running = True
             self.current_job_id = self.config.job_name
             self.batch_results = []
             self.processing_errors = []
-            
-            # Initialize progress tracking
-            self.progress_tracker = BatchProgressTracker(len(image_paths))
-            
+
             logger.info(f"🔄 Starting batch processing: {len(image_paths)} images")
-            
-            # Quality pre-screening if enabled
+            self.progress_tracker = BatchProgressTracker(len(image_paths))
+
+            # Step 1: Quality pre-screening
             if self.config.enable_qc:
-                image_paths = self._quality_prescreening(image_paths, progress_callback)
-            
-            # Process images in parallel
-            self._process_images_parallel(image_paths, progress_callback)
-            
-            # Post-processing quality control
+                screened_paths = self._quality_prescreening(image_paths, progress_callback)
+                logger.info(f"✅ Quality screening complete: {len(screened_paths)}/{len(image_paths)} images approved")
+            else:
+                screened_paths = image_paths
+
+            # Step 2: Handle empty batch post-QC
+            if not screened_paths:
+                logger.warning("⚠️ No images passed quality control. Skipping processing.")
+                qc_report = self.quality_controller.generate_qc_report()
+                export_info = self.exporter.export_results([], qc_report)
+
+                self.is_running = False
+                return {
+                    'job_id': self.current_job_id,
+                    'config': asdict(self.config),
+                    'summary': {
+                        'total_images': len(image_paths),
+                        'successful_analyses': 0,
+                        'failed_analyses': len(image_paths),
+                        'success_rate': 0.0
+                    },
+                    'quality_control': qc_report,
+                    'export_info': export_info,
+                    'processing_time': (datetime.now() - self.progress_tracker.start_time).total_seconds()
+                }
+
+            # Step 3: Parallel analysis
+            self._process_images_parallel(screened_paths, progress_callback)
+
+            # Step 4: Post-analysis QC
             if self.config.enable_qc and self.config.outlier_detection:
                 self.quality_controller.detect_batch_outliers(self.batch_results)
-            
-            # Generate QC report
+
+            # Step 5: Final QC report and export
             qc_report = self.quality_controller.generate_qc_report()
-            
-            # Export results
             export_info = self.exporter.export_results(self.batch_results, qc_report)
-            
-            # Final summary
+
+            # Step 6: Build and return final result
+            successful = len([r for r in self.batch_results if r.get('success')])
             final_results = {
                 'job_id': self.current_job_id,
                 'config': asdict(self.config),
                 'summary': {
                     'total_images': len(image_paths),
-                    'successful_analyses': len([r for r in self.batch_results if r.get('success')]),
-                    'failed_analyses': len(self.processing_errors),
-                    'success_rate': len([r for r in self.batch_results if r.get('success')]) / len(image_paths) * 100 if image_paths else 0
+                    'successful_analyses': successful,
+                    'failed_analyses': len(self.processing_errors) + (len(image_paths) - len(screened_paths)),
+                    'success_rate': (successful / len(image_paths) * 100) if image_paths else 0.0
                 },
                 'quality_control': qc_report,
                 'export_info': export_info,
                 'processing_time': (datetime.now() - self.progress_tracker.start_time).total_seconds()
             }
-            
+
             self.is_running = False
             logger.info(f"✅ Batch processing complete: {final_results['summary']['success_rate']:.1f}% success rate")
-            
             return final_results
-            
+
         except Exception as e:
             self.is_running = False
-            logger.error(f"❌ Batch processing error: {str(e)}")
+            logger.error(f"❌ Batch processing error: {str(e)}", exc_info=True)
             return {
                 'job_id': self.current_job_id,
                 'error': str(e),
                 'completed_items': len(self.batch_results),
                 'failed_items': len(self.processing_errors)
             }
+
     
-    def _quality_prescreening(self, image_paths: List[str], progress_callback: Callable) -> List[str]:
-        """Pre-screen images for quality before processing."""
+    def _quality_prescreening(self, image_paths: List[str], progress_callback: Callable = None) -> List[str]:
+        """Pre-screen images for quality before batch processing with tolerance for minor defects."""
         try:
             logger.info("🔍 Starting quality pre-screening...")
             approved_paths = []
-            
-            for i, image_path in enumerate(image_paths):
-                quality_assessment = self.quality_controller.assess_image_quality(image_path)
-                
-                if quality_assessment['passes_qc']:
-                    approved_paths.append(image_path)
-                else:
-                    logger.warning(f"❌ Image failed QC: {image_path} - {quality_assessment['issues']}")
-                
-                # Update progress
-                if progress_callback:
-                    progress_callback({
-                        'stage': 'quality_screening',
-                        'progress': (i + 1) / len(image_paths) * 100,
-                        'current_item': os.path.basename(image_path),
-                        'approved_count': len(approved_paths)
-                    })
-            
-            logger.info(f"✅ Quality screening complete: {len(approved_paths)}/{len(image_paths)} images approved")
+
+            total_images = len(image_paths)
+            for idx, image_path in enumerate(image_paths):
+                try:
+                    quality_assessment = self.quality_controller.assess_image_quality(image_path)
+                    score = quality_assessment.get('quality_score', 0)
+                    issues = quality_assessment.get('issues', [])
+
+                    # Optimized decision logic: accept borderline images with minimal issues
+                    passes_soft_qc = (
+                        score >= self.config.quality_threshold or
+                        (score >= (self.config.quality_threshold - 0.2) and len(issues) <= 2)
+                    )
+
+                    if passes_soft_qc:
+                        approved_paths.append(image_path)
+                        logger.info(f"✅ Image approved: {image_path} (Score: {score:.2f})")
+                    else:
+                        logger.warning(f"❌ Image failed QC: {image_path} - {issues} (Score: {score:.2f})")
+
+                    if progress_callback:
+                        progress_callback({
+                            'stage': 'quality_screening',
+                            'progress': (idx + 1) / total_images * 100,
+                            'current_item': os.path.basename(image_path),
+                            'approved_count': len(approved_paths),
+                            'rejected_count': idx + 1 - len(approved_paths)
+                        })
+
+                except Exception as image_error:
+                    logger.error(f"⚠️ Error assessing {image_path}: {str(image_error)}")
+                    continue
+
+            logger.info(f"✅ Quality screening complete: {len(approved_paths)}/{total_images} images approved")
             return approved_paths
-            
+
         except Exception as e:
-            logger.error(f"❌ Quality pre-screening error: {str(e)}")
-            return image_paths  # Return original list on error
+            logger.error(f"❌ Quality pre-screening failure: {str(e)}", exc_info=True)
+            return image_paths
+
     
     def _process_images_parallel(self, image_paths: List[str], progress_callback: Callable):
         """Process images in parallel using ThreadPoolExecutor."""
@@ -828,17 +868,58 @@ class BatchProcessor:
             logger.error(f"❌ Parallel processing error: {str(e)}")
     
     def _process_single_image(self, image_path: str) -> Dict:
-        """Process a single image using the analyzer system."""
+        """
+        Process a single image using the professional Wolffia analysis system.
+        Falls back to run_pipeline if defined and analyzer signals Wolffia-compatible mode.
+        """
         try:
-            # Use the existing analyzer system
+            # Use primary analyzer if available
             if hasattr(self.analyzer_system, 'analyze_image_professional'):
-                result = self.analyzer_system.analyze_image_professional(image_path)
-            else:
-                # Fallback to basic analysis
-                result = self.analyzer_system.analyze_single_image(image_path)
-            
-            return result
-            
+                return self.analyzer_system.analyze_image_professional(image_path)
+
+            # Custom Wolffia-compatible fallback using run_pipeline
+            if getattr(self.analyzer_system, 'custom_segmentation_method', None) == 'wolffia_pipeline':
+                import os
+                from datetime import datetime
+
+                import numpy as np
+
+                from segmentation import run_pipeline  # Adjusted to real module
+
+                dirpath, filename = os.path.split(image_path)
+                segmentation, results = run_pipeline(dirpath, filename)
+
+                return {
+                    'image_path': image_path,
+                    'success': True,
+                    'timestamp': datetime.now().isoformat(),
+                    'segmentation': segmentation.tolist(),
+                    'summary': {
+                        'total_cells': len(results["cell_id"]),
+                        'avg_area': float(np.mean(results["cell_area"])) if results["cell_area"] else 0,
+                        'chlorophyll_ratio': float(np.mean(results["int_mem_mean"])) if results["int_mem_mean"] else 0
+                    },
+                    'cell_data': [
+                        {
+                            'cell_id': int(cid),
+                            'area': int(area),
+                            'mem_intensity': float(mem),
+                            'mean_intensity': float(mean),
+                            'edge_length': int(edge)
+                        }
+                        for cid, area, mem, mean, edge in zip(
+                            results["cell_id"],
+                            results["cell_area"],
+                            results["int_mem_mean"],
+                            results["int_mean"],
+                            results["cell_edge"]
+                        )
+                    ]
+                }
+
+            # Fallback
+            return self.analyzer_system.analyze_single_image(image_path)
+
         except Exception as e:
             logger.error(f"❌ Single image processing error for {image_path}: {str(e)}")
             return {
@@ -847,7 +928,8 @@ class BatchProcessor:
                 'error': str(e),
                 'timestamp': datetime.now().strftime("%Y%m%d_%H%M%S")
             }
-    
+
+
     def get_progress_info(self) -> Dict:
         """Get current progress information."""
         if self.progress_tracker:
@@ -874,85 +956,92 @@ class BatchProcessorFlaskIntegration:
     
     def _add_batch_routes(self):
         """Add batch processing routes to Flask app."""
-        
+
+        from werkzeug.utils import secure_filename
+
         @self.app.route('/api/batch/start', methods=['POST'])
         def start_batch_job():
-            """Start a new batch processing job."""
             try:
-                data = request.get_json()
-                
-                # Create batch configuration
-                config = BatchJobConfig(
-                    max_workers=data.get('max_workers', 4),
-                    job_name=data.get('job_name', f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
-                    operator_name=data.get('operator_name', ''),
-                    export_formats=data.get('export_formats', ['csv', 'excel']),
-                    enable_qc=data.get('enable_qc', True)
-                )
-                
-                # Create batch processor
-                processor = BatchProcessor(self.analyzer_system, config)
-                self.active_processors[config.job_name] = processor
-                
-                # Get image paths from request
-                image_paths = data.get('image_paths', [])
-                if not image_paths:
-                    return jsonify({'error': 'No image paths provided'}), 400
-                
-                # Start processing in background thread
-                def run_batch():
-                    result = processor.process_batch(image_paths)
-                    # Store result for retrieval
-                    processor.final_result = result
-                
-                thread = threading.Thread(target=run_batch)
-                thread.start()
-                
-                return jsonify({
-                    'job_id': config.job_name,
-                    'status': 'started',
-                    'total_images': len(image_paths)
-                })
-                
+                if request.content_type.startswith('multipart/form-data'):
+                    form = request.form
+                    image_files = request.files.getlist('images')
+
+                    job_name = form.get('job_name', f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                    max_workers = int(form.get('max_workers', 4))
+                    enable_qc = form.get('enable_qc', 'true').lower() == 'true'
+
+                    config = BatchJobConfig(
+                        job_name=job_name,
+                        max_workers=max_workers,
+                        enable_qc=enable_qc
+                    )
+
+                    # Save images
+                    image_paths = []
+                    Path('temp_uploads').mkdir(parents=True, exist_ok=True)
+                    for file in image_files:
+                        filename = secure_filename(file.filename)
+                        save_path = Path('temp_uploads') / f"{job_name}_{filename}"
+                        file.save(save_path)
+                        image_paths.append(str(save_path))
+
+                    processor = BatchProcessor(self.analyzer_system, config)
+                    self.active_processors[job_name] = processor
+
+                    def run_job():
+                        result = processor.process_batch(image_paths)
+                        processor.final_result = result
+
+                    threading.Thread(target=run_job).start()
+
+                    return jsonify({
+                        'job_id': job_name,
+                        'status': 'started',
+                        'total_images': len(image_paths)
+                    })
+
+                else:
+                    return jsonify({'error': 'Unsupported Content-Type'}), 415
+
             except Exception as e:
                 logger.error(f"❌ Batch start error: {str(e)}")
                 return jsonify({'error': str(e)}), 500
-        
+
         @self.app.route('/api/batch/progress/<job_id>')
         def get_batch_progress(job_id):
             """Get progress of a batch job."""
             try:
                 if job_id not in self.active_processors:
                     return jsonify({'error': 'Job not found'}), 404
-                
+
                 processor = self.active_processors[job_id]
                 progress_info = processor.get_progress_info()
-                
+
                 # Add job status
                 progress_info['job_id'] = job_id
                 progress_info['is_running'] = processor.is_running
-                
+
                 return jsonify(progress_info)
-                
+
             except Exception as e:
                 logger.error(f"❌ Progress retrieval error: {str(e)}")
                 return jsonify({'error': str(e)}), 500
-        
+
         @self.app.route('/api/batch/results/<job_id>')
         def get_batch_results(job_id):
             """Get results of a completed batch job."""
             try:
                 if job_id not in self.active_processors:
                     return jsonify({'error': 'Job not found'}), 404
-                
+
                 processor = self.active_processors[job_id]
-                
+
                 if processor.is_running:
                     return jsonify({
                         'status': 'running',
                         'message': 'Job still in progress'
                     })
-                
+
                 if hasattr(processor, 'final_result'):
                     return jsonify(processor.final_result)
                 else:
@@ -961,7 +1050,7 @@ class BatchProcessorFlaskIntegration:
                         'results': processor.batch_results,
                         'errors': processor.processing_errors
                     })
-                
+
             except Exception as e:
                 logger.error(f"❌ Results retrieval error: {str(e)}")
                 return jsonify({'error': str(e)}), 500
@@ -969,19 +1058,43 @@ class BatchProcessorFlaskIntegration:
 
 # Example usage
 if __name__ == "__main__":
-    print("🧪 Testing Batch Processing System...")
-    
+    print("🧪 Launching Wolffia Batch Processing System Test...")
+
     try:
-        # Create test configuration
+        from pathlib import Path
+
+        from wolffia_analyzer import WolffiaAnalyzer  # Real professional analyzer
+
+        # Configuration
+        job_name = f"test_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        input_dir = Path("sample_images")  # Change this to your real input directory
+        image_paths = list(input_dir.glob("*.[jp][pn]g"))  # Matches .jpg, .jpeg, .png
+
+        if not image_paths:
+            raise FileNotFoundError("No test images found in 'sample_images' directory.")
+
+        # Setup batch configuration
         config = BatchJobConfig(
-            job_name="test_batch",
+            job_name=job_name,
             max_workers=2,
-            export_formats=['csv', 'json']
+            export_formats=["csv", "json", "excel"],
+            enable_qc=True,
+            outlier_detection=True
         )
-        
-        print(f"✅ Configuration created: {config.job_name}")
-        print("🔬 Batch Processing System ready for integration")
-        
+
+        analyzer = WolffiaAnalyzer()
+        processor = BatchProcessor(analyzer, config)
+
+        # Process
+        result = processor.process_batch([str(p) for p in image_paths])
+
+        # Output summary
+        print("✅ Batch processing completed.")
+        print(json.dumps(result["summary"], indent=2))
+        print("📁 Exported files:")
+        for fmt, path in result.get("export_info", {}).get("export_paths", {}).items():
+            print(f" - {fmt}: {path}")
+
     except Exception as e:
         print(f"❌ Test failed: {str(e)}")
         import traceback
