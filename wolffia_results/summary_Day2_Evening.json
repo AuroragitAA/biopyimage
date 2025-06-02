@@ -1,0 +1,49 @@
+{
+  "total_cell_count": 116,
+  "healthy_cell_count": 38,
+  "stressed_cell_count": 38,
+  "mean_cell_area_microns": 45.206896551724135,
+  "std_cell_area_microns": 33.6805529597743,
+  "median_cell_area_microns": 36.5,
+  "min_cell_area_microns": 15.0,
+  "max_cell_area_microns": 223.0,
+  "mean_chlorophyll_intensity": 0.13751553802015332,
+  "std_chlorophyll_intensity": 0.05161789000117725,
+  "median_chlorophyll_intensity": 0.129915429329669,
+  "mean_chlorophyll_density": 0.004369731408358898,
+  "total_biomass_estimate": 1542.4458415963732,
+  "mean_biomass_per_cell": 13.296946910313562,
+  "biomass_density": 0.29413536262325957,
+  "mean_aspect_ratio": 1.8575878310945317,
+  "mean_circularity": 2.157515236067374,
+  "mean_roundness": 1.8509929306866975,
+  "cell_type_distribution": {
+    "small_medium": 15,
+    "medium_high": 14,
+    "medium_low": 14,
+    "large_high": 13,
+    "large_medium": 13,
+    "small_low": 12,
+    "medium_medium": 12,
+    "large_low": 12,
+    "small_high": 11
+  },
+  "health_status_distribution": {
+    "moderate": 40,
+    "healthy": 38,
+    "stressed": 38
+  },
+  "size_category_distribution": {
+    "medium": 40,
+    "large": 38,
+    "small": 38
+  },
+  "chlorophyll_category_distribution": {
+    "medium": 40,
+    "high": 38,
+    "low": 38
+  },
+  "high_chlorophyll_percentage": 0.0,
+  "healthy_cell_percentage": 32.758620689655174,
+  "mean_color_variation": 0.047533658988528696
+}

@@ -3,465 +3,1059 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BIOIMAGIN - Professional Wolffia Analysis System</title>
-    
-    <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    
-    <!-- Custom CSS -->
+    <title>BIOIMAGIN - Wolffia Analysis System</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+
+    </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>🌱 BIOIMAGIN</h1>
-            <p>Professional Wolffia Analysis System with Live Processing</p>
-            <div class="status-indicator" id="systemStatus">
-                <span class="pulse-dot"></span>
-                <span>Initializing...</span>
-            </div>
-            <div class="live-indicator">
-                <span class="pulse-dot"></span>
-                <span>LIVE ANALYSIS</span>
-            </div>
+        <header>
+            <h1>BIOIMAGIN - Wolffia Analysis System</h1>
+            <p>Advanced bioimage analysis for Wolffia arrhiza</p>
+        </header>
+        
+        <!-- Parameter Controls -->
+        <div class="parameter-controls">
+            <h3>Analysis Parameters</h3>
+            <label>Pixel to Micron Ratio: 
+                <input type="number" id="pixelToMicron" value="0.5" step="0.01" min="0.01">
+            </label>
+            <label>Chlorophyll Threshold: 
+                <input type="number" id="chlorophyllThreshold" value="0.6" step="0.05" min="0" max="1">
+            </label>
+            <button onclick="updateParameters()">Update Parameters</button>
+            <button onclick="optimizeParameters()">Optimize Parameters</button>
+            <button onclick="showCalibrationDialog()">Calibrate</button>
         </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Analysis Panel -->
-            <div class="analysis-panel">
-                <h2 class="panel-title">
-                    🔬 Image Analysis
-                </h2>
-
-                <!-- Upload Area -->
-                <div class="upload-area" id="uploadArea">
-                    <p>📁 Drop your Wolffia image here or click to browse</p>
-                    <input type="file" id="imageInput" class="file-input" accept="image/*">
-                    <button type="button" class="btn btn-primary" onclick="document.getElementById('imageInput').click()">
-                        📂 Select Image
-                    </button>
-                </div>
-
-                <!-- Analysis Options -->
-                <div class="analysis-options">
-                    <h3 style="margin-bottom: 15px; color: #2c3e50;">⚙️ Analysis Parameters</h3>
-                    <div class="options-grid">
-                        <div class="option-group">
-                            <label for="pixelRatio">Pixel to Micron Ratio</label>
-                            <input type="number" id="pixelRatio" value="1.0" step="0.1" min="0.1" max="10">
-                        </div>
-                        <div class="option-group">
-                            <label for="analysisType">Analysis Type</label>
-                            <select id="analysisType">
-                                <option value="standard">🎯 Standard Analysis</option>
-                                <option value="comprehensive">🚀 Comprehensive Analysis</option>
-                                <option value="temporal">📈 Temporal Series</option>
-                            </select>
-                        </div>
-                        <div class="option-group">
-                            <label for="analysisMethod">Analysis Method</label>
-                            <select id="analysisMethod">
-                                <option value="auto">🎯 Auto (Recommended)</option>
-                                <option value="wolffia_specific">🔬 Wolffia Specific</option>
-                                <option value="professional">🚀 Professional Pipeline</option>
-                            </select>
-                        </div>
-                        <div class="option-group">
-                            <label for="wavelengthAnalysis">Wavelength Analysis</label>
-                            <select id="wavelengthAnalysis">
-                                <option value="enabled">✅ Enabled</option>
-                                <option value="disabled">❌ Disabled</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- Temporal Analysis Options -->
-                    <div id="timestampGroup" style="display: none; margin-top: 15px;">
-                        <div class="option-group">
-                            <label for="imageTimestamp">Image Timestamp (for temporal tracking)</label>
-                            <input type="datetime-local" id="imageTimestamp">
-                        </div>
-                    </div>
-                    
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="debugMode" checked>
-                        <label for="debugMode">Enable debug visualizations</label>
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="autoExport" checked>
-                        <label for="autoExport">Auto-export results</label>
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="biomassCalculation" checked>
-                        <label for="biomassCalculation">Calculate biomass estimation</label>
-                    </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="cellTracking">
-                        <label for="cellTracking">Enable cell tracking (multi-image)</label>
-                    </div>
-                </div>
-
-                <!-- Progress -->
-                <div class="progress-container" id="progressContainer">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="progress-text" id="progressText">Ready to analyze...</div>
-                </div>
-
-                <!-- Analysis Button -->
-                <div style="text-align: center;">
-                    <button type="button" class="btn btn-primary" id="analyzeBtn" disabled>
-                        🚀 Start Analysis
-                    </button>
-                    <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;">
-                        ⏹️ Cancel
-                    </button>
+        
+        <!-- File Upload Section -->
+        <section class="upload-section">
+            <h2>Upload Images</h2>
+            <div class="upload-container">
+                <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                    <svg class="upload-icon" viewBox="0 0 24 24">
+                        <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                    </svg>
+                    <p>Click to upload or drag and drop</p>
+                    <p class="upload-info">Supports: PNG, JPG, TIFF, BMP</p>
                 </div>
             </div>
-
-            <!-- Results Panel -->
-            <div class="results-panel">
-                <h2 class="panel-title">
-                    📊 Analysis Results
-                    <span id="liveUpdateIndicator" style="display: none;" class="live-indicator">
-                        <span class="pulse-dot"></span>
-                        <span>LIVE</span>
-                    </span>
-                </h2>
-
-                <!-- Empty State -->
-                <div class="results-empty" id="resultsEmpty">
-                    <div style="font-size: 4rem; margin-bottom: 20px;">🔬</div>
-                    <h3>Ready for Analysis</h3>
-                    <p>Upload an image to begin Wolffia cell analysis</p>
-                </div>
-
-                <!-- Results Content -->
-                <div class="results-content" id="resultsContent">
-                    <!-- Summary -->
-                    <div class="results-summary">
-                        <div class="summary-grid" id="summaryGrid">
-                            <!-- Dynamic summary items will be inserted here -->
-                        </div>
-                    </div>
-
-                    <!-- Enhanced Visualization Tabs -->
-                    <div class="visualization-tabs">
-                        <button class="tab-button active" data-tab="original">📷 Original</button>
-                        <button class="tab-button" data-tab="segmentation">🎯 Segmentation</button>
-                        <button class="tab-button" data-tab="contours">📐 Contours</button>
-                        <button class="tab-button" data-tab="numbered">🔢 Numbered</button>
-                        <button class="tab-button" data-tab="biomass">🌱 Biomass</button>
-                        <button class="tab-button" data-tab="spectral">🌈 Spectral</button>
-                        <button class="tab-button" data-tab="similarity">🔗 Similarity</button>
-                        <button class="tab-button" data-tab="temporal">📈 Temporal</button>
-                        <button class="tab-button" data-tab="histograms">📊 Histograms</button>
-                    </div>
-
-                    <!-- Tab Contents -->
-                    <div class="tab-content active" id="tab-original">
-                        <div class="visualization-container">
-                            <img id="originalImage" src="" alt="Original Image" style="display: none;">
-                            <p>Original image will appear here</p>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" id="tab-segmentation">
-                        <div class="visualization-container">
-                            <img id="segmentationImage" src="" alt="Segmentation" style="display: none;">
-                            <p>Segmentation visualization will appear here</p>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" id="tab-contours">
-                        <div class="visualization-container">
-                            <img id="contoursImage" src="" alt="Contours" style="display: none;">
-                            <p>Cell contours will appear here</p>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" id="tab-numbered">
-                        <div class="visualization-container">
-                            <img id="numberedImage" src="" alt="Numbered Cells" style="display: none;">
-                            <p>Numbered cell detection will appear here</p>
-                        </div>
-                    </div>
-
-                    <!-- Biomass Analysis Tab -->
-                    <div class="tab-content" id="tab-biomass">
-                        <div class="visualization-container">
-                            <div id="biomassCharts">
-                                <div class="chart-container">
-                                    <h4>🌱 Biomass Analysis</h4>
-                                    <div id="biomassChart"></div>
-                                    <div id="biomassValues"></div>
-                                </div>
-                            </div>
-                            <p>Biomass estimation charts will appear here</p>
-                        </div>
-                    </div>
-
-                    <!-- Spectral Analysis Tab -->
-                    <div class="tab-content" id="tab-spectral">
-                        <div class="visualization-container">
-                            <div id="spectralCharts">
-                                <div class="chart-container">
-                                    <h4>🌈 Spectral Analysis</h4>
-                                    <div id="spectralChart"></div>
-                                    <div id="wavelengthDistribution"></div>
-                                </div>
-                            </div>
-                            <p>Spectral analysis and wavelength data will appear here</p>
-                        </div>
-                    </div>
-
-                    <!-- Cell Similarity Tab -->
-                    <div class="tab-content" id="tab-similarity">
-                        <div class="visualization-container">
-                            <div id="similarityCharts">
-                                <div class="chart-container">
-                                    <h4>🔗 Cell Similarity Analysis</h4>
-                                    <div id="similarityMatrix"></div>
-                                    <div id="similarCellGroups"></div>
-                                </div>
-                            </div>
-                            <p>Cell similarity analysis will appear here</p>
-                        </div>
-                    </div>
-
-                    <!-- Temporal Tracking Tab -->
-                    <div class="tab-content" id="tab-temporal">
-                        <div class="visualization-container">
-                            <div id="temporalCharts">
-                                <div class="chart-container">
-                                    <h4>📈 Temporal Analysis & Cell Tracking</h4>
-                                    <div id="growthChart"></div>
-                                    <div id="trackedCells"></div>
-                                    <div id="temporalHighlights"></div>
-                                </div>
-                            </div>
-                            <p>Temporal tracking and growth analysis will appear here</p>
-                        </div>
-                    </div>
-
-                    <!-- Histograms Tab -->
-                    <div class="tab-content" id="tab-histograms">
-                        <div class="visualization-container">
-                            <div id="histogramContainer">
-                                <div class="chart-container">
-                                    <h4>📊 Distribution Analysis</h4>
-                                    <div id="sizeHistogram"></div>
-                                    <div id="colorHistogram"></div>
-                                    <div id="healthHistogram"></div>
-                                    <div id="wavelengthHistogram"></div>
-                                </div>
-                            </div>
-                            <p>Statistical distributions will appear here</p>
-                        </div>
-                    </div>
-
-                    <!-- Comprehensive Results Section -->
-                    <div id="comprehensiveResults" style="display: none; margin-top: 30px;">
-                        <h3>🔬 Advanced Analysis Results</h3>
-                        
-                        <!-- Live Analysis Stats -->
-                        <div class="live-stats-container" id="liveStatsContainer">
-                            <div class="stat-card">
-                                <h5>📊 Real-time Statistics</h5>
-                                <div id="liveStats"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Biomass Results -->
-                        <div class="analysis-section" id="biomassResults">
-                            <h4>🌱 Biomass Estimation</h4>
-                            <div class="results-grid">
-                                <div class="result-card">
-                                    <h6>Fresh Biomass</h6>
-                                    <div id="freshBiomass" class="metric-value">--</div>
-                                </div>
-                                <div class="result-card">
-                                    <h6>Dry Biomass</h6>
-                                    <div id="dryBiomass" class="metric-value">--</div>
-                                </div>
-                                <div class="result-card">
-                                    <h6>Confidence Interval</h6>
-                                    <div id="biomassConfidence" class="metric-value">--</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Spectral Results -->
-                        <div class="analysis-section" id="spectralResults">
-                            <h4>🌈 Spectral Analysis</h4>
-                            <div class="results-grid">
-                                <div class="result-card">
-                                    <h6>Dominant Wavelength</h6>
-                                    <div id="dominantWavelength" class="metric-value">--</div>
-                                </div>
-                                <div class="result-card">
-                                    <h6>Green Intensity</h6>
-                                    <div id="greenIntensity" class="metric-value">--</div>
-                                </div>
-                                <div class="result-card">
-                                    <h6>Chlorophyll Index</h6>
-                                    <div id="chlorophyllIndex" class="metric-value">--</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Cell Tracking Results -->
-                        <div class="analysis-section" id="trackingResults">
-                            <h4>📈 Cell Tracking</h4>
-                            <div class="results-grid">
-                                <div class="result-card">
-                                    <h6>Tracked Cells</h6>
-                                    <div id="trackedCellCount" class="metric-value">--</div>
-                                </div>
-                                <div class="result-card">
-                                    <h6>Growth Rate</h6>
-                                    <div id="averageGrowthRate" class="metric-value">--</div>
-                                </div>
-                                <div class="result-card">
-                                    <h6>Cell Divisions</h6>
-                                    <div id="cellDivisions" class="metric-value">--</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Cell Data Table -->
-                    <div style="margin-top: 20px;">
-                        <h3 style="margin-bottom: 15px; color: #2c3e50;">📋 Cell Data</h3>
-                        <div class="cell-data-table" id="cellDataTable">
-                            <p style="text-align: center; padding: 20px; color: #7f8c8d;">Cell data will appear here after analysis</p>
-                        </div>
-                    </div>
-
-                    <!-- Export Section -->
-                    <div class="export-section">
-                        <button class="btn btn-success" onclick="exportResults('csv')">📄 Export CSV</button>
-                        <button class="btn btn-success" onclick="exportResults('excel')">📊 Export Excel</button>
-                        <button class="btn btn-success" onclick="exportResults('json')">📋 Export JSON</button>
-                        <button class="btn btn-success" onclick="exportComprehensiveResults()">🚀 Export Complete Analysis</button>
-                        <button class="btn btn-info" onclick="downloadAllVisualizations()">🖼️ Download All Images</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Enhanced Batch Analysis Section -->
-        <div class="batch-section">
-            <h2 class="panel-title">
-                📦 Batch Analysis & Temporal Tracking
-            </h2>
             
-            <div class="batch-upload-area" id="batchUploadArea">
-                <p>📁 Drop multiple images here for batch processing and temporal analysis</p>
-                <input type="file" id="batchInput" multiple accept="image/*" style="display: none;">
-                <button type="button" class="btn btn-primary" onclick="document.getElementById('batchInput').click()">
-                    📂 Select Multiple Images
-                </button>
-                <div class="batch-options" style="margin-top: 15px;">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="enableTemporalTracking" checked>
-                        <label for="enableTemporalTracking">Enable temporal cell tracking</label>
+            <!-- Time Series Controls -->
+            <div class="time-series-controls" id="timeSeriesControls" style="display: none;">
+                <h3>Time Series Analysis</h3>
+                <p>Multiple images detected. Would you like to perform time series analysis?</p>
+                <label>
+                    <input type="checkbox" id="enableTimeSeries" checked>
+                    Enable Time Series Analysis
+                </label>
+                <div id="timestampInputs"></div>
+            </div>
+            
+            <div class="file-list" id="fileList"></div>
+            <button class="analyze-btn" onclick="startAnalysis()" style="display: none;">Start Analysis</button>
+        </section>
+        
+        <!-- Loading Indicator -->
+        <div class="loading-spinner" id="loadingSpinner"></div>
+        <div class="progress-bar" id="progressBar" style="display: none;">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <!-- Analysis Results -->
+        <section class="analysis-results" id="analysisResults">
+            <h2>Analysis Results</h2>
+            
+            <!-- Summary Statistics -->
+            <div class="stats-grid" id="statsGrid"></div>
+            
+            <!-- Tabs for different views -->
+            <div class="tab-container">
+                <div class="tab-buttons">
+                    <button class="tab-button active" onclick="showTab('visualizations')">Visualizations</button>
+                    <button class="tab-button" onclick="showTab('cellData')">Cell Data</button>
+                    <button class="tab-button" onclick="showTab('timeSeries')">Time Series</button>
+                    <button class="tab-button" onclick="showTab('comparison')">Cell Comparison</button>
+                    <button class="tab-button" onclick="showTab('mlInsights')">ML Insights</button>
+                </div>
+                
+                <!-- Visualizations Tab -->
+                <div class="tab-content active" id="visualizationsTab">
+                    <div class="visualization-container" id="visualizationContainer"></div>
+                </div>
+                
+                <!-- Cell Data Tab -->
+                <div class="tab-content" id="cellDataTab">
+                    <div class="export-buttons">
+                        <button onclick="exportResults('csv')">Export CSV</button>
+                        <button onclick="exportResults('json')">Export JSON</button>
+                        <button onclick="exportResults('zip')">Download All</button>
                     </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="highlightChanges" checked>
-                        <label for="highlightChanges">Highlight cell changes between timepoints</label>
+                    <div style="overflow-x: auto;">
+                        <table class="cell-table" id="cellTable">
+                            <thead>
+                                <tr>
+                                    <th>Cell ID</th>
+                                    <th>Area (μm²)</th>
+                                    <th>Chlorophyll</th>
+                                    <th>Biomass (μg)</th>
+                                    <th>Health</th>
+                                    <th>Type</th>
+                                    <th>Similar Cells</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cellTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Time Series Tab -->
+                <div class="tab-content" id="timeSeriesTab">
+                    <div class="visualization-container" id="timeSeriesContainer"></div>
+                </div>
+                
+                <!-- Cell Comparison Tab -->
+                <div class="tab-content" id="comparisonTab">
+                    <button onclick="compareCells()">Compare Cells Across Time</button>
+                    <div id="comparisonResults"></div>
+                </div>
+
+
+                
+                <!-- ML Insights Tab -->
+                <div class="tab-content" id="mlInsightsTab">
+                    <div class="ml-insights-container" id="mlInsightsContainer">
+                        <p>Loading ML insights...</p>
+                    </div>
+                </div>
+
+
+                <!-- Spectral Analysis Tab -->
+                <div class="tab-content" id="spectralTab">
+                    <div class="spectral-container" id="spectralContainer">
+                        <p>Loading spectral analysis...</p>
+                    </div>
+                </div>
+
+                <!-- Live Analysis Tab -->
+                <div class="tab-content" id="liveAnalysisTab">
+                    <div class="live-analysis-container">
+                        <h3>Real-time Analysis</h3>
+                        <video id="liveVideo" width="640" height="480" autoplay></video>
+                        <canvas id="liveCanvas" width="640" height="480" style="display:none;"></canvas>
+                        <button onclick="startLiveAnalysis()">Start Live Analysis</button>
+                        <button onclick="captureFrame()">Capture & Analyze</button>
+                        <div id="liveResults"></div>
+                    </div>
+                </div>
+
+                <!-- Manual Training Tab -->
+                <div class="tab-content" id="trainingTab">
+                    <div class="training-container">
+                        <h3>Manual Cell Annotation for ML Training</h3>
+                        <canvas id="annotationCanvas" width="800" height="600"></canvas>
+                        <div class="annotation-controls">
+                            <label>Cell Type:
+                                <select id="cellTypeSelect">
+                                    <option value="healthy">Healthy</option>
+                                    <option value="stressed">Stressed</option>
+                                    <option value="dead">Dead</option>
+                                    <option value="debris">Debris</option>
+                                </select> 
+                            </label>
+                            <button onclick="saveAnnotations()">Save Annotations</button>
+                            <button onclick="trainModel()">Train Model</button>
+                        </div>
+                        <div id="annotationsList"></div>
                     </div>
                 </div>
             </div>
-
-            <div class="batch-file-list" id="batchFileList" style="display: none;">
-                <!-- Selected files will be listed here -->
-            </div>
-
-            <div style="text-align: center; margin-top: 15px;">
-                <button type="button" class="btn btn-primary" id="batchAnalyzeBtn" disabled>
-                    🚀 Start Batch Analysis
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="clearBatchFiles()">
-                    🗑️ Clear Files
-                </button>
-            </div>
-
-            <div class="progress-container" id="batchProgressContainer">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="batchProgressFill"></div>
-                </div>
-                <div class="progress-text" id="batchProgressText">Ready for batch analysis...</div>
-            </div>
-        </div>
-
-        <!-- Live Analysis Dashboard -->
-        <div class="live-dashboard" id="liveDashboard" style="display: none;">
-            <h2 class="panel-title">🔄 Live Analysis Dashboard</h2>
-            <div class="dashboard-grid">
-                <div class="dashboard-card">
-                    <h4>📊 Current Analysis</h4>
-                    <div id="currentAnalysisInfo"></div>
-                </div>
-                <div class="dashboard-card">
-                    <h4>📈 Real-time Metrics</h4>
-                    <div id="realtimeMetrics"></div>
-                </div>
-                <div class="dashboard-card">
-                    <h4>🎯 Quality Indicators</h4>
-                    <div id="qualityIndicators"></div>
-                </div>
-            </div>
-        </div>
+        </section>
     </div>
+    
+    <script>
+        let uploadedFiles = [];
+        let currentAnalysisId = null;
+        
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            handleFiles(e.target.files);
+        });
+        
+        // Drag and drop handlers
+        const uploadArea = document.querySelector('.upload-area');
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '#e8f5e9';
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.backgroundColor = '';
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.backgroundColor = '';
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        function handleFiles(files) {
+            uploadedFiles = Array.from(files);
+            displayFileList();
+            
+            if (uploadedFiles.length > 1) {
+                document.getElementById('timeSeriesControls').style.display = 'block';
+                createTimestampInputs();
+            } else {
+                document.getElementById('timeSeriesControls').style.display = 'none';
+            }
+            
+            document.querySelector('.analyze-btn').style.display = 'block';
+        }
+        
+        function displayFileList() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '<h3>Selected Files:</h3>';
+            
+            uploadedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <span>${file.name}</span>
+                    <button onclick="removeFile(${index})">Remove</button>
+                `;
+                fileList.appendChild(fileItem);
+            });
+        }
+        
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            displayFileList();
+            
+            if (uploadedFiles.length === 0) {
+                document.querySelector('.analyze-btn').style.display = 'none';
+            }
+        }
+        
+        function createTimestampInputs() {
+            const container = document.getElementById('timestampInputs');
+            container.innerHTML = '<h4>Enter timestamps for each image:</h4>';
+            
+            uploadedFiles.forEach((file, index) => {
+                const input = document.createElement('div');
+                input.innerHTML = `
+                    <label>
+                        ${file.name}: 
+                        <input type="text" id="timestamp_${index}" value="T${index}" placeholder="e.g., 0h, Day1, etc.">
+                    </label>
+                `;
+                container.appendChild(input);
+            });
+        }
+        
+        function showMLInsights() {
+            if (!currentAnalysisId) return;
 
-    <!-- Connection Status -->
-    <div class="connection-status disconnected" id="connectionStatus">
-        🔌 Connecting...
-    </div>
+            fetch(`/api/ml_insights/${currentAnalysisId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayMLInsights(data.insights); // You must define this function to render insights
+                    }
+                });
+        }
 
-    <!-- Notification Container -->
-    <div id="notificationContainer"></div>
+        function optimizeParameters() {
+            if (!currentAnalysisId) return;
 
-    <!-- Enhanced Modals for Advanced Features -->
-    <div class="modal fade" id="biomassModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">🌱 Detailed Biomass Analysis</h5>
-                    <button type="button" class="close" data-dismiss="modal">&times;</button>
-                </div>
-                <div class="modal-body" id="biomassModalBody">
-                    <!-- Detailed biomass content -->
-                </div>
-            </div>
+            fetch(`/api/optimize_parameters/${currentAnalysisId}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Parameters optimized: ' + JSON.stringify(data.optimized_parameters));
+                        // Optionally update UI with new parameters
+                    }
+                });
+        }
+
+        async function startAnalysis() {
+            if (uploadedFiles.length === 0) return;
+            
+            // Show loading
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('progressBar').style.display = 'block';
+            document.getElementById('analysisResults').style.display = 'none';
+            
+            // Prepare form data
+            const formData = new FormData();
+            uploadedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+            
+            try {
+                // Upload files
+                const uploadResponse = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const uploadResult = await uploadResponse.json();
+                
+                if (uploadResult.success) {
+                    currentAnalysisId = uploadResult.analysis_id;
+
+                    // ✅ START streaming progress after analysis ID is set
+                    const eventSource = new EventSource(`/api/stream_progress/${currentAnalysisId}`);
+                    eventSource.onmessage = function(event) {
+                        const progress = JSON.parse(event.data);
+                        document.getElementById('progressFill').style.width = progress.progress + '%';
+                        // Show spinner + progress text
+                        document.getElementById('loadingSpinner').innerHTML = `
+                            <p>${progress.current_step}</p>
+                            <p>${progress.progress}%</p>
+
+                        `;
+                    };
+
+                    // Optional fallback
+                    pollAnalysisStatus();
+                }
+                else {
+                    alert('Upload failed: ' + uploadResult.error);
+                    hideLoading();
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                hideLoading();
+            }
+        }
+        
+        // Update the pollAnalysisStatus function to handle errors better:
+        async function pollAnalysisStatus() {
+            const maxAttempts = 100000; // 3 minute timeout
+            let attempts = 0;
+            
+            const pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/analyze/${currentAnalysisId}`);
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('Server error response:', errorText);
+                        
+                        // Try to parse as JSON if possible
+                        let errorMessage = 'Server error';
+                        try {
+                            const errorJson = JSON.parse(errorText);
+                            errorMessage = errorJson.error || errorJson.message || 'Unknown error';
+                        } catch (e) {
+                            // If not JSON, use the text directly
+                            errorMessage = errorText.substring(0, 200); // Limit length
+                        }
+                        
+                        clearInterval(pollInterval);
+                        alert('Analysis error: ' + errorMessage);
+                        hideLoading();
+                        return;
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (result.status === 'completed') {
+                        clearInterval(pollInterval);
+                        displayResults(result);
+                        hideLoading();
+                    } else if (result.status === 'failed') {
+                        clearInterval(pollInterval);
+                        const errorDetails = result.error_details ? '\n\nDetails: ' + result.error_details : '';
+                        alert('Analysis failed: ' + (result.error || result.message) + errorDetails);
+                        hideLoading();
+                    } else if (result.status === 'error') {
+                        clearInterval(pollInterval);
+                        alert('Server error: ' + result.error);
+                        hideLoading();
+                    } else {
+                        // Update progress
+                        if (result.progress !== undefined) {
+                            document.getElementById('progressFill').style.width = result.progress + '%';
+                            document.getElementById('loadingSpinner').innerHTML = `
+                                <p>${result.current_step || 'Processing...'}</p>
+                                <p>${result.progress || 0}%</p>
+                            `;
+                        }
+                    }
+                    
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                        alert('Analysis timeout - please try again with fewer images or check server logs');
+                        hideLoading();
+                    }
+                } catch (error) {
+                    clearInterval(pollInterval);
+                    console.error('Polling error:', error);
+                    alert('Error checking status: ' + error.message);
+                    hideLoading();
+                }
+            }, 1000);
+        }
+        function hideLoading() {
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('progressBar').style.display = 'none';
+            document.getElementById('progressFill').style.width = '0%';
+        }
+        
+        function displayResults(analysisResult) {
+            document.getElementById('analysisResults').style.display = 'block';
+            
+            // Display summary statistics
+            displayStats(analysisResult.summary);
+            
+            // Display visualizations
+            displayVisualizations(analysisResult.results);
+            
+            // Display cell data table
+            displayCellTable(analysisResult.results);
+            
+            // Display time series if available
+            if (analysisResult.results.length > 1) {
+                displayTimeSeries(analysisResult.results);
+            }
+        }
+        
+        function displayStats(summary) {
+            const statsGrid = document.getElementById('statsGrid');
+            statsGrid.innerHTML = '';
+
+            console.log("[DEBUG] Summary object:", summary);
+
+            function safeFixed(val, digits) {
+                const num = Number(val);
+                if (isNaN(num)) {
+                    console.warn(`[WARN] Value is not a number:`, val);
+                    return '0'.padEnd(digits + 2, '0'); // e.g. '0.00' for digits = 2
+                }
+                return num.toFixed(digits);
+            }
+
+            const stats = [
+                { label: 'Total Cells', value: summary.total_cells_detected ?? 0 },
+                { label: 'Green Cells', value: summary.total_green_cells ?? 0 },
+                { label: 'Total Biomass (μg)', value: safeFixed(summary.total_biomass, 2) },
+                { label: 'Avg Chlorophyll', value: safeFixed(summary.average_chlorophyll, 3) },
+                { label: 'Avg Cell Area (μm²)', value: safeFixed(summary.average_cell_area, 1) }
+            ];
+
+                if (summary.growth_metrics && summary.growth_metrics.biomass_growth_rate !== undefined) {
+                    stats.push({
+                        label: 'Biomass Growth Rate',
+                        value: safeFixed(summary.growth_metrics.biomass_growth_rate, 1) + '%'
+                    });
+                }
+
+            stats.forEach(stat => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                    <h3>${stat.value}</h3>
+                    <p>${stat.label}</p>
+                `;
+                statsGrid.appendChild(card);
+            });
+        }
+
+
+        function displayVisualizations(results) {
+            const container = document.getElementById('visualizationContainer');
+            container.innerHTML = '';
+            
+            results.forEach((result, index) => {
+                if (result.visualizations) {
+                    // Main analysis visualization
+                    if (result.visualizations.main_analysis) {
+                        const vizItem = document.createElement('div');
+                        vizItem.className = 'visualization-item';
+                        vizItem.innerHTML = `
+                            <h3>Analysis - ${result.timestamp}</h3>
+                            <img src="data:image/png;base64,${result.visualizations.main_analysis}" alt="Analysis">
+                        `;
+                        container.appendChild(vizItem);
+                    }
+                    
+                    // Cell tracking visualization
+                    if (result.visualizations.cell_tracking) {
+                        const vizItem = document.createElement('div');
+                        vizItem.className = 'visualization-item';
+                        vizItem.innerHTML = `
+                            <h3>Cell Tracking - ${result.timestamp}</h3>
+                            <img src="data:image/png;base64,${result.visualizations.cell_tracking}" alt="Cell Tracking">
+                        `;
+                        container.appendChild(vizItem);
+                    }
+                    
+                    // Size vs Biomass
+                    if (result.visualizations.size_biomass) {
+                        const vizItem = document.createElement('div');
+                        vizItem.className = 'visualization-item';
+                        vizItem.innerHTML = `
+                            <h3>Size vs Biomass - ${result.timestamp}</h3>
+                            <img src="data:image/png;base64,${result.visualizations.size_biomass}" alt="Size vs Biomass">
+                        `;
+                        container.appendChild(vizItem);
+                    }
+                }
+            });
+        }
+        
+        function displayCellTable(results) {
+            const tbody = document.getElementById('cellTableBody');
+            tbody.innerHTML = '';
+
+            if (!Array.isArray(results)) {
+                console.warn("displayCellTable expected array but got:", results);
+                return;
+            }
+
+            results.forEach((result, index) => {
+                if (Array.isArray(result.cells)) {
+                    result.cells.forEach(cell => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${cell.cell_id ?? 'N/A'}</td>
+                            <td>${(cell.area_microns_sq ?? 0).toFixed(2)}</td>
+                            <td>${(cell.mean_chlorophyll_intensity ?? 0).toFixed(3)}</td>
+                            <td>${(cell.biomass_estimate_ug ?? 0).toFixed(3)}</td>
+                            <td><span class="health-${cell.health_status ?? 'unknown'}">${cell.health_status ?? 'unknown'}</span></td>
+                            <td>${cell.cell_type ?? 'unknown'}</td>
+                            <td>${cell.similar_cell_count ?? 'N/A'}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                } else {
+                    console.warn(`[displayCellTable] result ${index} has no 'cells' array`, result);
+                }
+            });
+        }
+
+        function displayTimeSeries(results) {
+            const container = document.getElementById('timeSeriesContainer');
+            container.innerHTML = '';
+            
+            // Check for time series visualizations in the last result
+            const lastResult = results[results.length - 1];
+            if (lastResult.time_series_visualizations) {
+                if (lastResult.time_series_visualizations.time_series) {
+                    const vizItem = document.createElement('div');
+                    vizItem.className = 'visualization-item';
+                    vizItem.innerHTML = `
+                        <h3>Time Series Analysis</h3>
+                        <img src="data:image/png;base64,${lastResult.time_series_visualizations.time_series}" alt="Time Series">
+                    `;
+                    container.appendChild(vizItem);
+                }
+                
+                if (lastResult.time_series_visualizations.growth_rates) {
+                    const vizItem = document.createElement('div');
+                    vizItem.className = 'visualization-item';
+                    vizItem.innerHTML = `
+                        <h3>Growth Rates</h3>
+                        <img src="data:image/png;base64,${lastResult.time_series_visualizations.growth_rates}" alt="Growth Rates">
+                    `;
+                    container.appendChild(vizItem);
+                }
+            }
+        }
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+
+            document.getElementById(tabName + 'Tab').classList.add('active');
+            event.target.classList.add('active');
+
+            if (tabName === 'mlInsights') {
+                fetchAndDisplayMLInsights();
+            }
+                if (tabName === 'spectral' && currentAnalysisId) {
+        fetch(`/api/spectral_analysis/${currentAnalysisId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displaySpectralAnalysis(data.spectral_data);
+                }
+            });
+    }
+        }
+
+        function fetchAndDisplayMLInsights() {
+            if (!currentAnalysisId) return;
+
+            const container = document.getElementById('mlInsightsContainer');
+            container.innerHTML = '<p>Loading ML insights...</p>';
+
+            fetch(`/api/ml_insights/${currentAnalysisId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.insights) {
+                        renderMLInsights(data.insights);
+                    } else {
+                        container.innerHTML = '<p>No ML insights available.</p>';
+                    }
+                })
+                .catch(error => {
+                    container.innerHTML = `<p>Error loading ML insights: ${error.message}</p>`;
+                });
+        }
+
+
+        function renderMLInsights(insights) {
+            const container = document.getElementById('mlInsightsContainer');
+            container.innerHTML = '';
+
+            // Health
+            container.innerHTML += `<h3>Population Health</h3>
+                <p>Health Trend: ${insights.ml_metrics.health_trend ?? 'N/A'}</p>
+                <p>Dominant Cell Type: ${insights.ml_metrics.dominant_cell_type ?? 'N/A'}</p>
+                <p>Anomaly Rate: ${insights.ml_metrics.anomaly_rate?.toFixed(1) ?? '0'}%</p>`;
+
+            // Cell Type Evolution
+            container.innerHTML += `<h3>Cell Type Evolution</h3>`;
+            Object.entries(insights.cell_type_evolution || {}).forEach(([type, counts]) => {
+                container.innerHTML += `<p>${type}: ${counts.join(', ')}</p>`;
+            });
+
+            // Growth Stage
+            container.innerHTML += `<h3>Growth Stage Distribution</h3>`;
+            Object.entries(insights.growth_stage_analysis || {}).forEach(([time, stages]) => {
+                container.innerHTML += `<p><strong>${time}</strong>: ${Object.entries(stages).map(([s, c]) => `${s}: ${c}`).join(', ')}</p>`;
+            });
+
+            // Biomass models
+            container.innerHTML += `<h3>Biomass Model Comparison</h3>`;
+            const bmc = insights.biomass_model_comparison;
+            if (bmc && Object.keys(bmc).length) {
+                Object.entries(bmc).forEach(([timestamp, model]) => {
+                    container.innerHTML += `<p><strong>${timestamp}</strong>: Volume=${model.volume}, ML=${model.ml}, Ensemble=${model.ensemble}</p>`;
+                });
+            }
+        }
+
+        async function updateParameters() {
+            const pixelToMicron = parseFloat(document.getElementById('pixelToMicron').value);
+            const chlorophyllThreshold = parseFloat(document.getElementById('chlorophyllThreshold').value);
+            
+            try {
+                const response = await fetch('/api/set_parameters', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        pixel_to_micron: pixelToMicron,
+                        chlorophyll_threshold: chlorophyllThreshold
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('Parameters updated successfully');
+                } else {
+                    alert('Failed to update parameters');
+                }
+            } catch (error) {
+                alert('Error updating parameters: ' + error.message);
+            }
+        }
+        
+        function showCalibrationDialog() {
+            const pixelsInput = prompt('Enter known distance in pixels:');
+            const micronsInput = prompt('Enter known distance in microns:');
+            
+            if (pixelsInput && micronsInput) {
+                calibrateSystem(parseFloat(pixelsInput), parseFloat(micronsInput));
+            }
+        }
+        
+        async function calibrateSystem(pixels, microns) {
+            try {
+                const response = await fetch('/api/calibrate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        known_distance_pixels: pixels,
+                        known_distance_microns: microns
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('pixelToMicron').value = result.pixel_to_micron_ratio.toFixed(4);
+                    alert(result.message);
+                } else {
+                    alert('Calibration failed');
+                }
+            } catch (error) {
+                alert('Error during calibration: ' + error.message);
+            }
+        }
+        
+        async function exportResults(format) {
+            if (!currentAnalysisId) return;
+            
+            try {
+                const response = await fetch(`/api/export/${currentAnalysisId}/${format}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `wolffia_analysis.${format === 'zip' ? 'zip' : format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    alert('Export failed');
+                }
+            } catch (error) {
+                alert('Error exporting results: ' + error.message);
+            }
+        }
+        
+        async function compareCells() {
+            if (!currentAnalysisId) return;
+            
+            const comparisonResults = document.getElementById('comparisonResults');
+            comparisonResults.innerHTML = '<p>Comparing cells across time points...</p>';
+            
+            try {
+                const response = await fetch('/api/compare_cells', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        analysis_id: currentAnalysisId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayComparisonResults(result.comparisons);
+                } else {
+                    comparisonResults.innerHTML = '<p>Comparison failed</p>';
+                }
+            } catch (error) {
+                comparisonResults.innerHTML = '<p>Error: ' + error.message + '</p>';
+            }
+        }
+        
+function displayComparisonResults(comparisons) {
+    const container = document.getElementById('comparisonResults');
+    container.innerHTML = '<h3>Cell Tracking Results</h3>';
+
+    if (!Array.isArray(comparisons)) {
+        console.warn("Expected array of comparisons:", comparisons);
+        return;
+    }
+
+    comparisons.forEach(comparison => {
+        const section = document.createElement('div');
+        section.className = 'comparison-section';
+        section.innerHTML = `
+            <h4>${comparison.from ?? 'T1'} → ${comparison.to ?? 'T2'}</h4>
+            <p>Matched cells: ${comparison.matched_cells ?? 0}</p>
+        `;
+
+        if (Array.isArray(comparison.matches) && comparison.matches.length > 0) {
+            const table = document.createElement('table');
+            table.className = 'cell-table';
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Cell ID (T1)</th>
+                        <th>Cell ID (T2)</th>
+                        <th>Area Change (μm²)</th>
+                        <th>Chlorophyll Change</th>
+                        <th>Biomass Change (μg)</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            `;
+
+            const tbody = table.querySelector('tbody');
+            comparison.matches.forEach(match => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${match.cell_id_1 ?? 'N/A'}</td>
+                    <td>${match.cell_id_2 ?? 'N/A'}</td>
+                    <td>${(match.area_change ?? 0).toFixed(2)}</td>
+                    <td>${(match.chlorophyll_change ?? 0).toFixed(3)}</td>
+                    <td>${(match.biomass_change ?? 0).toFixed(3)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            section.appendChild(table);
+        }
+
+        container.appendChild(section);
+    });
+}
+
+        
+        // Live analysis for single image
+        async function performLiveAnalysis(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/live_analysis', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Display live results
+                    displayLiveResults(result.result);
+                } else {
+                    alert('Live analysis failed: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error in live analysis: ' + error.message);
+            }
+        }
+        
+        function displayLiveResults(result) {
+            // Create a temporary results structure
+            const tempResults = {
+                status: 'completed',
+                summary: result.summary,
+                results: [result]
+            };
+            
+            displayResults(tempResults);
+        }
+        
+        // Add styles for health status
+        const style = document.createElement('style');
+        style.textContent = `
+            .health-healthy { color: green; font-weight: bold; }
+            .health-moderate { color: orange; font-weight: bold; }
+            .health-stressed { color: red; font-weight: bold; }
+            
+            .comparison-section {
+                margin: 20px 0;
+                padding: 15px;
+                background: #f5f5f5;
+                border-radius: 8px;
+            }
+            
+            .file-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px;
+                margin: 5px 0;
+                background: #f0f0f0;
+                border-radius: 5px;
+            }
+            
+            .file-item button {
+                background: #ff4444;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                cursor: pointer;
+            }
+            
+            .file-item button:hover {
+                background: #cc0000;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Add these functions to your existing script section
+
+function displaySpectralAnalysis(spectralData) {
+    const container = document.getElementById('spectralContainer');
+    container.innerHTML = '';
+    
+    spectralData.forEach(item => {
+        const section = document.createElement('div');
+        section.className = 'spectral-section';
+        section.innerHTML = `
+            <h3>Spectral Analysis - ${item.timestamp}</h3>
+            <img src="data:image/png;base64,${item.visualization}" alt="Spectral Analysis">
+            <pre>${item.report}</pre>
+        `;
+        container.appendChild(section);
+    });
+}
+
+// Live analysis functions
+let stream = null;
+async function startLiveAnalysis() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.getElementById('liveVideo');
+        video.srcObject = stream;
+    } catch (err) {
+        alert('Error accessing camera: ' + err.message);
+    }
+}
+
+async function captureFrame() {
+    const video = document.getElementById('liveVideo');
+    const canvas = document.getElementById('liveCanvas');
+    const context = canvas.getContext('2d');
+    
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL('image/png');
+    
+    // Send to server for analysis
+    const response = await fetch('/api/live_capture', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ image_data: imageData })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+        displayLiveResults(result.instant_metrics);
+    }
+}
+
+function displayLiveResults(metrics) {
+    const container = document.getElementById('liveResults');
+    container.innerHTML = `
+        <div class="live-metrics">
+            <h4>Instant Analysis</h4>
+            <p>Cells detected: ${metrics.cell_count}</p>
+            <p>Total chlorophyll: ${metrics.total_chlorophyll.toFixed(2)} μg</p>
+            <p>Health: ${JSON.stringify(metrics.health_distribution)}</p>
         </div>
-    </div>
+    `;
+}
 
-    <div class="modal fade" id="spectralModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">🌈 Detailed Spectral Analysis</h5>
-                    <button type="button" class="close" data-dismiss="modal">&times;</button>
-                </div>
-                <div class="modal-body" id="spectralModalBody">
-                    <!-- Detailed spectral content -->
-                </div>
-            </div>
-        </div>
-    </div>
+// Manual annotation functions
+let annotations = [];
+let currentImage = null;
 
-    <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
-    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
+function initAnnotationCanvas(imageUrl) {
+    const canvas = document.getElementById('annotationCanvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = function() {
+        currentImage = img;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = imageUrl;
+    
+    canvas.addEventListener('click', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const cellType = document.getElementById('cellTypeSelect').value;
+        
+        annotations.push({
+            x: x,
+            y: y,
+            type: cellType,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Draw annotation
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, 2 * Math.PI);
+        ctx.strokeStyle = getColorForType(cellType);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        updateAnnotationsList();
+    });
+}
 
+function getColorForType(type) {
+    const colors = {
+        'healthy': 'green',
+        'stressed': 'orange',
+        'dead': 'red',
+        'debris': 'gray'
+    };
+    return colors[type] || 'blue';
+}
+
+function updateAnnotationsList() {
+    const list = document.getElementById('annotationsList');
+    list.innerHTML = '<h4>Annotations (' + annotations.length + ')</h4>';
+    
+    annotations.forEach((ann, idx) => {
+        const item = document.createElement('div');
+        item.innerHTML = `${idx + 1}. ${ann.type} at (${ann.x.toFixed(0)}, ${ann.y.toFixed(0)})`;
+        list.appendChild(item);
+    });
+}
+
+async function saveAnnotations() {
+    if (annotations.length === 0) {
+        alert('No annotations to save');
+        return;
+    }
+    
+    const response = await fetch('/api/manual_annotation', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            image_id: currentAnalysisId,
+            annotations: annotations
+        })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+        alert('Annotations saved successfully');
+        annotations = [];
+        updateAnnotationsList();
+    }
+}
+
+async function trainModel() {
+    const response = await fetch('/api/train_model', {
+        method: 'POST'
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+        alert(`Model trained successfully! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
+    }
+}
+
+// Update the tab buttons to include new tabs
+document.querySelector('.tab-buttons').innerHTML += `
+    <button class="tab-button" onclick="showTab('spectral')">Spectral Analysis</button>
+    <button class="tab-button" onclick="showTab('liveAnalysis')">Live Analysis</button>
+    <button class="tab-button" onclick="showTab('training')">ML Training</button>
+`;
+
+
+    </script>
 </body>
 </html>
