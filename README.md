@@ -20,6 +20,8 @@
 
 BIOIMAGIN is a cutting-edge, fully automated bioimage analysis system specifically designed for comprehensive analysis of *Wolffia arrhiza* (the world's smallest flowering plant). The system combines advanced computer vision, machine learning, and spectral analysis to provide researchers with unprecedented insights into Wolffia populations, growth dynamics, and physiological states.
 
+The project is stated at the BTU (Brandenburgisch technische Universität Cottbus-Senftenberg) and is called: "BinAqua: Klimafreundliche Herstellung vollwertiger veganer Proteinpulver durch die Co-Kultivierung von Mikroalgen und Wasserlinsen" ("BinAqua: Climate-friendly production of healthy vegan protein powders through co-cultivation of microalgae and duckweed").
+
 ### Key Capabilities
 
 - **🤖 AI-Powered Analysis**: Multi-method segmentation with ML-enhanced cell classification
@@ -452,27 +454,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 🗺️ Roadmap
-
-### Version 2.1 (Q2 2024)
-- [ ] Deep learning integration for enhanced segmentation
-- [ ] 3D analysis capabilities for Z-stack images
-- [ ] Real-time video analysis
-- [ ] Cloud deployment options
-
-### Version 2.2 (Q4 2024)
-- [ ] Multi-species support (expanded Wolffia varieties)
-- [ ] Advanced spectral analysis with hyperspectral data
-- [ ] Automated experimental design suggestions
-- [ ] Integration with laboratory information systems
-
-### Version 3.0 (2025)
-- [ ] Full AI-powered analysis pipeline
-- [ ] Federated learning capabilities
-- [ ] Mobile application development
-- [ ] Integration with robotic cultivation systems
-
----
 
 <div align="center">
 
