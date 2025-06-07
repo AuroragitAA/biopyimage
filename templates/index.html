@@ -26,7 +26,6 @@
                 <input type="number" id="chlorophyllThreshold" value="0.6" step="0.05" min="0" max="1">
             </label>
             <button onclick="updateParameters()">Update Parameters</button>
-            <button onclick="optimizeParameters()">Optimize Parameters</button>
             <button onclick="showCalibrationDialog()">Calibrate</button>
         </div>
         
@@ -75,11 +74,9 @@
             <!-- Tabs for different views -->
             <div class="tab-container">
                 <div class="tab-buttons">
-                    <button class="tab-button active" onclick="showTab('visualizations')">Visualizations</button>
+                    <button class="tab-button active" onclick="showTab('visualizations')">Results Overview</button>
                     <button class="tab-button" onclick="showTab('cellData')">Cell Data</button>
                     <button class="tab-button" onclick="showTab('timeSeries')">Time Series</button>
-                    <button class="tab-button" onclick="showTab('comparison')">Cell Comparison</button>
-                    <button class="tab-button" onclick="showTab('mlInsights')">ML Insights</button>
                 </div>
                 
                 <!-- Visualizations Tab -->
@@ -102,9 +99,7 @@
                                     <th>Area (μm²)</th>
                                     <th>Chlorophyll</th>
                                     <th>Biomass (μg)</th>
-                                    <th>Health</th>
-                                    <th>Type</th>
-                                    <th>Similar Cells</th>
+                                    <th>Green Cell</th>
                                 </tr>
                             </thead>
                             <tbody id="cellTableBody"></tbody>
@@ -117,36 +112,6 @@
                     <div class="visualization-container" id="timeSeriesContainer"></div>
                 </div>
                 
-                <!-- Cell Comparison Tab -->
-                <div class="tab-content" id="comparisonTab">
-                    <button onclick="compareCells()">Compare Cells Across Time</button>
-                    <div id="comparisonResults"></div>
-                </div>
-
-
-                
-                <!-- ML Insights Tab -->
-                <div class="tab-content" id="mlInsightsTab">
-                    <div class="ml-insights-container" id="mlInsightsContainer">
-                        <p>Loading ML insights...</p>
-                    </div>
-                </div>
-
-
-                <!-- Spectral Analysis Tab -->
-                <div class="tab-content" id="spectralTab">
-                    <div class="spectral-container" id="spectralContainer">
-                        <p>Loading spectral analysis...</p>
-                    </div>
-                </div>
-
-                <!-- Live Analysis Tab -->
-                <div class="tab-content" id="liveAnalysisTab">
-                    <div class="live-analysis-container">
-                        <h3>Real-time Analysis</h3>
-                        <video id="liveVideo" width="640" height="480" autoplay></video>
-                        <canvas id="liveCanvas" width="640" height="480" style="display:none;"></canvas>
-                        <button onclick="startLiveAnalysis()">Start Live Analysis</button>
                         <button onclick="captureFrame()">Capture & Analyze</button>
                         <div id="liveResults"></div>
                     </div>
@@ -257,30 +222,6 @@
             });
         }
         
-        function showMLInsights() {
-            if (!currentAnalysisId) return;
-
-            fetch(`/api/ml_insights/${currentAnalysisId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        displayMLInsights(data.insights); // You must define this function to render insights
-                    }
-                });
-        }
-
-        function optimizeParameters() {
-            if (!currentAnalysisId) return;
-
-            fetch(`/api/optimize_parameters/${currentAnalysisId}`, { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Parameters optimized: ' + JSON.stringify(data.optimized_parameters));
-                        // Optionally update UI with new parameters
-                    }
-                });
-        }
 
         async function startAnalysis() {
             if (uploadedFiles.length === 0) return;
@@ -308,20 +249,7 @@
                 if (uploadResult.success) {
                     currentAnalysisId = uploadResult.analysis_id;
 
-                    // ✅ START streaming progress after analysis ID is set
-                    const eventSource = new EventSource(`/api/stream_progress/${currentAnalysisId}`);
-                    eventSource.onmessage = function(event) {
-                        const progress = JSON.parse(event.data);
-                        document.getElementById('progressFill').style.width = progress.progress + '%';
-                        // Show spinner + progress text
-                        document.getElementById('loadingSpinner').innerHTML = `
-                            <p>${progress.current_step}</p>
-                            <p>${progress.progress}%</p>
-
-                        `;
-                    };
-
-                    // Optional fallback
+                    // Poll for analysis status
                     pollAnalysisStatus();
                 }
                 else {
@@ -527,11 +455,9 @@
                         row.innerHTML = `
                             <td>${cell.cell_id ?? 'N/A'}</td>
                             <td>${(cell.area_microns_sq ?? 0).toFixed(2)}</td>
-                            <td>${(cell.mean_chlorophyll_intensity ?? 0).toFixed(3)}</td>
-                            <td>${(cell.biomass_estimate_ug ?? 0).toFixed(3)}</td>
-                            <td><span class="health-${cell.health_status ?? 'unknown'}">${cell.health_status ?? 'unknown'}</span></td>
-                            <td>${cell.cell_type ?? 'unknown'}</td>
-                            <td>${cell.similar_cell_count ?? 'N/A'}</td>
+                            <td>${(cell.chlorophyll_index ?? 0).toFixed(3)}</td>
+                            <td>${(cell.biomass_ensemble ?? cell.biomass_estimate_ug ?? 0).toFixed(3)}</td>
+                            <td>${cell.is_green_cell ? '✓' : '✗'}</td>
                         `;
                         tbody.appendChild(row);
                     });
@@ -581,72 +507,10 @@
             document.getElementById(tabName + 'Tab').classList.add('active');
             event.target.classList.add('active');
 
-            if (tabName === 'mlInsights') {
-                fetchAndDisplayMLInsights();
-            }
-                if (tabName === 'spectral' && currentAnalysisId) {
-        fetch(`/api/spectral_analysis/${currentAnalysisId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    displaySpectralAnalysis(data.spectral_data);
-                }
-            });
-    }
-        }
-
-        function fetchAndDisplayMLInsights() {
-            if (!currentAnalysisId) return;
-
-            const container = document.getElementById('mlInsightsContainer');
-            container.innerHTML = '<p>Loading ML insights...</p>';
-
-            fetch(`/api/ml_insights/${currentAnalysisId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.insights) {
-                        renderMLInsights(data.insights);
-                    } else {
-                        container.innerHTML = '<p>No ML insights available.</p>';
-                    }
-                })
-                .catch(error => {
-                    container.innerHTML = `<p>Error loading ML insights: ${error.message}</p>`;
-                });
         }
 
 
-        function renderMLInsights(insights) {
-            const container = document.getElementById('mlInsightsContainer');
-            container.innerHTML = '';
 
-            // Health
-            container.innerHTML += `<h3>Population Health</h3>
-                <p>Health Trend: ${insights.ml_metrics.health_trend ?? 'N/A'}</p>
-                <p>Dominant Cell Type: ${insights.ml_metrics.dominant_cell_type ?? 'N/A'}</p>
-                <p>Anomaly Rate: ${insights.ml_metrics.anomaly_rate?.toFixed(1) ?? '0'}%</p>`;
-
-            // Cell Type Evolution
-            container.innerHTML += `<h3>Cell Type Evolution</h3>`;
-            Object.entries(insights.cell_type_evolution || {}).forEach(([type, counts]) => {
-                container.innerHTML += `<p>${type}: ${counts.join(', ')}</p>`;
-            });
-
-            // Growth Stage
-            container.innerHTML += `<h3>Growth Stage Distribution</h3>`;
-            Object.entries(insights.growth_stage_analysis || {}).forEach(([time, stages]) => {
-                container.innerHTML += `<p><strong>${time}</strong>: ${Object.entries(stages).map(([s, c]) => `${s}: ${c}`).join(', ')}</p>`;
-            });
-
-            // Biomass models
-            container.innerHTML += `<h3>Biomass Model Comparison</h3>`;
-            const bmc = insights.biomass_model_comparison;
-            if (bmc && Object.keys(bmc).length) {
-                Object.entries(bmc).forEach(([timestamp, model]) => {
-                    container.innerHTML += `<p><strong>${timestamp}</strong>: Volume=${model.volume}, ML=${model.ml}, Ensemble=${model.ensemble}</p>`;
-                });
-            }
-        }
 
         async function updateParameters() {
             const pixelToMicron = parseFloat(document.getElementById('pixelToMicron').value);
@@ -733,34 +597,6 @@
             }
         }
         
-        async function compareCells() {
-            if (!currentAnalysisId) return;
-            
-            const comparisonResults = document.getElementById('comparisonResults');
-            comparisonResults.innerHTML = '<p>Comparing cells across time points...</p>';
-            
-            try {
-                const response = await fetch('/api/compare_cells', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        analysis_id: currentAnalysisId
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    displayComparisonResults(result.comparisons);
-                } else {
-                    comparisonResults.innerHTML = '<p>Comparison failed</p>';
-                }
-            } catch (error) {
-                comparisonResults.innerHTML = '<p>Error: ' + error.message + '</p>';
-            }
-        }
         
 function displayComparisonResults(comparisons) {
     const container = document.getElementById('comparisonResults');
@@ -890,68 +726,6 @@ function displayComparisonResults(comparisons) {
         `;
         document.head.appendChild(style);
 
-        // Add these functions to your existing script section
-
-function displaySpectralAnalysis(spectralData) {
-    const container = document.getElementById('spectralContainer');
-    container.innerHTML = '';
-    
-    spectralData.forEach(item => {
-        const section = document.createElement('div');
-        section.className = 'spectral-section';
-        section.innerHTML = `
-            <h3>Spectral Analysis - ${item.timestamp}</h3>
-            <img src="data:image/png;base64,${item.visualization}" alt="Spectral Analysis">
-            <pre>${item.report}</pre>
-        `;
-        container.appendChild(section);
-    });
-}
-
-// Live analysis functions
-let stream = null;
-async function startLiveAnalysis() {
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const video = document.getElementById('liveVideo');
-        video.srcObject = stream;
-    } catch (err) {
-        alert('Error accessing camera: ' + err.message);
-    }
-}
-
-async function captureFrame() {
-    const video = document.getElementById('liveVideo');
-    const canvas = document.getElementById('liveCanvas');
-    const context = canvas.getContext('2d');
-    
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = canvas.toDataURL('image/png');
-    
-    // Send to server for analysis
-    const response = await fetch('/api/live_capture', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ image_data: imageData })
-    });
-    
-    const result = await response.json();
-    if (result.success) {
-        displayLiveResults(result.instant_metrics);
-    }
-}
-
-function displayLiveResults(metrics) {
-    const container = document.getElementById('liveResults');
-    container.innerHTML = `
-        <div class="live-metrics">
-            <h4>Instant Analysis</h4>
-            <p>Cells detected: ${metrics.cell_count}</p>
-            <p>Total chlorophyll: ${metrics.total_chlorophyll.toFixed(2)} μg</p>
-            <p>Health: ${JSON.stringify(metrics.health_distribution)}</p>
-        </div>
-    `;
-}
 
 // Manual annotation functions
 let annotations = [];
@@ -988,72 +762,8 @@ function initAnnotationCanvas(imageUrl) {
         ctx.strokeStyle = getColorForType(cellType);
         ctx.lineWidth = 2;
         ctx.stroke();
-        
-        updateAnnotationsList();
     });
 }
-
-function getColorForType(type) {
-    const colors = {
-        'healthy': 'green',
-        'stressed': 'orange',
-        'dead': 'red',
-        'debris': 'gray'
-    };
-    return colors[type] || 'blue';
-}
-
-function updateAnnotationsList() {
-    const list = document.getElementById('annotationsList');
-    list.innerHTML = '<h4>Annotations (' + annotations.length + ')</h4>';
-    
-    annotations.forEach((ann, idx) => {
-        const item = document.createElement('div');
-        item.innerHTML = `${idx + 1}. ${ann.type} at (${ann.x.toFixed(0)}, ${ann.y.toFixed(0)})`;
-        list.appendChild(item);
-    });
-}
-
-async function saveAnnotations() {
-    if (annotations.length === 0) {
-        alert('No annotations to save');
-        return;
-    }
-    
-    const response = await fetch('/api/manual_annotation', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            image_id: currentAnalysisId,
-            annotations: annotations
-        })
-    });
-    
-    const result = await response.json();
-    if (result.success) {
-        alert('Annotations saved successfully');
-        annotations = [];
-        updateAnnotationsList();
-    }
-}
-
-async function trainModel() {
-    const response = await fetch('/api/train_model', {
-        method: 'POST'
-    });
-    
-    const result = await response.json();
-    if (result.success) {
-        alert(`Model trained successfully! Accuracy: ${(result.accuracy * 100).toFixed(1)}%`);
-    }
-}
-
-// Update the tab buttons to include new tabs
-document.querySelector('.tab-buttons').innerHTML += `
-    <button class="tab-button" onclick="showTab('spectral')">Spectral Analysis</button>
-    <button class="tab-button" onclick="showTab('liveAnalysis')">Live Analysis</button>
-    <button class="tab-button" onclick="showTab('training')">ML Training</button>
-`;
 
 
     </script>
