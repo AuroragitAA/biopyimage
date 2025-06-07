@@ -90,6 +90,798 @@ class WolffiaAnalyzer:
             n_jobs=-1
         )
         
+    def assess_image_quality(self, image):
+        """
+        Professional AI-based image quality assessment for bioimage analysis
+        Returns quality metrics and recommended preprocessing strategy
+        """
+        try:
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = image.copy()
+            
+            # 1. Contrast and brightness assessment
+            contrast = np.std(gray)
+            brightness = np.mean(gray)
+            dynamic_range = np.ptp(gray)  # Peak-to-peak (max - min)
+            
+            # 2. Noise assessment using Laplacian variance
+            noise_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+            
+            # 3. Blur assessment using gradient magnitude
+            grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+            blur_score = np.mean(np.sqrt(grad_x**2 + grad_y**2))
+            
+            # 4. Illumination uniformity
+            h, w = gray.shape
+            center_region = gray[h//4:3*h//4, w//4:3*w//4]
+            edge_region = np.concatenate([
+                gray[:h//4, :].flatten(),
+                gray[3*h//4:, :].flatten(),
+                gray[:, :w//4].flatten(),
+                gray[:, 3*w//4:].flatten()
+            ])
+            illumination_uniformity = 1.0 - abs(np.mean(center_region) - np.mean(edge_region)) / 255.0
+            
+            # 5. Green content assessment (specific for Wolffia)
+            if len(image.shape) == 3:
+                hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+                green_mask = cv2.inRange(hsv, (40, 30, 30), (80, 255, 255))
+                green_content = np.sum(green_mask > 0) / (h * w)
+            else:
+                green_content = 0.0
+            
+            # 6. Overall quality scoring
+            quality_metrics = {
+                'contrast': min(contrast / 50.0, 1.0),  # Normalize to 0-1
+                'brightness_optimal': 1.0 - abs(brightness - 127.5) / 127.5,
+                'dynamic_range': min(dynamic_range / 255.0, 1.0),
+                'sharpness': min(noise_score / 100.0, 1.0),
+                'focus': min(blur_score / 50.0, 1.0),
+                'illumination': illumination_uniformity,
+                'green_content': min(green_content * 5.0, 1.0),  # Boost importance
+            }
+            
+            # Calculate overall quality score (weighted average)
+            weights = {
+                'contrast': 0.15,
+                'brightness_optimal': 0.15,
+                'dynamic_range': 0.10,
+                'sharpness': 0.15,
+                'focus': 0.15,
+                'illumination': 0.15,
+                'green_content': 0.15
+            }
+            
+            overall_quality = sum(quality_metrics[k] * weights[k] for k in quality_metrics.keys())
+            
+            # Determine quality category and strategy
+            if overall_quality >= 0.7:
+                quality_category = 'excellent'
+                strategy = 'minimal'
+            elif overall_quality >= 0.5:
+                quality_category = 'good'
+                strategy = 'standard'
+            elif overall_quality >= 0.3:
+                quality_category = 'fair'
+                strategy = 'enhanced'
+            else:
+                quality_category = 'poor'
+                strategy = 'aggressive'
+            
+            return {
+                'overall_quality': overall_quality,
+                'category': quality_category,
+                'strategy': strategy,
+                'metrics': quality_metrics,
+                'recommendations': self._get_enhancement_recommendations(quality_metrics)
+            }
+            
+        except Exception as e:
+            print(f"Error in quality assessment: {str(e)}")
+            return {
+                'overall_quality': 0.5,
+                'category': 'unknown',
+                'strategy': 'standard',
+                'metrics': {},
+                'recommendations': ['standard_preprocessing']
+            }
+    
+    def _get_enhancement_recommendations(self, metrics):
+        """
+        Generate specific enhancement recommendations based on quality metrics
+        """
+        recommendations = []
+        
+        if metrics.get('contrast', 0) < 0.4:
+            recommendations.append('contrast_enhancement')
+        if metrics.get('brightness_optimal', 0) < 0.6:
+            recommendations.append('brightness_correction')
+        if metrics.get('sharpness', 0) < 0.5:
+            recommendations.append('noise_reduction')
+        if metrics.get('focus', 0) < 0.5:
+            recommendations.append('sharpening')
+        if metrics.get('illumination', 0) < 0.6:
+            recommendations.append('illumination_correction')
+        if metrics.get('green_content', 0) < 0.3:
+            recommendations.append('color_enhancement')
+            
+        if not recommendations:
+            recommendations.append('standard_preprocessing')
+            
+        return recommendations
+    
+    def intelligent_preprocess_image(self, image_path, quality_assessment=None):
+        """
+        Intelligent preprocessing that adapts based on image quality assessment
+        """
+        try:
+            # Load image
+            if isinstance(image_path, str):
+                image = cv2.imread(image_path)
+                if image is None:
+                    raise ValueError(f"Could not load image from {image_path}")
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            else:
+                image = image_path
+            
+            original = image.copy()
+            
+            # Assess quality if not provided
+            if quality_assessment is None:
+                quality_assessment = self.assess_image_quality(image)
+            
+            print(f"🔍 Image quality: {quality_assessment['category']} (score: {quality_assessment['overall_quality']:.3f})")
+            print(f"📋 Enhancement strategy: {quality_assessment['strategy']}")
+            
+            # Apply adaptive preprocessing based on quality
+            if quality_assessment['strategy'] == 'minimal':
+                enhanced = self._minimal_preprocessing(image)
+            elif quality_assessment['strategy'] == 'standard':
+                enhanced = self._standard_preprocessing(image)
+            elif quality_assessment['strategy'] == 'enhanced':
+                enhanced = self._enhanced_preprocessing(image)
+            else:  # aggressive
+                enhanced = self._aggressive_preprocessing(image)
+            
+            # Apply specific recommendations
+            for rec in quality_assessment['recommendations']:
+                enhanced = self._apply_specific_enhancement(enhanced, rec, quality_assessment['metrics'])
+            
+            # Final quality validation
+            final_quality = self.assess_image_quality(enhanced)
+            improvement = final_quality['overall_quality'] - quality_assessment['overall_quality']
+            
+            print(f"✅ Processing complete. Quality improvement: {improvement:+.3f}")
+            
+            # Prepare preprocessed data structure
+            preprocessed_data = self._create_preprocessed_data_structure(enhanced, original)
+            
+            return preprocessed_data
+            
+        except Exception as e:
+            print(f"❌ Error in intelligent preprocessing: {str(e)}")
+            # Fallback to standard preprocessing
+            return self.advanced_preprocess_image(image_path)
+    
+    def _minimal_preprocessing(self, image):
+        """Minimal processing for excellent quality images"""
+        enhanced = image.copy()
+        
+        # Light denoising only
+        enhanced = cv2.bilateralFilter(enhanced, 5, 20, 20)
+        
+        # Slight contrast enhancement
+        enhanced = cv2.convertScaleAbs(enhanced, alpha=1.05, beta=5)
+        
+        return enhanced
+    
+    def _standard_preprocessing(self, image):
+        """Standard processing for good quality images"""
+        enhanced = image.copy()
+        
+        # Moderate denoising
+        enhanced = cv2.bilateralFilter(enhanced, 7, 50, 50)
+        
+        # Standard contrast enhancement
+        lab = cv2.cvtColor(enhanced, cv2.COLOR_RGB2LAB)
+        lab[:,:,0] = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(lab[:,:,0])
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+        
+        return enhanced
+    
+    def _enhanced_preprocessing(self, image):
+        """Enhanced processing for fair quality images"""
+        enhanced = image.copy()
+        
+        # Strong denoising
+        enhanced = cv2.bilateralFilter(enhanced, 9, 75, 75)
+        
+        # Illumination correction using top-hat
+        gray = cv2.cvtColor(enhanced, cv2.COLOR_RGB2GRAY)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (50, 50))
+        background = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
+        
+        # Apply correction to each channel
+        for i in range(3):
+            enhanced[:,:,i] = cv2.add(enhanced[:,:,i], background)
+        
+        # Strong contrast enhancement
+        lab = cv2.cvtColor(enhanced, cv2.COLOR_RGB2LAB)
+        lab[:,:,0] = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(6,6)).apply(lab[:,:,0])
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+        
+        return enhanced
+    
+    def _aggressive_preprocessing(self, image):
+        """Aggressive processing for poor quality images"""
+        enhanced = image.copy()
+        
+        # Multi-step denoising
+        enhanced = cv2.bilateralFilter(enhanced, 11, 100, 100)
+        enhanced = cv2.medianBlur(enhanced, 5)
+        
+        # Illumination correction with large kernel
+        gray = cv2.cvtColor(enhanced, cv2.COLOR_RGB2GRAY)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (80, 80))
+        background = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
+        
+        # Apply strong correction
+        for i in range(3):
+            bg_scaled = (background * 1.5).astype(enhanced.dtype)
+            enhanced[:,:,i] = cv2.add(enhanced[:,:,i], bg_scaled)
+        
+        # Aggressive contrast and brightness correction
+        enhanced = cv2.convertScaleAbs(enhanced, alpha=1.2, beta=10)
+        
+        # Multiple CLAHE applications
+        lab = cv2.cvtColor(enhanced, cv2.COLOR_RGB2LAB)
+        lab[:,:,0] = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(4,4)).apply(lab[:,:,0])
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+        
+        # Color space enhancement for green content
+        hsv = cv2.cvtColor(enhanced, cv2.COLOR_RGB2HSV)
+        hsv[:,:,1] = cv2.multiply(hsv[:,:,1], 1.3)  # Increase saturation
+        enhanced = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+        
+        return enhanced
+    
+    def _apply_specific_enhancement(self, image, recommendation, metrics):
+        """Apply specific enhancement based on recommendation"""
+        enhanced = image.copy()
+        
+        if recommendation == 'contrast_enhancement':
+            enhanced = cv2.convertScaleAbs(enhanced, alpha=1.3, beta=0)
+        
+        elif recommendation == 'brightness_correction':
+            brightness = metrics.get('brightness_optimal', 0.5)
+            if brightness < 0.5:  # Too dark
+                enhanced = cv2.convertScaleAbs(enhanced, alpha=1.0, beta=20)
+            else:  # Too bright
+                enhanced = cv2.convertScaleAbs(enhanced, alpha=1.0, beta=-20)
+        
+        elif recommendation == 'noise_reduction':
+            enhanced = cv2.bilateralFilter(enhanced, 9, 80, 80)
+        
+        elif recommendation == 'sharpening':
+            kernel = np.array([[-1,-1,-1],[-1,9,-1],[-1,-1,-1]])
+            for i in range(3):
+                enhanced[:,:,i] = cv2.filter2D(enhanced[:,:,i], -1, kernel)
+        
+        elif recommendation == 'illumination_correction':
+            gray = cv2.cvtColor(enhanced, cv2.COLOR_RGB2GRAY)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (60, 60))
+            background = cv2.morphologyEx(gray, cv2.MORPH_TOPHAT, kernel)
+            for i in range(3):
+                enhanced[:,:,i] = cv2.add(enhanced[:,:,i], background)
+        
+        elif recommendation == 'color_enhancement':
+            hsv = cv2.cvtColor(enhanced, cv2.COLOR_RGB2HSV)
+            hsv[:,:,1] = cv2.multiply(hsv[:,:,1], 1.2)  # Boost saturation
+            enhanced = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+        
+        return enhanced
+    
+    def _create_preprocessed_data_structure(self, enhanced, original):
+        """Create the standard preprocessed data structure matching expected format"""
+        # Convert to different color spaces
+        gray = rgb2gray(enhanced)
+        hsv = rgb2hsv(enhanced)
+        lab = rgb2lab(enhanced)
+        
+        # Calculate vegetation indices
+        ndvi = self._calculate_ndvi(enhanced)
+        green_mask = self._create_green_mask(enhanced, hsv)
+        
+        # Create additional required fields to match original preprocessing format
+        gray_corrected = gray.copy()  # Use gray as gray_corrected
+        green_channel = enhanced[:,:,1] if len(enhanced.shape) == 3 else gray
+        chlorophyll_enhanced = ndvi * green_mask  # Simplified chlorophyll proxy
+        
+        # Calculate additional vegetation indices
+        gci = self._calculate_gci(enhanced)
+        exg = self._calculate_exg(enhanced)
+        
+        return {
+            'original': original,
+            'enhanced': enhanced,
+            'gray': gray,
+            'gray_corrected': gray_corrected,  # Required by multi_method_segmentation
+            'green_channel': green_channel,
+            'chlorophyll_enhanced': chlorophyll_enhanced,  # Required by multi_method_segmentation
+            'hsv': hsv,
+            'lab': lab,
+            'ndvi': ndvi,
+            'gci': gci,
+            'exg': exg,
+            'green_mask': green_mask
+        }
+    
+    def _calculate_gci(self, image):
+        """Calculate Green Chlorophyll Index"""
+        if len(image.shape) == 3:
+            green = image[:,:,1].astype(np.float64)
+            red = image[:,:,0].astype(np.float64)
+            # GCI = (Green / Red) - 1
+            denominator = red.copy()
+            denominator[denominator == 0] = 1e-10
+            gci = (green / denominator) - 1
+            return np.clip(gci, -1, 5)
+        else:
+            return np.zeros_like(image)
+    
+    def _calculate_exg(self, image):
+        """Calculate Excess Green Index"""
+        if len(image.shape) == 3:
+            r, g, b = image[:,:,0], image[:,:,1], image[:,:,2]
+            # ExG = 2*G - R - B
+            exg = 2 * g.astype(np.float64) - r.astype(np.float64) - b.astype(np.float64)
+            return np.clip(exg, -1, 1)
+        else:
+            return np.zeros_like(image)
+    
+    def _calculate_ndvi(self, image):
+        """Calculate NDVI from RGB image"""
+        red = image[:,:,0].astype(np.float64)
+        green = image[:,:,1].astype(np.float64)
+        
+        # Avoid division by zero
+        denominator = red + green
+        denominator[denominator == 0] = 1e-10
+        
+        ndvi = (green - red) / denominator
+        return np.clip(ndvi, -1, 1)
+    
+    def _create_green_mask(self, image, hsv):
+        """Create green mask for vegetation detection"""
+        # HSV-based green detection
+        green_lower = np.array([40, 30, 30])
+        green_upper = np.array([80, 255, 255])
+        
+        # Convert to HSV 0-255 range
+        hsv_255 = (hsv * 255).astype(np.uint8)
+        mask = cv2.inRange(hsv_255, green_lower, green_upper)
+        
+        return mask.astype(bool)
+    
+    def smart_targeted_preprocess(self, image_path):
+        """
+        Smart preprocessing that only uses intensive quality assessment when standard methods fail
+        """
+        try:
+            # First, try standard preprocessing
+            preprocessed = self.advanced_preprocess_image(image_path)
+            
+            if preprocessed is None:
+                print("⚠️ Standard preprocessing failed, trying intelligent approach...")
+                return self.intelligent_preprocess_image(image_path)
+            
+            # Quick check: does standard preprocessing give good green detection?
+            green_coverage = np.sum(preprocessed['green_mask']) / preprocessed['green_mask'].size
+            
+            # If green coverage is very low, the image might need special handling
+            if green_coverage < 0.001:  # Less than 0.1% green
+                print(f"⚠️ Low green coverage ({green_coverage:.4f}), trying enhanced preprocessing...")
+                
+                # Try enhanced preprocessing for challenging images
+                enhanced_preprocessed = self.enhanced_wolffia_preprocess(image_path)
+                if enhanced_preprocessed is not None:
+                    return enhanced_preprocessed
+            
+            print(f"✅ Standard preprocessing sufficient (green coverage: {green_coverage:.4f})")
+            return preprocessed
+            
+        except Exception as e:
+            print(f"❌ Error in smart preprocessing: {str(e)}")
+            return self.advanced_preprocess_image(image_path)
+    
+    def enhanced_wolffia_preprocess(self, image_path):
+        """
+        Enhanced preprocessing specifically designed for challenging Wolffia images
+        (WhatsApp compressed, low contrast, etc.)
+        """
+        try:
+            # Load image
+            if isinstance(image_path, str):
+                image = cv2.imread(image_path)
+                if image is None:
+                    raise ValueError(f"Could not load image from {image_path}")
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            else:
+                image = image_path
+            
+            original = image.copy()
+            print("🔧 Enhanced Wolffia preprocessing for challenging image...")
+            
+            # Step 1: Aggressive denoising for compressed images
+            enhanced = cv2.bilateralFilter(image, 15, 100, 100)
+            
+            # Step 2: Color space enhancement for better green detection
+            hsv = cv2.cvtColor(enhanced, cv2.COLOR_RGB2HSV)
+            
+            # Enhance saturation to make greens more prominent
+            hsv[:,:,1] = cv2.multiply(hsv[:,:,1], 1.5)
+            enhanced = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+            
+            # Step 3: Contrast enhancement with multiple methods
+            lab = cv2.cvtColor(enhanced, cv2.COLOR_RGB2LAB)
+            lab[:,:,0] = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8)).apply(lab[:,:,0])
+            enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+            
+            # Step 4: Create more sensitive green detection
+            enhanced_green_mask = self._create_sensitive_green_mask(enhanced)
+            
+            # Step 5: If still no green detected, try alternative detection
+            if np.sum(enhanced_green_mask) < 100:  # Very low threshold
+                print("⚠️ Still low green detection, trying alternative methods...")
+                enhanced_green_mask = self._alternative_cell_detection(enhanced)
+            
+            # Create preprocessed data structure
+            gray = rgb2gray(enhanced)
+            hsv_final = rgb2hsv(enhanced)
+            lab_final = rgb2lab(enhanced)
+            
+            # Enhanced vegetation indices
+            ndvi = self._calculate_enhanced_ndvi(enhanced)
+            gci = self._calculate_gci(enhanced)
+            exg = self._calculate_exg(enhanced)
+            
+            return {
+                'original': original,
+                'enhanced': enhanced,
+                'gray': gray,
+                'gray_corrected': gray,
+                'green_channel': enhanced[:,:,1],
+                'chlorophyll_enhanced': ndvi * enhanced_green_mask,
+                'hsv': hsv_final,
+                'lab': lab_final,
+                'ndvi': ndvi,
+                'gci': gci,
+                'exg': exg,
+                'green_mask': enhanced_green_mask
+            }
+            
+        except Exception as e:
+            print(f"❌ Error in enhanced Wolffia preprocessing: {str(e)}")
+            return None
+    
+    def _create_sensitive_green_mask(self, image):
+        """
+        Create a more sensitive green mask for challenging images
+        """
+        # Method 1: Expanded HSV range for green
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        
+        # More permissive green range
+        green_lower = np.array([30, 20, 20])  # Expanded range
+        green_upper = np.array([90, 255, 255])
+        mask1 = cv2.inRange(hsv, green_lower, green_upper)
+        
+        # Method 2: Green channel enhancement
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        green_channel = image[:,:,1]
+        
+        # Green is stronger than red and blue
+        green_dominance = (green_channel > image[:,:,0] * 0.8) & (green_channel > image[:,:,2] * 0.8)
+        
+        # Method 3: Vegetation-like colors (including yellowish-green)
+        lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+        # Negative 'a' channel indicates green
+        green_lab = lab[:,:,1] < 128  # Less than neutral in a-channel
+        
+        # Combine methods
+        combined_mask = mask1.astype(bool) | green_dominance | green_lab
+        
+        # Clean up the mask
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        combined_mask = cv2.morphologyEx(combined_mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+        
+        return combined_mask.astype(bool)
+    
+    def _alternative_cell_detection(self, image):
+        """
+        Alternative cell detection for images where green detection fails
+        """
+        print("🔍 Trying alternative cell detection methods...")
+        
+        # Method 1: Circular/oval objects detection
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        
+        # Edge detection
+        edges = cv2.Canny(gray, 50, 150)
+        
+        # Find contours
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Create mask from circular contours
+        mask = np.zeros_like(gray, dtype=bool)
+        
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if 50 < area < 5000:  # Reasonable cell size range
+                # Check if contour is roughly circular
+                perimeter = cv2.arcLength(contour, True)
+                if perimeter > 0:
+                    circularity = 4 * np.pi * area / (perimeter * perimeter)
+                    if circularity > 0.3:  # Reasonably circular
+                        cv2.fillPoly(mask, [contour], True)
+        
+        # Method 2: Blob detection
+        # Set up blob detector parameters
+        params = cv2.SimpleBlobDetector_Params()
+        params.filterByArea = True
+        params.minArea = 50
+        params.maxArea = 5000
+        params.filterByCircularity = True
+        params.minCircularity = 0.3
+        params.filterByConvexity = True
+        params.minConvexity = 0.5
+        
+        detector = cv2.SimpleBlobDetector_create(params)
+        keypoints = detector.detect(gray)
+        
+        # Add blob areas to mask
+        for kp in keypoints:
+            x, y = int(kp.pt[0]), int(kp.pt[1])
+            radius = int(kp.size / 2)
+            cv2.circle(mask, (x, y), radius, True, -1)
+        
+        print(f"✅ Alternative detection found {np.sum(mask)} pixels")
+        return mask
+    
+    def _calculate_enhanced_ndvi(self, image):
+        """
+        Calculate enhanced NDVI with better handling for compressed images
+        """
+        if len(image.shape) == 3:
+            # Use green and red channels
+            green = image[:,:,1].astype(np.float64)
+            red = image[:,:,0].astype(np.float64)
+            
+            # Smooth to reduce compression artifacts
+            green = cv2.GaussianBlur(green, (3, 3), 0)
+            red = cv2.GaussianBlur(red, (3, 3), 0)
+            
+            # Avoid division by zero
+            denominator = green + red
+            denominator[denominator == 0] = 1e-10
+            
+            ndvi = (green - red) / denominator
+            return np.clip(ndvi, -1, 1)
+        else:
+            return np.zeros_like(image)
+    
+    def create_accurate_cell_visualization(self, original_image, labels, features_df=None):
+        """
+        Create accurate cell highlighting visualization with proper borders
+        """
+        try:
+            # Create visualization image
+            vis_img = original_image.copy()
+            
+            # Get unique cell labels (excluding background)
+            unique_labels = np.unique(labels)
+            unique_labels = unique_labels[unique_labels > 0]
+            
+            print(f"🎨 Creating visualization for {len(unique_labels)} detected cells...")
+            
+            # Define colors for different cell types/conditions
+            colors = {
+                'detected': (0, 255, 0),      # Green for detected cells
+                'green_cell': (0, 255, 0),    # Bright green for green cells
+                'normal_cell': (255, 255, 0), # Yellow for normal cells
+                'small_cell': (255, 165, 0),  # Orange for small cells
+                'large_cell': (255, 0, 255)   # Magenta for large cells
+            }
+            
+            for label_id in unique_labels:
+                # Get cell mask
+                cell_mask = (labels == label_id)
+                
+                # Find contours of the cell
+                contours, _ = cv2.findContours(
+                    cell_mask.astype(np.uint8), 
+                    cv2.RETR_EXTERNAL, 
+                    cv2.CHAIN_APPROX_SIMPLE
+                )
+                
+                # Determine cell color based on properties
+                cell_color = colors['detected']  # Default
+                
+                if features_df is not None and len(features_df) >= label_id:
+                    try:
+                        cell_row = features_df.iloc[label_id - 1]
+                        area = cell_row.get('area_microns_sq', 0)
+                        is_green = cell_row.get('is_green_cell', False)
+                        
+                        if is_green:
+                            cell_color = colors['green_cell']
+                        elif area < 50:
+                            cell_color = colors['small_cell']
+                        elif area > 1000:
+                            cell_color = colors['large_cell']
+                        else:
+                            cell_color = colors['normal_cell']
+                    except:
+                        pass
+                
+                # Draw cell boundaries
+                for contour in contours:
+                    # Draw thick border
+                    cv2.drawContours(vis_img, [contour], -1, cell_color, 3)
+                    
+                    # Draw thinner inner border for better visibility
+                    cv2.drawContours(vis_img, [contour], -1, (255, 255, 255), 1)
+                
+                # Add cell number/ID
+                if len(contours) > 0:
+                    # Get centroid of largest contour
+                    largest_contour = max(contours, key=cv2.contourArea)
+                    M = cv2.moments(largest_contour)
+                    if M['m00'] != 0:
+                        cx = int(M['m10'] / M['m00'])
+                        cy = int(M['m01'] / M['m00'])
+                        
+                        # Draw cell ID
+                        cv2.putText(vis_img, str(label_id), (cx-10, cy+5), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                        cv2.putText(vis_img, str(label_id), (cx-10, cy+5), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+            
+            # Add legend
+            legend_y = 30
+            cv2.putText(vis_img, f"Detected: {len(unique_labels)} cells", 
+                       (10, legend_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            cv2.putText(vis_img, f"Detected: {len(unique_labels)} cells", 
+                       (10, legend_y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 1)
+            
+            # Add color legend
+            legend_items = [
+                ("Green cells", colors['green_cell']),
+                ("Normal cells", colors['normal_cell']),
+                ("Small cells", colors['small_cell']),
+                ("Large cells", colors['large_cell'])
+            ]
+            
+            for i, (label, color) in enumerate(legend_items):
+                y_pos = vis_img.shape[0] - 120 + i * 25
+                # Draw color box
+                cv2.rectangle(vis_img, (10, y_pos-10), (30, y_pos+5), color, -1)
+                cv2.rectangle(vis_img, (10, y_pos-10), (30, y_pos+5), (255, 255, 255), 1)
+                # Draw text
+                cv2.putText(vis_img, label, (35, y_pos), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                cv2.putText(vis_img, label, (35, y_pos), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+            
+            return vis_img
+            
+        except Exception as e:
+            print(f"❌ Error creating cell visualization: {str(e)}")
+            return original_image
+    
+    def _enhanced_segmentation_fallback(self, preprocessed):
+        """
+        Enhanced fallback segmentation methods for difficult images
+        """
+        print("🔧 Trying enhanced segmentation fallback methods...")
+        
+        try:
+            # Method 1: More aggressive Otsu with morphological opening
+            gray = preprocessed['gray']
+            green_mask = preprocessed['green_mask']
+            
+            # Histogram stretching
+            gray_stretched = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+            
+            # Multiple Otsu thresholds with lower sensitivity
+            thresholds = threshold_multiotsu(gray_stretched, classes=2)
+            binary = gray_stretched > thresholds[0] * 0.7  # Lower threshold
+            
+            # Combine with green mask
+            combined = binary & green_mask
+            
+            # Morphological operations
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            combined = cv2.morphologyEx(combined.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+            combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel)
+            
+            # Remove small objects
+            combined = remove_small_objects(combined.astype(bool), min_size=10)
+            
+            if np.sum(combined) > 50:  # Found something
+                # Watershed segmentation
+                distance = ndimage.distance_transform_edt(combined)
+                if np.max(distance) > 0:
+                    # Use distance peaks as markers
+                    from scipy.ndimage import maximum_filter
+                    local_maxima = distance == maximum_filter(distance, size=5)
+                    local_maxima = local_maxima & (distance > np.max(distance)*0.3)
+                    coords = np.where(local_maxima)
+                    if len(coords[0]) > 0:
+                        markers = np.zeros_like(distance, dtype=int)
+                        markers[coords] = range(1, len(coords[0]) + 1)
+                        labels = segmentation.watershed(-distance, markers, mask=combined)
+                        
+                        if np.max(labels) > 0:
+                            print(f"✅ Fallback Method 1 succeeded: {np.max(labels)} regions")
+                            return labels, {'fallback_otsu_watershed': True}
+            
+            # Method 2: Adaptive thresholding with different parameters
+            gray_uint8 = (gray * 255).astype(np.uint8)
+            
+            for block_size in [11, 15, 25, 35]:
+                for offset in [0.05, 0.1, 0.15]:
+                    try:
+                        adaptive = threshold_local(gray_uint8, block_size=block_size, offset=offset, method='gaussian')
+                        binary_adaptive = gray_uint8 > adaptive
+                        
+                        # Combine with green mask
+                        combined_adaptive = binary_adaptive & green_mask
+                        
+                        if np.sum(combined_adaptive) > 30:
+                            # Clean up
+                            combined_adaptive = remove_small_objects(combined_adaptive, min_size=8)
+                            
+                            if np.sum(combined_adaptive) > 0:
+                                # Simple connected components
+                                labels = measure.label(combined_adaptive)
+                                
+                                if np.max(labels) > 0:
+                                    print(f"✅ Fallback Method 2 succeeded: {np.max(labels)} regions (block_size={block_size}, offset={offset})")
+                                    return labels, {'fallback_adaptive': {'block_size': block_size, 'offset': offset}}
+                    except Exception as e:
+                        continue
+            
+            # Method 3: Simple green-based segmentation
+            if len(preprocessed['original'].shape) == 3:
+                # Extract green channel and enhance
+                green_channel = preprocessed['original'][:,:,1]
+                green_enhanced = cv2.equalizeHist((green_channel * 255).astype(np.uint8))
+                
+                # Simple threshold on enhanced green
+                _, green_binary = cv2.threshold(green_enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                green_binary = green_binary.astype(bool)
+                
+                # Clean up
+                green_binary = remove_small_objects(green_binary, min_size=5)
+                
+                if np.sum(green_binary) > 0:
+                    labels = measure.label(green_binary)
+                    if np.max(labels) > 0:
+                        print(f"✅ Fallback Method 3 succeeded: {np.max(labels)} regions (green channel)")
+                        return labels, {'fallback_green_channel': True}
+            
+            print("❌ All fallback methods failed")
+            return np.zeros_like(gray, dtype=np.int32), {}
+            
+        except Exception as e:
+            print(f"❌ Error in enhanced segmentation fallback: {str(e)}")
+            return np.zeros_like(preprocessed['gray'], dtype=np.int32), {}
+        
     def advanced_preprocess_image(self, image_path, enhance_contrast=True, denoise=True):
         """
         Advanced preprocessing optimized for petri dish Wolffia images
@@ -254,14 +1046,37 @@ class WolffiaAnalyzer:
             ) >= 2
 
             if np.sum(combined_binary) < 10:
-                print("⚠️ Combined mask too weak. Attempting fallback using green mask and chlorophyll...")
-                fallback = green_mask & (chlorophyll > 0.1)
-                if np.sum(fallback) > 10:
-                    combined_binary = fallback
-                    print("✅ Fallback succeeded with", np.sum(combined_binary), "pixels")
+                print("⚠️ Combined mask too weak. Trying intelligent fallback cascade...")
+                
+                # Fallback 1: Reduced chlorophyll threshold
+                fallback1 = green_mask & (chlorophyll > 0.05)  # Lower threshold
+                if np.sum(fallback1) > 10:
+                    combined_binary = fallback1
+                    print(f"✅ Fallback 1 succeeded with {np.sum(combined_binary)} pixels (low chlorophyll)")
                 else:
-                    print("❌ Fallback failed: no viable regions")
-                    return np.zeros_like(gray, dtype=np.int32), {}
+                    # Fallback 2: Pure green mask with morphological opening
+                    fallback2 = opening(green_mask, disk(1))
+                    if np.sum(fallback2) > 5:
+                        combined_binary = fallback2
+                        print(f"✅ Fallback 2 succeeded with {np.sum(combined_binary)} pixels (pure green)")
+                    else:
+                        # Fallback 3: Aggressive NDVI-based detection
+                        if 'ndvi' in preprocessed_data:
+                            ndvi = preprocessed_data['ndvi']
+                            fallback3 = ndvi > 0.1  # Very low NDVI threshold
+                            if np.sum(fallback3) > 5:
+                                combined_binary = fallback3
+                                print(f"✅ Fallback 3 succeeded with {np.sum(combined_binary)} pixels (NDVI-based)")
+                            else:
+                                # Fallback 4: Simple brightness-based detection
+                                gray_normalized = (gray - np.min(gray)) / (np.max(gray) - np.min(gray))
+                                fallback4 = gray_normalized > 0.3  # Low brightness threshold
+                                if np.sum(fallback4) > 3:
+                                    combined_binary = fallback4
+                                    print(f"✅ Fallback 4 succeeded with {np.sum(combined_binary)} pixels (brightness-based)")
+                                else:
+                                    print("❌ All intelligent fallbacks failed: no viable regions")
+                                    return np.zeros_like(gray, dtype=np.int32), {'failed_fallbacks': True}
 
             # Morphological refinement
             combined_binary = remove_small_objects(combined_binary, min_size=20)
@@ -945,21 +1760,38 @@ class WolffiaAnalyzer:
         print(f"{'='*60}")
         
         try:
-            # Advanced preprocessing
-            print("Step 1: Preprocessing image...")
-            preprocessed = self.advanced_preprocess_image(image_path)
+            # Smart preprocessing - use intelligent only when needed
+            print("🔍 Step 1: Smart preprocessing with targeted quality assessment...")
+            preprocessed = self.smart_targeted_preprocess(image_path)
             if preprocessed is None:
                 print("❌ Failed to preprocess image")
                 return None
             print("✅ Preprocessing complete")
             
-            # Multi-method segmentation
-            print("\nStep 2: Performing segmentation...")
+            # Multi-method segmentation with intelligent fallbacks
+            print("\n🔍 Step 2: Performing intelligent segmentation...")
             labels, segmentation_methods = self.multi_method_segmentation(preprocessed)
             
+            # Enhanced fallback strategy for failed segmentation
             if np.max(labels) == 0:
-                print("❌ No cells detected after segmentation!")
-                return None
+                print("⚠️ Initial segmentation found no cells. Trying enhanced fallback methods...")
+                labels, segmentation_methods = self._enhanced_segmentation_fallback(preprocessed)
+                
+                if np.max(labels) == 0:
+                    print("❌ Enhanced fallback also failed. Trying aggressive preprocessing...")
+                    # Try with more aggressive preprocessing
+                    aggressive_preprocessed = self._aggressive_preprocessing(preprocessed['original'])
+                    aggressive_data = self._create_preprocessed_data_structure(aggressive_preprocessed, preprocessed['original'])
+                    labels, segmentation_methods = self.multi_method_segmentation(aggressive_data)
+                    
+                    if np.max(labels) == 0:
+                        print("❌ All segmentation methods failed. No cells detected.")
+                        return None
+                    else:
+                        print(f"✅ Aggressive preprocessing succeeded! Found {np.max(labels)} potential cells")
+                        preprocessed = aggressive_data
+                else:
+                    print(f"✅ Enhanced fallback succeeded! Found {np.max(labels)} potential cells")
             
             print(f"✅ Detected {np.max(labels)} potential cells")
             
@@ -2138,7 +2970,146 @@ class WolffiaAnalyzer:
                 }
 
 
-    # Enhanced helper functions for web integration
+    def _find_optimal_tophat_size(self, gray_image):
+        """
+        Automatically determine optimal structuring element size
+        """
+        # Estimate cell sizes using FFT
+        f_transform = np.fft.fft2(gray_image)
+        f_shift = np.fft.fftshift(f_transform)
+        magnitude_spectrum = np.abs(f_shift)
+        
+        # Find dominant frequencies
+        radial_profile = self._radial_profile(magnitude_spectrum)
+        
+        # Find peaks in radial profile
+        from scipy.signal import find_peaks
+        peaks, _ = find_peaks(radial_profile, height=np.max(radial_profile)*0.1)
+        
+        if len(peaks) > 1:
+            # Estimate feature size from frequency
+            dominant_freq = peaks[1]  # Skip DC component
+            feature_size = gray_image.shape[0] / dominant_freq
+            optimal_size = int(feature_size / 2)
+        else:
+            # Default fallback
+            optimal_size = 30
+        
+        return np.clip(optimal_size, 10, 100)
+
+    def _radial_profile(self, data):
+        """Calculate radial profile of 2D data"""
+        center = np.array(data.shape) // 2
+        y, x = np.ogrid[:data.shape[0], :data.shape[1]]
+        r = np.sqrt((x - center[1])**2 + (y - center[0])**2)
+        r = r.astype(int)
+        
+        tbin = np.bincount(r.ravel(), data.ravel())
+        nr = np.bincount(r.ravel())
+        radialprofile = tbin / nr
+        
+        return radialprofile
+
+    def _intelligent_background_detection(self, image, tophat, chlorophyll):
+        """
+        Intelligently detect and remove background
+        """
+        # Method 1: Otsu on tophat image
+        _, binary1 = cv2.threshold(tophat, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Method 2: Chlorophyll threshold
+        chlorophyll_norm = (chlorophyll - np.min(chlorophyll)) / (np.max(chlorophyll) - np.min(chlorophyll))
+        binary2 = chlorophyll_norm > 0.1
+        
+        # Method 3: Color-based (HSV)
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        # Green hue range
+        lower_green = np.array([35, 40, 40])
+        upper_green = np.array([85, 255, 255])
+        binary3 = cv2.inRange(hsv, lower_green, upper_green) > 0
+        
+        # Combine methods
+        combined = (binary1 + binary2 + binary3) >= 2
+        
+        # Morphological cleanup
+        combined = morphology.remove_small_holes(combined, area_threshold=100)
+        combined = morphology.remove_small_objects(combined, min_size=50)
+        
+        return combined.astype(np.float32)
+
+
+
+
+    def _create_wavelength_visualization(self, image, labels, spectral_data):
+        """
+        Create visualization of spectral analysis
+        """
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        
+        # Original image with cell outlines
+        ax = axes[0, 0]
+        ax.imshow(image)
+        ax.contour(labels > 0, colors='white', linewidths=1)
+        ax.set_title('Original with Cell Boundaries')
+        ax.axis('off')
+        
+        # Chlorophyll concentration heatmap
+        ax = axes[0, 1]
+        chlor_map = np.zeros_like(labels, dtype=np.float32)
+        for cell in spectral_data:
+            mask = labels == cell['cell_id']
+            chlor_map[mask] = cell['chlorophyll_concentration']
+        
+        im = ax.imshow(chlor_map, cmap='Greens', vmin=0)
+        ax.set_title('Chlorophyll Concentration (μg/cm²)')
+        ax.axis('off')
+        plt.colorbar(im, ax=ax)
+        
+        # Health status map
+        ax = axes[0, 2]
+        health_map = np.zeros_like(labels, dtype=np.float32)
+        health_colors = {
+            'very_healthy': 4,
+            'healthy': 3,
+            'moderate': 2,
+            'stressed': 1
+        }
+        
+        for cell in spectral_data:
+            mask = labels == cell['cell_id']
+            health_map[mask] = health_colors.get(cell['spectral_health'], 0)
+        
+        im = ax.imshow(health_map, cmap='RdYlGn', vmin=0, vmax=4)
+        ax.set_title('Cell Health Status')
+        ax.axis('off')
+        
+        # Spectral indices
+        indices_to_show = ['evi', 'gli', 'tgi']
+        for i, idx_name in enumerate(indices_to_show):
+            ax = axes[1, i]
+            idx_map = np.zeros_like(labels, dtype=np.float32)
+            
+            for cell in spectral_data:
+                mask = labels == cell['cell_id']
+                idx_map[mask] = cell[f'{idx_name}_mean']
+            
+            im = ax.imshow(idx_map, cmap='viridis')
+            ax.set_title(f'{idx_name.upper()} Index')
+            ax.axis('off')
+            plt.colorbar(im, ax=ax)
+        
+        plt.tight_layout()
+        
+        # Convert to base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+        buffer.seek(0)
+        wavelength_viz_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        return wavelength_viz_base64
+
+# Enhanced helper functions for web integration
 def analyze_uploaded_image(image_path, analyzer=None):
     """
     Analyze a single uploaded image with ML enhancement
@@ -2183,202 +3154,6 @@ def analyze_multiple_images(image_paths, timestamps=None, analyzer=None):
     return None
 
 
-
-
-
-
-
-
-
-# improved machine learning capabilities for WolffiaAnalyzer
-# Add these methods to your WolffiaAnalyzer class in bioimaging.py
-
-def create_training_interface(self, image_path, existing_labels=None):
-    """
-    Create an interactive interface for manual cell annotation
-    Returns annotated regions for ML training
-    """
-    import json
-
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Circle, Rectangle
-    from matplotlib.widgets import Button, RadioButtons
-    
-    class AnnotationInterface:
-        def __init__(self, image, analyzer):
-            self.image = image
-            self.analyzer = analyzer
-            self.annotations = []
-            self.current_class = 'healthy'
-            self.fig, self.ax = plt.subplots(figsize=(12, 10))
-            self.ax.imshow(image)
-            
-            # Setup UI elements
-            self.setup_ui()
-            self.connect_events()
-            
-        def setup_ui(self):
-            # Class selection radio buttons
-            rax = plt.axes([0.85, 0.7, 0.12, 0.15])
-            self.radio = RadioButtons(rax, ('healthy', 'stressed', 'dead', 'debris'))
-            self.radio.on_clicked(self.set_class)
-            
-            # Save button
-            save_ax = plt.axes([0.85, 0.05, 0.1, 0.04])
-            self.save_btn = Button(save_ax, 'Save')
-            self.save_btn.on_clicked(self.save_annotations)
-            
-        def connect_events(self):
-            self.cid_press = self.fig.canvas.mpl_connect('button_press_event', self.on_click)
-            self.cid_key = self.fig.canvas.mpl_connect('key_press_event', self.on_key)
-            
-        def on_click(self, event):
-            if event.inaxes != self.ax:
-                return
-                
-            # Add annotation point
-            x, y = int(event.xdata), int(event.ydata)
-            self.annotations.append({
-                'x': x,
-                'y': y,
-                'class': self.current_class,
-                'timestamp': datetime.now().isoformat()
-            })
-            
-            # Visual feedback
-            circle = Circle((x, y), 10, fill=False, 
-                            color=self.get_class_color(self.current_class), 
-                            linewidth=2)
-            self.ax.add_patch(circle)
-            self.ax.text(x+12, y, self.current_class[:3], fontsize=8)
-            self.fig.canvas.draw()
-            
-        def get_class_color(self, class_name):
-            colors = {
-                'healthy': 'green',
-                'stressed': 'orange', 
-                'dead': 'red',
-                'debris': 'gray'
-            }
-            return colors.get(class_name, 'blue')
-            
-        def set_class(self, label):
-            self.current_class = label
-            
-        def save_annotations(self, event):
-            # Save annotations to file
-            os.makedirs('annotations', exist_ok=True)
-            filename = os.path.join('annotations', f"annotations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-            with open(filename, 'w') as f:
-                json.dump({
-                    'image_path': str(self.analyzer.current_image_path),
-                    'annotations': self.annotations,
-                    'metadata': {
-                        'pixel_to_micron': self.analyzer.pixel_to_micron,
-                        'timestamp': datetime.now().isoformat()
-                    }
-                }, f, indent=2)
-            print(f"Annotations saved to {filename}")
-            plt.close()
-            
-        def on_key(self, event):
-            if event.key == 'escape':
-                plt.close()
-                
-    # Load and preprocess the image
-    if isinstance(image_path, str):
-        image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    else:
-        image = image_path
-        
-    self.current_image_path = image_path
-    
-    # Create and show interface
-    interface = AnnotationInterface(image, self)
-    plt.show()
-    
-    return interface.annotations
-
-def train_from_annotations(self, annotation_files):
-    """
-    Train ML models from manual annotations
-    """
-    all_features = []
-    all_labels = []
-    
-    for ann_file in annotation_files:
-        with open(ann_file, 'r') as f:
-            data = json.load(f)
-            
-        # Load and process image
-        image_path = data['image_path']
-        preprocessed = self.advanced_preprocess_image(image_path)
-        
-        # Extract features around each annotation
-        for ann in data['annotations']:
-            x, y = ann['x'], ann['y']
-            
-            # Extract patch around annotation
-            patch_size = 50
-            y1 = max(0, y - patch_size)
-            y2 = min(preprocessed['original'].shape[0], y + patch_size)
-            x1 = max(0, x - patch_size)
-            x2 = min(preprocessed['original'].shape[1], x + patch_size)
-            
-            # Calculate features for patch
-            patch_features = self._extract_patch_features(
-                preprocessed, x1, x2, y1, y2
-            )
-            
-            all_features.append(patch_features)
-            all_labels.append(ann['class'])
-    
-    # Train classifier
-    X = np.array(all_features)
-    y = np.array(all_labels)
-    
-    from sklearn.model_selection import train_test_split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-    
-    # Train enhanced classifier
-    self.ml_classifier.fit(X_train, y_train)
-    
-    # Evaluate
-    score = self.ml_classifier.score(X_test, y_test)
-    print(f"Classifier accuracy: {score:.3f}")
-    
-    # Save trained model
-    import joblib
-    os.makedirs('models', exist_ok=True)
-    joblib.dump(self.ml_classifier, 'models/wolffia_classifier_trained.pkl')
-    
-    return score
-
-def _extract_patch_features(self, preprocessed, x1, x2, y1, y2):
-    """Extract features from image patch"""
-    patch_chlorophyll = preprocessed['chlorophyll_enhanced'][y1:y2, x1:x2]
-    patch_ndvi = preprocessed['ndvi'][y1:y2, x1:x2]
-    patch_hsv = preprocessed['hsv'][y1:y2, x1:x2]
-    
-    features = [
-        np.mean(patch_chlorophyll),
-        np.std(patch_chlorophyll),
-        np.mean(patch_ndvi),
-        np.std(patch_ndvi),
-        np.mean(patch_hsv[:,:,0]),  # Hue
-        np.mean(patch_hsv[:,:,1]),  # Saturation
-        np.mean(patch_hsv[:,:,2]),  # Value
-        np.percentile(patch_chlorophyll, 75),
-        np.percentile(patch_chlorophyll, 25),
-        # Texture features
-        np.mean(np.gradient(patch_chlorophyll)[0]**2),
-        np.mean(np.gradient(patch_chlorophyll)[1]**2)
-    ]
-    
-    return features
 
 def smart_preprocess_with_tophat(self, image_path, auto_optimize=True):
     """
@@ -2464,73 +3239,6 @@ def smart_preprocess_with_tophat(self, image_path, auto_optimize=True):
         'background_mask': background_mask,
         'optimal_tophat_size': optimal_size
     }
-
-def _find_optimal_tophat_size(self, gray_image):
-    """
-    Automatically determine optimal structuring element size
-    """
-    # Estimate cell sizes using FFT
-    f_transform = np.fft.fft2(gray_image)
-    f_shift = np.fft.fftshift(f_transform)
-    magnitude_spectrum = np.abs(f_shift)
-    
-    # Find dominant frequencies
-    radial_profile = self._radial_profile(magnitude_spectrum)
-    
-    # Find peaks in radial profile
-    from scipy.signal import find_peaks
-    peaks, _ = find_peaks(radial_profile, height=np.max(radial_profile)*0.1)
-    
-    if len(peaks) > 1:
-        # Estimate feature size from frequency
-        dominant_freq = peaks[1]  # Skip DC component
-        feature_size = gray_image.shape[0] / dominant_freq
-        optimal_size = int(feature_size / 2)
-    else:
-        # Default fallback
-        optimal_size = 30
-    
-    return np.clip(optimal_size, 10, 100)
-
-def _radial_profile(self, data):
-    """Calculate radial profile of 2D data"""
-    center = np.array(data.shape) // 2
-    y, x = np.ogrid[:data.shape[0], :data.shape[1]]
-    r = np.sqrt((x - center[1])**2 + (y - center[0])**2)
-    r = r.astype(int)
-    
-    tbin = np.bincount(r.ravel(), data.ravel())
-    nr = np.bincount(r.ravel())
-    radialprofile = tbin / nr
-    
-    return radialprofile
-
-def _intelligent_background_detection(self, image, tophat, chlorophyll):
-    """
-    Intelligently detect and remove background
-    """
-    # Method 1: Otsu on tophat image
-    _, binary1 = cv2.threshold(tophat, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
-    # Method 2: Chlorophyll threshold
-    chlorophyll_norm = (chlorophyll - np.min(chlorophyll)) / (np.max(chlorophyll) - np.min(chlorophyll))
-    binary2 = chlorophyll_norm > 0.1
-    
-    # Method 3: Color-based (HSV)
-    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    # Green hue range
-    lower_green = np.array([35, 40, 40])
-    upper_green = np.array([85, 255, 255])
-    binary3 = cv2.inRange(hsv, lower_green, upper_green) > 0
-    
-    # Combine methods
-    combined = (binary1 + binary2 + binary3) >= 2
-    
-    # Morphological cleanup
-    combined = morphology.remove_small_holes(combined, area_threshold=100)
-    combined = morphology.remove_small_objects(combined, min_size=50)
-    
-    return combined.astype(np.float32)
 
 def analyze_chlorophyll_spectrum(self, image, labels):
     """
@@ -2622,75 +3330,6 @@ def analyze_chlorophyll_spectrum(self, image, labels):
     )
     
     return pd.DataFrame(cell_spectral_data), wavelength_viz
-
-def _create_wavelength_visualization(self, image, labels, spectral_data):
-    """
-    Create visualization of spectral analysis
-    """
-    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-    
-    # Original image with cell outlines
-    ax = axes[0, 0]
-    ax.imshow(image)
-    ax.contour(labels > 0, colors='white', linewidths=1)
-    ax.set_title('Original with Cell Boundaries')
-    ax.axis('off')
-    
-    # Chlorophyll concentration heatmap
-    ax = axes[0, 1]
-    chlor_map = np.zeros_like(labels, dtype=np.float32)
-    for cell in spectral_data:
-        mask = labels == cell['cell_id']
-        chlor_map[mask] = cell['chlorophyll_concentration']
-    
-    im = ax.imshow(chlor_map, cmap='Greens', vmin=0)
-    ax.set_title('Chlorophyll Concentration (μg/cm²)')
-    ax.axis('off')
-    plt.colorbar(im, ax=ax)
-    
-    # Health status map
-    ax = axes[0, 2]
-    health_map = np.zeros_like(labels, dtype=np.float32)
-    health_colors = {
-        'very_healthy': 4,
-        'healthy': 3,
-        'moderate': 2,
-        'stressed': 1
-    }
-    
-    for cell in spectral_data:
-        mask = labels == cell['cell_id']
-        health_map[mask] = health_colors.get(cell['spectral_health'], 0)
-    
-    im = ax.imshow(health_map, cmap='RdYlGn', vmin=0, vmax=4)
-    ax.set_title('Cell Health Status')
-    ax.axis('off')
-    
-    # Spectral indices
-    indices_to_show = ['evi', 'gli', 'tgi']
-    for i, idx_name in enumerate(indices_to_show):
-        ax = axes[1, i]
-        idx_map = np.zeros_like(labels, dtype=np.float32)
-        
-        for cell in spectral_data:
-            mask = labels == cell['cell_id']
-            idx_map[mask] = cell[f'{idx_name}_mean']
-        
-        im = ax.imshow(idx_map, cmap='viridis')
-        ax.set_title(f'{idx_name.upper()} Index')
-        ax.axis('off')
-        plt.colorbar(im, ax=ax)
-    
-    plt.tight_layout()
-    
-    # Convert to base64
-    buffer = BytesIO()
-    plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
-    buffer.seek(0)
-    wavelength_viz_base64 = base64.b64encode(buffer.getvalue()).decode()
-    plt.close()
-    
-    return wavelength_viz_base64
 
 def generate_spectral_report(self, spectral_df):
     """
