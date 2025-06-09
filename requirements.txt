@@ -23,7 +23,23 @@ Werkzeug>=3.0.0
 
 # Additional utilities
 python-dateutil>=2.8.0
-# Update the requirements.txt by adding:
-cellpose>=2.2.3
+
+# Professional bioimage analysis dependencies
+# CellPose for advanced cell segmentation
+cellpose>=3.0.0
+cellpose-planer>=0.1.0
+
+# PyTorch for GPU acceleration (CPU version by default)
 torch>=1.12.0
-opencv-python-headless>=4.8.0  # Use headless version for server
+torchvision>=0.13.0
+
+# SimpleITK for medical image processing
+SimpleITK>=2.2.0
+
+# GPU acceleration (optional - uncomment for CUDA support)
+# torch>=1.12.0+cu117
+# torchvision>=0.13.0+cu117
+
+# Development and testing
+requests>=2.31.0
+

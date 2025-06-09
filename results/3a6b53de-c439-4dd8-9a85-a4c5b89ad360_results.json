@@ -1,0 +1,61 @@
+{
+  "status": "completed",
+  "timestamp": "2025-06-09T15:45:00.151980",
+  "pipeline_type": "professional_improved",
+  "total_images": 1,
+  "successful_images": 0,
+  "results": [
+    {
+      "success": false,
+      "error": "index 0 is out of bounds for axis 0 with size 0",
+      "timestamp": "2025-06-09T15:44:59.776539"
+    }
+  ],
+  "summary": {
+    "total_images_processed": 1,
+    "successful_images": 0,
+    "total_cells_all_images": 0,
+    "total_green_cells_all_images": 0,
+    "total_biomass_all_images": 0,
+    "average_cells_per_image": 0,
+    "processing_quality": "failed"
+  },
+  "parameters_used": {
+    "wolffia_params": {
+      "min_cell_area_pixels": 80,
+      "max_cell_area_pixels": 1200,
+      "min_cell_diameter": 8,
+      "max_cell_diameter": 40,
+      "detection_sensitivity": 0.7,
+      "edge_threshold": 0.3,
+      "area_threshold": 0.15,
+      "circularity_min": 0.3,
+      "circularity_max": 0.95,
+      "aspect_ratio_max": 3.0,
+      "green_threshold": 0.45,
+      "chlorophyll_threshold": 0.6,
+      "hsv_hue_min": 35,
+      "hsv_hue_max": 85,
+      "hsv_saturation_min": 0.2,
+      "cellpose_diameter": 20,
+      "cellpose_flow_threshold": 0.3,
+      "cellpose_model": "cyto2",
+      "pixel_to_micron": 0.5,
+      "biomass_conversion": 0.15
+    },
+    "cellpose_available": true,
+    "gpu_available": false,
+    "analysis_stats": {
+      "total_analyses": 0,
+      "successful_analyses": 0,
+      "avg_cells_per_image": 0,
+      "avg_processing_time": 0
+    },
+    "system_status": {
+      "ready": true,
+      "pipeline": "wolffia_optimized",
+      "segmentation_method": "cellpose",
+      "gpu_acceleration": false
+    }
+  }
+}

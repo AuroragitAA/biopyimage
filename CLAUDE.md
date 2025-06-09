@@ -4,95 +4,100 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-BIOIMAGIN is a focused bioimage analysis system specifically designed for core analysis of *Wolffia arrhiza* (the world's smallest flowering plant). The system provides reliable, automated cell detection, counting, measurements, and time series tracking with professional-quality results.
+BIOIMAGIN OPTIMIZED is a streamlined, high-performance bioimage analysis system specifically designed for *Wolffia arrhiza* cell analysis. The system delivers fast, accurate cell detection with smart multi-method segmentation, essential visualizations, and AI-powered tophat training capabilities. Built from the ground up for simplicity, speed, and accuracy.
 
 ### Core Architecture
 
-- **bioimaging.py**: Legacy analysis engine with basic `WolffiaAnalyzer` class 
-- **bioimaging_professional.py**: Original professional analysis pipeline with CellPose + SimpleITK integration
-- **bioimaging_professional_improved.py**: Refined professional pipeline with enhanced error handling, learning system, and better visualizations
-- **web_integration.py**: Flask web server that automatically chooses best available pipeline (improved → professional → legacy)
-- **templates/index.html**: Enhanced web interface with professional parameter controls
-- **static/styles.css**: Updated styling for professional interface
-- **models/**: Pre-trained CellPose models (cyto_*.pla, nuclei_*.pla) for segmentation
+- **bioimaging.py**: Optimized analysis engine with smart multi-method detection (OptimizedWolffiaAnalyzer)
+- **web_integration.py**: Streamlined Flask API with essential endpoints and tophat training
+- **templates/index.html**: Clean, responsive interface focused on core functionality
+- **run_optimized.py**: Simple launcher with dependency checking and system setup
+- **models/**: Pre-trained CellPose models and tophat AI training models
 
 ### Key Components
 
-1. **Core Image Processing Pipeline**:
-   - Multi-scale morphological enhancement with adaptive filtering
-   - Multi-method segmentation (Otsu, adaptive, K-means, Felzenszwalb, SLIC)
-   - Reliable cell detection and boundary identification
+1. **Smart Detection Pipeline**:
+   - Adaptive preprocessing based on image quality assessment
+   - Multi-method segmentation: Optimized Watershed + CellPose + Tophat AI
+   - Intelligent fusion of detection results with duplicate removal
+   - Wolffia-specific size filtering (50-1200 pixels area)
 
-2. **Essential Measurements**:
-   - Accurate cell counting and size measurements
-   - Biomass estimation using proven mathematical models
-   - Green cell identification through chlorophyll detection
-   - Basic spectral analysis for vegetation indices
+2. **Essential Outputs**:
+   - Cell count with high accuracy
+   - Total and average cell area measurements  
+   - Single comprehensive labeled visualization
+   - Fast processing (typically <5 seconds per image)
 
-3. **Core Analysis Capabilities**:
-   - Single image analysis with essential quantitative parameters
-   - Time series analysis for growth tracking
-   - Cell-level data export and visualization
-   - Professional reporting and data export
+3. **AI Training System**:
+   - Tophat model training with user corrections
+   - Interactive annotation interface for marking correct/incorrect cells
+   - Random Forest classifier for improved detection
+   - Persistent model storage and reuse
+
+4. **Simplified Interface**:
+   - Drag-and-drop file upload
+   - Real-time progress tracking
+   - Essential metrics display only
+   - CSV/JSON export functionality
 
 ## Common Development Commands
 
 ### Installation and Setup
 ```bash
-# Install dependencies (includes CellPose, torch, SimpleITK, etc.)
-pip install -r requirements.txt
+# Install dependencies
+pip install opencv-python numpy matplotlib pandas scikit-learn flask flask-cors
 
-# Initialize system (tests improved professional pipeline first)
-python -c "
-try:
-    from bioimaging_professional_improved import WolffiaAnalyzer
-    print('✅ Improved professional pipeline ready')
-except ImportError:
-    try:
-        from bioimaging_professional import WolffiaAnalyzer
-        print('✅ Professional pipeline ready')
-    except ImportError:
-        from bioimaging import WolffiaAnalyzer  
-        print('⚠️ Using legacy pipeline')
-"
+# Install optional but recommended packages
+pip install cellpose scikit-image
 
-# Launch web interface (auto-detects best available pipeline)
+# Quick start with optimized launcher (recommended)
+python run_optimized.py
+
+# Alternative: Direct web server launch
 python web_integration.py
 ```
 
 ### Running Analysis
 ```bash
-# Run web server (main interface)
-python web_integration.py
+# Start optimized system (checks dependencies automatically)
+python run_optimized.py
 
 # Access web interface at http://localhost:5000
+# Features: Upload images, analyze with/without tophat, train AI model
 ```
 
-### Testing the System
+### System Testing
 ```bash
-# Test improved professional pipeline (preferred)
-python -c "
-from bioimaging_professional_improved import WolffiaAnalyzer
-analyzer = WolffiaAnalyzer()
-print('Improved professional analyzer ready')
-print('Engine status:', analyzer.get_current_parameters()['engines_status'])
-"
+# Test optimized analyzer
+python -c "from bioimaging import WolffiaAnalyzer; analyzer = WolffiaAnalyzer(); print('✅ Optimized analyzer ready')"
 
-# Test original professional pipeline
-python -c "
-from bioimaging_professional import WolffiaAnalyzer
-analyzer = WolffiaAnalyzer()
-print('Professional analyzer ready with CellPose integration')
-"
-
-# Test legacy pipeline
+# Test specific analysis on sample image
 python -c "
 from bioimaging import WolffiaAnalyzer
 analyzer = WolffiaAnalyzer()
-print('Legacy analyzer ready')
+# result = analyzer.analyze_image('path/to/image.jpg')
+print('✅ Analysis method available')
 "
 
-# Test web integration with pipeline detection
+# Check tophat model status
+python -c "
+from bioimaging import WolffiaAnalyzer
+analyzer = WolffiaAnalyzer()
+print(f'Tophat model available: {analyzer.tophat_model is not None}')
+"
+```
+
+### Advanced Testing
+```bash
+# Test main analysis pipeline
+python -c "
+from bioimaging import WolffiaAnalyzer
+analyzer = WolffiaAnalyzer()
+print('✅ Main analyzer ready')
+print('Features: Multi-method segmentation, CellPose integration, biomass estimation')
+"
+
+# Test web server health
 python -c "
 import requests
 import time
@@ -102,55 +107,51 @@ time.sleep(3)
 response = requests.get('http://localhost:5000/api/health_check')
 if response.status_code == 200:
     data = response.json()
-    print(f'Web server status: {data[\"status\"]}')
-    print(f'Pipeline version: {data[\"version\"]}')
+    print(f'✅ Web server status: {data[\"status\"]}')
 else:
-    print('Web server failed to start')
+    print('❌ Web server failed to start')
 "
 ```
 
 ## Development Guidelines
 
 ### Code Organization
-- **Professional Pipeline**: `WolffiaAnalyzer` class in bioimaging_professional.py (preferred)
-- **Legacy Pipeline**: `WolffiaAnalyzer` class in bioimaging.py (fallback)
-- **Web Integration**: web_integration.py automatically detects and uses professional pipeline
+- **Main Pipeline**: `WolffiaAnalyzer` class in bioimaging.py (primary analysis engine)
+- **Web Integration**: web_integration.py with Flask API and background processing
 - **API Endpoints**: All endpoints prefixed with `/api/` in web_integration.py  
 - **File Structure**:
   - `uploads/`: Temporary uploaded images
   - `results/`: Individual analysis results (CSV format)
   - `wolffia_results/`: Time series and comprehensive analysis outputs
   - `training_data/`: ML training data in JSON format
+  - `learning_system/`: AI learning system data and model performance tracking
   - `models/`: CellPose pre-trained models (.pla files)
   - `annotations/`: Manual annotations for training
   - `imagepy/`: Documentation and notes on different analysis methods
 
 ### Key Classes and Methods
 
-**Improved Professional Pipeline (bioimaging_professional_improved.py)**:
-- `WolffiaAnalyzer.analyze_image_professional()`: Main professional analysis method with enhanced parameters
-- Modular engine architecture: restoration, segmentation, feature extraction, quality assessment, learning
-- Advanced error handling and fallback mechanisms
-- Real-time learning system for model improvement
-- Professional visualizations similar to CellPose GUI
-- Support for configurable diameter and flow threshold parameters
-
-**Original Professional Pipeline (bioimaging_professional.py)**:
-- Uses CellPose for advanced cell segmentation
-- Integrates with cellpose-planer for model management
-- Copies models from `models/` directory to cellpose-planer installation
-
-**Legacy Pipeline (bioimaging.py)**:
-- `WolffiaAnalyzer.analyze_single_image()`: Basic single image analysis
-- `WolffiaAnalyzer.advanced_preprocess_image()`: Image preprocessing pipeline  
-- `WolffiaAnalyzer.multi_method_segmentation()`: Multi-algorithm segmentation
-- `WolffiaAnalyzer.extract_ml_features()`: Feature extraction for ML
-- `WolffiaAnalyzer.ml_classify_cells()`: Cell classification using Random Forest
+**Optimized Analysis Pipeline (bioimaging.py)**:
+- `WolffiaAnalyzer.analyze_image()`: Main analysis method - fast, accurate, simple
+- `WolffiaAnalyzer.smart_preprocess()`: Adaptive preprocessing based on image quality
+- `WolffiaAnalyzer.smart_detect_cells()`: Multi-method detection with intelligent fusion
+- `WolffiaAnalyzer.watershed_detection()`: Optimized watershed segmentation for Wolffia
+- `WolffiaAnalyzer.cellpose_detection()`: CellPose integration (if available)
+- `WolffiaAnalyzer.tophat_detection()`: AI-powered detection using trained model
+- `WolffiaAnalyzer.fuse_detections()`: Smart fusion removes duplicates, keeps best results
+- `WolffiaAnalyzer.create_essential_visualization()`: Single labeled cell image with stats
 
 **Web Integration (web_integration.py)**:
-- `process_core_analysis()`: Background processing with automatic pipeline selection
-- Enhanced parameter API endpoints supporting professional controls
-- Automatic pipeline detection and fallback (improved → professional → legacy)
+- `upload_files()`: Multi-file upload with validation
+- `analyze_image()`: Background analysis with progress tracking  
+- `get_analysis_status()`: Real-time status and results retrieval
+- `export_results()`: CSV/JSON export functionality
+
+**Tophat AI Training (bioimaging.py)**:
+- `start_tophat_training()`: Initialize training session with multiple images
+- `save_user_annotations()`: Store user corrections for model training
+- `train_tophat_model()`: Train Random Forest classifier from annotations
+- `collect_training_data()`: Prepare features and labels from user feedback
 
 ### File Paths and Structure
 - Analysis results: `/results/`
@@ -160,88 +161,107 @@ else:
 
 ### Important Parameters
 
-**Basic Parameters**:
-- `pixel_to_micron_ratio`: Spatial calibration (default: 0.5)
-- `chlorophyll_threshold`: Green cell detection (default: 0.6) 
-- `min_area_microns`: Minimum cell area filter (default: 30)
-- `max_area_microns`: Maximum cell area filter (default: 12000)
+**Core Parameters** (automatically optimized):
+- Cell area range: 50-1200 pixels (optimized for Wolffia)
+- CellPose diameter: 25 pixels (Wolffia-specific)
+- Detection methods: Watershed + CellPose + Tophat AI
+- Quality assessment: Automatic contrast/brightness adaptation
+- Size filtering: Wolffia-specific morphological constraints
 
-**Professional CellPose Parameters** (improved pipeline only):
-- `diameter`: Expected cell diameter in pixels for CellPose (default: 30)
-- `flow_threshold`: CellPose flow threshold for segmentation strictness (default: 0.4)
-- `restoration_mode`: Image restoration method ('auto', 'denoise', 'enhance', 'full', 'none')
-- `segmentation_model`: CellPose model selection ('auto', 'cyto3', 'nuclei', 'custom')
-- `learn_from_analysis`: Enable learning system for model improvement (default: True)
+**User Options**:
+- `use_tophat`: Enable AI-trained tophat model (if available)
+- File formats: PNG, JPG, JPEG, BMP, TIFF, JFIF (max 50MB each)
+- Export formats: CSV (cell data), JSON (complete results)
 
 ### API Endpoints
-- `POST /api/upload`: Upload images for analysis
-- `GET /api/analyze/<id>`: Get analysis status/results
-- `POST /api/set_parameters`: Update analysis parameters (supports professional CellPose parameters)
-- `GET /api/get_parameters`: Get current analysis parameters
-- `POST /api/calibrate`: Calibrate pixel-to-micron ratio
-- `GET /api/export/<id>/<format>`: Export results (csv/json/zip)
-- `GET /api/health_check`: System status check with pipeline detection
 
-### Error Handling
-The system includes comprehensive error handling with detailed logging. Analysis progress is tracked and results are JSON-serializable for web interface compatibility.
+**Core Analysis**:
+- `POST /api/upload`: Upload multiple images for analysis
+- `POST /api/analyze/<file_id>`: Start background analysis of specific image
+- `GET /api/status/<analysis_id>`: Get real-time analysis progress and results
+- `GET /api/export/<analysis_id>/<format>`: Export results (csv/json)
+- `GET /api/health`: System health check and version info
 
-### Core Features Only
-- Focus on reliable cell detection, counting, and measurement
-- Green cell identification through chlorophyll analysis
-- Time series tracking for growth analysis
-- Professional data export and visualization
-- No advanced ML training or complex optimization features
+**Tophat AI Training**:
+- `POST /api/tophat/start_training`: Initialize training session with images
+- `POST /api/tophat/save_annotations`: Save user corrections for training
+- `POST /api/tophat/train_model`: Train AI model from annotations
+- `GET /api/tophat/model_status`: Check if tophat model is available
+
+### Key Features
+
+**Optimized Performance**:
+- Fast analysis: Typically <5 seconds per image
+- Smart preprocessing: Automatic quality assessment and enhancement
+- Multi-method detection: Combines best of watershed, CellPose, and AI
+- Intelligent fusion: Eliminates duplicates, keeps highest confidence detections
+
+**Essential Simplicity**:
+- Single comprehensive visualization per image
+- Core metrics only: cell count, total area, average area
+- Clean, responsive web interface
+- Real-time progress tracking
+
+**AI Training Capability**:
+- Interactive tophat model training
+- User-guided annotation system
+- Persistent model improvement
+- Immediate deployment of trained models
 
 ## Data Formats
 
 ### Input
-- Supported image formats: PNG, JPG, JPEG, TIFF, BMP, JFIF
-- Multiple images for time series analysis
-- Maximum file size: 50MB per image
-- Recommended: High-resolution microscopy images of Wolffia cultures
+- **Formats**: PNG, JPG, JPEG, BMP, TIFF, JFIF (max 50MB each)
+- **Quality**: Any quality - system adapts automatically
+- **Quantity**: Single images or multiple files for batch processing
+- **Optimized for**: Wolffia arrhiza microscopy images
 
 ### Output
-- **CSV**: Individual cell measurements (`results/*.csv`)
-- **JSON**: Complete analysis results with metadata (`training_data/*.json`)
-- **ZIP**: Comprehensive packages with visualizations and reports
-- **Time Series**: Population dynamics data (`wolffia_results/*.csv`)
+- **Essential Metrics**: Cell count, total area, average area, processing time
+- **Visualization**: Single labeled image with numbered cells and statistics
+- **Export Formats**: CSV (cell data), JSON (complete results)
+- **Training Data**: Stored automatically for tophat model training
 
 ## Development Workflow
 
-### Debugging Issues
+### Quick Debugging
 ```bash
-# Check which pipeline is being used
+# Check system status with optimized launcher
+python run_optimized.py
+# This automatically checks dependencies and starts the system
+
+# Test analysis pipeline directly
 python -c "
-from web_integration import analyzer
-print(f'Using: {analyzer.__class__.__module__}.{analyzer.__class__.__name__}')
+from bioimaging import WolffiaAnalyzer
+analyzer = WolffiaAnalyzer()
+print('✅ Optimized analyzer ready')
+print(f'Tophat model: {\"Available\" if analyzer.tophat_model else \"Not trained\"}')
 "
 
-# Test CellPose models availability
+# Check web server health
+curl http://localhost:5000/api/health
+```
+
+### Tophat Model Management
+```bash
+# Check tophat model status
 python -c "
-import cellpose_planer as cellpp
-cellpp.search_models()
-print('Available models:', cellpp.list_models())
+from bioimaging import WolffiaAnalyzer
+analyzer = WolffiaAnalyzer()
+model_path = analyzer.dirs['models'] / 'tophat_model.pkl'
+print(f'Model file exists: {model_path.exists()}')
 "
 
-# Check model files
-ls -la models/
+# View training sessions
+ls -la tophat_training/
 
-# View recent analysis results
-ls -la results/ | tail -5
-ls -la training_data/ | tail -5
+# View annotations
+ls -la annotations/
 ```
 
-### Adding New Models
-```bash
-# Copy new CellPose models to models directory
-cp new_model.pla models/
-
-# Restart web server to reload models
-# Models are automatically copied to cellpose-planer on startup
-```
-
-### Working with Analysis Results
-- Individual cell data: `results/<analysis_id>_cells.csv`
-- Time series data: `wolffia_results/`
-- Training data: `training_data/analysis_<timestamp>.json`
-- Web uploads: `uploads/` (temporary storage)
+### Results and Data
+- **Analysis results**: `results/<analysis_id>_result.json`
+- **Cell data exports**: `results/<analysis_id>_cells.csv` 
+- **Training sessions**: `tophat_training/session_<timestamp>.json`
+- **User annotations**: `annotations/<session>_<image>_annotation.json`
+- **Uploaded files**: `uploads/` (temporary)

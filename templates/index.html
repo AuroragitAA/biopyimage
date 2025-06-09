@@ -3,2961 +3,1264 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BIOIMAGIN - Wolffia Analysis System</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>BIOIMAGIN Optimized - Wolffia Cell Analysis</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            border-left: 5px solid #007bff;
+        }
+
+        .section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .upload-area {
+            border: 3px dashed #007bff;
+            border-radius: 10px;
+            padding: 50px;
+            text-align: center;
+            background: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #0056b3;
+            background: #f8f9fa;
+        }
+
+        .upload-area.dragover {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-text {
+            font-size: 1.2em;
+            color: #6c757d;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+
+        .options {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #007bff;
+        }
+
+        .files-list {
+            margin-top: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .file-status {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #28a745);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .results-container {
+            margin-top: 30px;
+        }
+
+        .result-item {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .result-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 5px;
+        }
+
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .visualization {
+            text-align: center;
+            margin: 25px 0;
+        }
+
+        .visualization img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .tophat-training {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border-left-color: #ffc107;
+        }
+
+        .training-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .step {
+            flex: 1;
+            min-width: 200px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .step-number {
+            background: #ffc107;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: bold;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .options {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .result-summary {
+                grid-template-columns: 1fr;
+            }
+
+            .training-steps {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-<div class="analysis-controls">
-    <h3>🧬 Ultimate Cell Detection System</h3>
-    
-    <!-- Pipeline Mode Selection -->
-    <div class="pipeline-selector">
-        <h4>Analysis Mode</h4>
-        <div class="mode-options">
-            <label class="mode-option">
-                <input type="radio" name="analysisMode" value="auto" checked>
-                <span class="mode-label">
-                    <strong>🎯 Auto Mode</strong>
-                    <small>Automatically selects optimal pipeline</small>
-                </span>
-            </label>
-            
-            <label class="mode-option">
-                <input type="radio" name="analysisMode" value="advanced">
-                <span class="mode-label">
-                    <strong>🚀 Advanced Pipeline</strong>
-                    <small>8-stage computer vision for challenging images</small>
-                </span>
-            </label>
-            
-            <label class="mode-option">
-                <input type="radio" name="analysisMode" value="professional">
-                <span class="mode-label">
-                    <strong>🔬 Professional Pipeline</strong>
-                    <small>CellPose + optimization for good quality images</small>
-                </span>
-            </label>
-            
-            <label class="mode-option">
-                <input type="radio" name="analysisMode" value="hybrid">
-                <span class="mode-label">
-                    <strong>🔗 Hybrid Mode</strong>
-                    <small>Combines both pipelines for maximum accuracy</small>
-                </span>
-            </label>
+        <div class="header">
+            <h1>🔬 BIOIMAGIN Optimized</h1>
+            <p>Smart Wolffia Cell Analysis with AI-Powered Tophat Training</p>
         </div>
-    </div>
-    
-    <!-- Advanced Configuration -->
-    <div class="advanced-config" id="advancedConfig">
-        <h4>Advanced Settings</h4>
-        
-        <div class="config-row">
-            <label for="confidenceThreshold">Confidence Threshold:</label>
-            <input type="range" id="confidenceThreshold" min="0.01" max="0.5" value="0.05" step="0.01">
-            <span id="confidenceValue">0.05</span>
-            <small>Lower = detect more cells (may include false positives)</small>
-        </div>
-        
-        <div class="config-row">
-            <label for="pixelToMicron">Pixel to Micron Ratio:</label>
-            <input type="number" id="pixelToMicron" value="0.5" step="0.1" min="0.1" max="10">
-            <small>Calibration for accurate size measurements</small>
-        </div>
-        
-        <div class="config-row">
-            <label>
-                <input type="checkbox" id="detailedAnalysis" checked>
-                Detailed Feature Analysis
-            </label>
-            <small>Extract comprehensive biological features</small>
-        </div>
-        
-        <div class="config-row">
-            <label>
-                <input type="checkbox" id="forceAdvanced">
-                Force Advanced Pipeline
-            </label>
-            <small>Use advanced pipeline even for good quality images</small>
-        </div>
-        
-        <div class="config-row">
-            <label>
-                <input type="checkbox" id="generateVisualizations" checked>
-                Generate Visualizations
-            </label>
-            <small>Create detailed analysis visualizations</small>
-        </div>
-    </div>
-    
-    <!-- File Upload -->
-    <div class="upload-section">
-        <input type="file" id="imageFiles" multiple accept="image/*" class="file-input">
-        <label for="imageFiles" class="upload-button">
-            📁 Select Images for Analysis
-        </label>
-        <div id="fileList" class="file-list"></div>
-    </div>
-    
-    <!-- Analysis Button -->
-    <button id="analyzeButton" class="analyze-btn" onclick="startUltimateAnalysis()">
-        🚀 Start Ultimate Analysis
-    </button>
-</div>
 
-<!-- Enhanced Results Display -->
-<div id="analysisResults" class="results-container" style="display: none;">
-    
-    <!-- System Status -->
-    <div id="systemStatus" class="system-status">
-        <h3>🔧 System Status</h3>
-        <div class="status-grid">
-            <div class="status-item">
-                <span class="status-label">Pipeline Used:</span>
-                <span id="pipelineUsed" class="status-value">-</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Processing Time:</span>
-                <span id="processingTime" class="status-value">-</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Overall Confidence:</span>
-                <span id="overallConfidence" class="status-value">-</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">GPU Acceleration:</span>
-                <span id="gpuStatus" class="status-value">-</span>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Enhanced Summary Statistics -->
-    <div id="enhancedSummary" class="enhanced-summary">
-        <h3>📊 Analysis Summary</h3>
-        <div class="summary-grid">
-            <div class="summary-card cells-detected">
-                <div class="card-header">🔬 Total Cells</div>
-                <div class="card-value" id="totalCells">0</div>
-                <div class="card-detail" id="cellsDetail">-</div>
-            </div>
-            
-            <div class="summary-card green-cells">
-                <div class="card-header">🌱 Green Cells</div>
-                <div class="card-value" id="greenCells">0</div>
-                <div class="card-detail" id="greenPercentage">-</div>
-            </div>
-            
-            <div class="summary-card biomass">
-                <div class="card-header">⚖️ Total Biomass</div>
-                <div class="card-value" id="totalBiomass">0</div>
-                <div class="card-detail">μg</div>
-            </div>
-            
-            <div class="summary-card average-size">
-                <div class="card-header">📏 Average Size</div>
-                <div class="card-value" id="averageSize">0</div>
-                <div class="card-detail">μm²</div>
-            </div>
-            
-            <div class="summary-card viability">
-                <div class="card-header">💚 High Viability</div>
-                <div class="card-value" id="viableCells">0</div>
-                <div class="card-detail" id="viabilityPercentage">-</div>
-            </div>
-            
-            <div class="summary-card confidence">
-                <div class="card-header">🎯 High Confidence</div>
-                <div class="card-value" id="highConfidenceCells">0</div>
-                <div class="card-detail" id="confidencePercentage">-</div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Advanced Visualizations -->
-    <div id="advancedVisualizations" class="visualizations-section">
-        <h3>🎨 Advanced Visualizations</h3>
-        
-        <div class="visualization-tabs">
-            <button class="tab-button active" onclick="showVisualization('overview')">📋 Overview</button>
-            <button class="tab-button" onclick="showVisualization('pipeline')">🔧 Pipeline Stages</button>
-            <button class="tab-button" onclick="showVisualization('confidence')">🎯 Confidence Map</button>
-            <button class="tab-button" onclick="showVisualization('classification')">🏷️ Classification</button>
-            <button class="tab-button" onclick="showVisualization('metrics')">📊 Metrics</button>
-        </div>
-        
-        <div class="visualization-content">
-            <div id="overviewViz" class="viz-panel active">
-                <img id="overviewImage" src="" alt="Analysis Overview" style="display: none;">
-            </div>
-            
-            <div id="pipelineViz" class="viz-panel">
-                <img id="pipelineImage" src="" alt="Pipeline Stages" style="display: none;">
-            </div>
-            
-            <div id="confidenceViz" class="viz-panel">
-                <img id="confidenceImage" src="" alt="Confidence Heatmap" style="display: none;">
-            </div>
-            
-            <div id="classificationViz" class="viz-panel">
-                <img id="classificationImage" src="" alt="Cell Classification" style="display: none;">
-            </div>
-            
-            <div id="metricsViz" class="viz-panel">
-                <img id="metricsImage" src="" alt="Metrics Dashboard" style="display: none;">
-            </div>
-        </div>
-    </div>
-    
-    <!-- Detailed Cell Table -->
-    <div id="cellTableSection" class="cell-table-section">
-        <h3>🔬 Individual Cell Analysis</h3>
-        
-        <div class="table-controls">
-            <div class="filter-controls">
-                <label>Filter by confidence: 
-                    <input type="range" id="confidenceFilter" min="0" max="1" value="0" step="0.1">
-                    <span id="confidenceFilterValue">0.0+</span>
-                </label>
+        <div class="main-content">
+            <!-- Image Upload Section -->
+            <div class="section">
+                <h2>📸 Image Upload & Analysis</h2>
                 
-                <label>
-                    <input type="checkbox" id="greenCellsOnly"> Green cells only
-                </label>
-                
-                <label>
-                    <input type="checkbox" id="highViabilityOnly"> High viability only
-                </label>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-text">
+                        <strong>Drop images here or click to select</strong><br>
+                        Supports: PNG, JPG, JPEG, BMP, TIFF, JFIF (Max 50MB each)
+                    </div>
+                    <input type="file" id="fileInput" class="file-input" multiple accept=".png,.jpg,.jpeg,.bmp,.tiff,.tif,.jfif">
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        📁 Select Images
+                    </button>
+                </div>
+
+
+
+                <div class="options">
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="useTophat">
+                        <label for="useTophat"><strong>Use Tophat AI Model</strong> (if trained)</label>
+                    </div>
+                    
+                    <!-- NEW: CellDetection option -->
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="useCellDetection" checked>
+                        <label for="useCellDetection"><strong>Use CellDetection AI</strong> (deep learning)</label>
+                    </div>
+                    
+                    <button class="btn btn-success" id="analyzeBtn" onclick="startAnalysis()" disabled>
+                        🧬 Start Analysis
+                    </button>
+                    
+                    <!-- Status indicators -->
+                    <div id="tophatStatus" class="alert alert-info" style="display: none;">
+                        Checking Tophat model status...
+                    </div>
+                    
+                    <!-- NEW: CellDetection status -->
+                    <div id="celldetectionStatus" class="alert alert-info" style="display: none;">
+                        Checking CellDetection model status...
+                    </div>
+                </div>
+
+
+                <div class="files-list" id="filesList"></div>
             </div>
+
+            <!-- Results Section -->
+            <div class="section" id="resultsSection" style="display: none;">
+                <h2>📊 Analysis Results</h2>
+                <div class="results-container" id="resultsContainer"></div>
+            </div>
+
+            <!-- Tophat Training Section -->
+            <div class="section tophat-training">
+                <h2>🎯 Tophat AI Training</h2>
+                <p>Train the AI to better detect cells by correcting automatic detections</p>
+
+                <div class="training-steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h4>Upload Images</h4>
+                        <p>Upload multiple images for training</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h4>Review Detections</h4>
+                        <p>Mark correct and incorrect cell detections</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <h4>Train Model</h4>
+                        <p>AI learns from your corrections</p>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-warning" id="startTrainingBtn" onclick="startTophatTraining()" disabled>
+                        🧠 Start Training Session
+                    </button>
+                </div>
+
+                <div id="trainingContainer" style="display: none; margin-top: 20px;">
+                    <!-- Training interface will be loaded here -->
+                </div>
+            </div>
+
             
-            <div class="sort-controls">
-                <label>Sort by:
-                    <select id="sortBy">
-                        <option value="cell_id">Cell ID</option>
-                        <option value="confidence">Confidence</option>
-                        <option value="area_microns_sq">Area</option>
-                        <option value="biomass_estimate_ug">Biomass</option>
-                        <option value="viability_estimate">Viability</option>
-                    </select>
-                </label>
-            </div>
-        </div>
-        
-        <div class="table-container">
-            <table id="cellTable" class="cell-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Position (x,y)</th>
-                        <th>Area (μm²)</th>
-                        <th>Biomass (μg)</th>
-                        <th>Confidence</th>
-                        <th>Green</th>
-                        <th>Viability</th>
-                        <th>Growth Stage</th>
-                        <th>Health Score</th>
-                    </tr>
-                </thead>
-                <tbody id="cellTableBody">
-                </tbody>
-            </table>
+
         </div>
     </div>
-    
-    <!-- Export Options -->
-    <div id="exportSection" class="export-section">
-        <h3>💾 Export Results</h3>
-        
-        <div class="export-buttons">
-            <button class="export-btn" onclick="exportResults('csv')">
-                📊 Export CSV
-            </button>
-            <button class="export-btn" onclick="exportResults('json')">
-                🗃️ Export JSON  
-            </button>
-            <button class="export-btn" onclick="exportResults('zip')">
-                📦 Export Complete Package
-            </button>
-            <button class="export-btn" onclick="exportResults('report')">
-                📑 Generate Report
-            </button>
-        </div>
-    </div>
-</div>
-    
+
     <script>
         let uploadedFiles = [];
-        let currentAnalysisId = null;
-        // Global variables for ultimate analysis
-        let currentAnalysisResults = null;
-        let ultimateAnalysisMode = 'auto';
+        let analysisResults = {};
+        let currentTrainingSession = null;
 
-// Initialize enhanced interface
-document.addEventListener('DOMContentLoaded', function() {
-    initializeUltimateInterface();
-    loadSystemStatus();
-});
-
-function initializeUltimateInterface() {
-    // Confidence threshold slider
-    const confidenceSlider = document.getElementById('confidenceThreshold');
-    const confidenceValue = document.getElementById('confidenceValue');
-    
-    confidenceSlider.addEventListener('input', function() {
-        confidenceValue.textContent = this.value;
-    });
-    
-    // Analysis mode selection
-    const modeRadios = document.querySelectorAll('input[name="analysisMode"]');
-    modeRadios.forEach(radio => {
-        radio.addEventListener('change', function() {
-            ultimateAnalysisMode = this.value;
-            updateAdvancedConfig();
-        });
-    });
-    
-    // File input handling
-    const fileInput = document.getElementById('imageFiles');
-    fileInput.addEventListener('change', handleFileSelection);
-    
-    // Table filters
-    setupTableFilters();
-}
-
-function updateAdvancedConfig() {
-    const advancedConfig = document.getElementById('advancedConfig');
-    const forceAdvanced = document.getElementById('forceAdvanced');
-    
-    if (ultimateAnalysisMode === 'advanced') {
-        forceAdvanced.checked = true;
-        forceAdvanced.disabled = true;
-    } else {
-        forceAdvanced.disabled = false;
-    }
-}
-
-function handleFileSelection(event) {
-    const files = event.target.files;
-    const fileList = document.getElementById('fileList');
-    
-    fileList.innerHTML = '';
-    
-    Array.from(files).forEach((file, index) => {
-        const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
-        fileItem.innerHTML = `
-            <span class="file-name">${file.name}</span>
-            <span class="file-size">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
-        `;
-        fileList.appendChild(fileItem);
-    });
-    
-    // Enable analyze button if files selected
-    const analyzeButton = document.getElementById('analyzeButton');
-    analyzeButton.disabled = files.length === 0;
-}
-
-async function startUltimateAnalysis() {
-    const fileInput = document.getElementById('imageFiles');
-    const files = fileInput.files;
-    
-    if (files.length === 0) {
-        showNotification('Please select images for analysis', 'warning');
-        return;
-    }
-    
-    try {
-        showNotification('Starting ultimate analysis...', 'info');
-        showProgressOverlay('Initializing ultimate pipeline...');
-        
-        // Prepare form data
-        const formData = new FormData();
-        
-        // Add files
-        Array.from(files).forEach(file => {
-            formData.append('files', file);
-        });
-        
-        // Add configuration
-        formData.append('analysis_mode', ultimateAnalysisMode);
-        formData.append('confidence_threshold', document.getElementById('confidenceThreshold').value);
-        formData.append('pixel_to_micron', document.getElementById('pixelToMicron').value);
-        formData.append('detailed_analysis', document.getElementById('detailedAnalysis').checked);
-        formData.append('force_advanced', document.getElementById('forceAdvanced').checked);
-        formData.append('generate_visualizations', document.getElementById('generateVisualizations').checked);
-        
-        // Send to ultimate analysis endpoint
-        const response = await fetch('/api/analyze_ultimate', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Analysis failed: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            hideProgressOverlay();
-            showNotification('Ultimate analysis completed successfully!', 'success');
-            displayUltimateResults(result);
-        } else {
-            throw new Error(result.error || 'Analysis failed');
-        }
-        
-    } catch (error) {
-        hideProgressOverlay();
-        showNotification(`Analysis failed: ${error.message}`, 'error');
-        console.error('Ultimate analysis error:', error);
-    }
-}
-
-function displayUltimateResults(results) {
-    currentAnalysisResults = results;
-    
-    // Show results section
-    document.getElementById('analysisResults').style.display = 'block';
-    
-    // Update system status
-    updateSystemStatus(results);
-    
-    // Update enhanced summary
-    updateEnhancedSummary(results.summary);
-    
-    // Display visualizations
-    displayAdvancedVisualizations(results.visualizations);
-    
-    // Populate cell table
-    populateCellTable(results.results?.[0]?.cells || []);
-    
-    // Scroll to results
-    document.getElementById('analysisResults').scrollIntoView({ behavior: 'smooth' });
-}
-
-function updateSystemStatus(results) {
-    const result = results.results?.[0] || {};
-    
-    document.getElementById('pipelineUsed').textContent = 
-        result.pipeline_used?.replace(/_/g, ' ').toUpperCase() || 'Unknown';
-    
-    document.getElementById('processingTime').textContent = 
-        `${result.analysis_duration_seconds?.toFixed(1) || 0}s`;
-    
-    document.getElementById('overallConfidence').textContent = 
-        `${(result.overall_confidence * 100 || 0).toFixed(1)}%`;
-    
-    document.getElementById('gpuStatus').textContent = 
-        result.performance_metrics?.gpu_used ? '✅ Enabled' : '❌ CPU Only';
-}
-
-function updateEnhancedSummary(summary) {
-    const totalCells = summary?.total_cells_detected || 0;
-    const greenCells = summary?.total_green_cells || 0;
-    const viableCells = summary?.quality_indicators?.viable_cells || 0;
-    const highConfCells = summary?.confidence_metrics?.high_confidence_cells || 0;
-    
-    document.getElementById('totalCells').textContent = totalCells;
-    document.getElementById('cellsDetail').textContent = `${totalCells} detected`;
-    
-    document.getElementById('greenCells').textContent = greenCells;
-    document.getElementById('greenPercentage').textContent = 
-        `${(summary?.green_cell_percentage || 0).toFixed(1)}%`;
-    
-    document.getElementById('totalBiomass').textContent = 
-        (summary?.total_biomass || 0).toFixed(3);
-    
-    document.getElementById('averageSize').textContent = 
-        (summary?.average_area || 0).toFixed(1);
-    
-    document.getElementById('viableCells').textContent = viableCells;
-    document.getElementById('viabilityPercentage').textContent = 
-        totalCells > 0 ? `${(viableCells / totalCells * 100).toFixed(1)}%` : '0%';
-    
-    document.getElementById('highConfidenceCells').textContent = highConfCells;
-    document.getElementById('confidencePercentage').textContent = 
-        totalCells > 0 ? `${(highConfCells / totalCells * 100).toFixed(1)}%` : '0%';
-}
-
-function displayAdvancedVisualizations(visualizations) {
-    if (!visualizations) return;
-    
-    // Display each visualization type
-    const vizTypes = ['overview', 'pipeline', 'confidence', 'classification', 'metrics'];
-    
-    vizTypes.forEach(type => {
-        const key = type === 'overview' ? 'advanced_cell_overlay' : 
-                   type === 'pipeline' ? 'pipeline_stages' :
-                   type === 'confidence' ? 'confidence_heatmap' :
-                   type === 'classification' ? 'cell_classification' :
-                   'metrics_dashboard';
-        
-        const img = document.getElementById(`${type}Image`);
-        if (visualizations[key]) {
-            img.src = `data:image/png;base64,${visualizations[key]}`;
-            img.style.display = 'block';
-        }
-    });
-}
-
-function showVisualization(type) {
-    // Hide all panels
-    document.querySelectorAll('.viz-panel').forEach(panel => {
-        panel.classList.remove('active');
-    });
-    
-    // Hide all tab buttons
-    document.querySelectorAll('.tab-button').forEach(button => {
-        button.classList.remove('active');
-    });
-    
-    // Show selected panel and button
-    document.getElementById(`${type}Viz`).classList.add('active');
-    event.target.classList.add('active');
-}
-
-function populateCellTable(cells) {
-    const tbody = document.getElementById('cellTableBody');
-    tbody.innerHTML = '';
-    
-    cells.forEach(cell => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${cell.cell_id || '-'}</td>
-            <td>(${(cell.centroid_x || 0).toFixed(0)}, ${(cell.centroid_y || 0).toFixed(0)})</td>
-            <td>${(cell.area_microns_sq || 0).toFixed(1)}</td>
-            <td>${(cell.biomass_estimate_ug || 0).toFixed(4)}</td>
-            <td class="confidence-cell">${(cell.confidence || 0).toFixed(3)}</td>
-            <td class="green-cell">${cell.is_green_cell ? '✅' : '❌'}</td>
-            <td class="viability-cell">${cell.viability_estimate || '-'}</td>
-            <td>${cell.growth_stage || '-'}</td>
-            <td>${(cell.comprehensive_health_score || 0).toFixed(2)}</td>
-        `;
-        
-        // Color code rows
-        if (cell.confidence > 0.8) row.classList.add('high-confidence');
-        if (cell.is_green_cell) row.classList.add('green-cell-row');
-        if (cell.viability_estimate === 'high') row.classList.add('high-viability');
-        
-        tbody.appendChild(row);
-    });
-}
-
-function setupTableFilters() {
-    const confidenceFilter = document.getElementById('confidenceFilter');
-    const confidenceFilterValue = document.getElementById('confidenceFilterValue');
-    const greenCellsOnly = document.getElementById('greenCellsOnly');
-    const highViabilityOnly = document.getElementById('highViabilityOnly');
-    const sortBy = document.getElementById('sortBy');
-    
-    // Confidence filter
-    confidenceFilter.addEventListener('input', function() {
-        confidenceFilterValue.textContent = `${this.value}+`;
-        filterCellTable();
-    });
-    
-    // Checkbox filters
-    greenCellsOnly.addEventListener('change', filterCellTable);
-    highViabilityOnly.addEventListener('change', filterCellTable);
-    
-    // Sort functionality
-    sortBy.addEventListener('change', sortCellTable);
-}
-
-function filterCellTable() {
-    const confidenceThreshold = parseFloat(document.getElementById('confidenceFilter').value);
-    const greenOnly = document.getElementById('greenCellsOnly').checked;
-    const viabilityOnly = document.getElementById('highViabilityOnly').checked;
-    
-    const rows = document.querySelectorAll('#cellTableBody tr');
-    
-    rows.forEach(row => {
-        const confidence = parseFloat(row.cells[4].textContent);
-        const isGreen = row.cells[5].textContent === '✅';
-        const viability = row.cells[6].textContent;
-        
-        let show = true;
-        
-        if (confidence < confidenceThreshold) show = false;
-        if (greenOnly && !isGreen) show = false;
-        if (viabilityOnly && viability !== 'high') show = false;
-        
-        row.style.display = show ? '' : 'none';
-    });
-}
-
-function sortCellTable() {
-    // Implementation for sorting the table
-    // This would sort the table based on the selected column
-}
-
-async function exportResults(format) {
-    if (!currentAnalysisResults) {
-        showNotification('No results to export', 'warning');
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/export_ultimate/${format}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(currentAnalysisResults)
-        });
-        
-        if (response.ok) {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `wolffia_ultimate_analysis.${format === 'zip' ? 'zip' : format}`;
-            a.click();
-            window.URL.revokeObjectURL(url);
+        // Check  model status on load
+        function checkModelStatus() {
+            // Check Tophat status
+            fetch('/api/tophat/model_status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('tophatStatus');
+                    const checkbox = document.getElementById('useTophat');
+                    
+                    if (data.model_available) {
+                        statusDiv.innerHTML = '✅ Tophat AI model is available';
+                        statusDiv.className = 'alert alert-success';
+                        checkbox.disabled = false;
+                    } else {
+                        statusDiv.innerHTML = '⚠️ No Tophat model trained yet. Use training section below.';
+                        statusDiv.className = 'alert alert-info';
+                        checkbox.disabled = true;
+                        checkbox.checked = false;
+                    }
+                    statusDiv.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error checking Tophat status:', error);
+                });
             
-            showNotification(`${format.toUpperCase()} export completed`, 'success');
-        } else {
-            throw new Error('Export failed');
+            // NEW: Check CellDetection status
+            fetch('/api/celldetection/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('celldetectionStatus');
+                    const checkbox = document.getElementById('useCellDetection');
+                    
+                    if (data.success && data.status.available && data.status.model_loaded) {
+                        statusDiv.innerHTML = `✅ CellDetection AI ready (${data.status.device.toUpperCase()})`;
+                        statusDiv.className = 'alert alert-success';
+                        checkbox.disabled = false;
+                    } else if (data.success && data.status.available && !data.status.model_loaded) {
+                        statusDiv.innerHTML = '⚠️ CellDetection available but model not loaded';
+                        statusDiv.className = 'alert alert-warning';
+                        checkbox.disabled = false;
+                    } else {
+                        statusDiv.innerHTML = '❌ CellDetection not available. Install: pip install celldetection';
+                        statusDiv.className = 'alert alert-error';
+                        checkbox.disabled = true;
+                        checkbox.checked = false;
+                    }
+                    statusDiv.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error checking CellDetection status:', error);
+                    const statusDiv = document.getElementById('celldetectionStatus');
+                    statusDiv.innerHTML = '❌ Could not check CellDetection status';
+                    statusDiv.className = 'alert alert-error';
+                    statusDiv.style.display = 'block';
+                });
         }
-    } catch (error) {
-        showNotification(`Export failed: ${error.message}`, 'error');
-    }
-}
 
-async function loadSystemStatus() {
-    try {
-        const response = await fetch('/api/system_status');
-        const status = await response.json();
-        
-        // Update interface based on system capabilities
-        if (!status.gpu_available) {
-            showNotification('GPU not available - using CPU mode', 'info');
+        // Update window load event
+        window.addEventListener('load', checkModelStatus);  // 
+
+        function checkTophatStatus() {
+            fetch('/api/tophat/model_status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('tophatStatus');
+                    const checkbox = document.getElementById('useTophat');
+                    
+                    if (data.model_available) {
+                        statusDiv.innerHTML = '✅ Tophat AI model is available';
+                        statusDiv.className = 'alert alert-success';
+                        checkbox.disabled = false;
+                    } else {
+                        statusDiv.innerHTML = '⚠️ No Tophat model trained yet. Use training section below.';
+                        statusDiv.className = 'alert alert-info';
+                        checkbox.disabled = true;
+                        checkbox.checked = false;
+                    }
+                    statusDiv.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error checking Tophat status:', error);
+                });
         }
-        
-        if (!status.advanced_pipeline_available) {
-            // Disable advanced options
-            document.querySelector('input[value="advanced"]').disabled = true;
-            document.querySelector('input[value="hybrid"]').disabled = true;
-        }
-        
-    } catch (error) {
-        console.warn('Could not load system status:', error);
-    }
-}
 
-// Utility functions
-function showProgressOverlay(message) {
-    const overlay = document.createElement('div');
-    overlay.id = 'progressOverlay';
-    overlay.className = 'progress-overlay';
-    overlay.innerHTML = `
-        <div class="progress-content">
-            <div class="progress-spinner"></div>
-            <p>${message}</p>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-}
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
 
-function hideProgressOverlay() {
-    const overlay = document.getElementById('progressOverlay');
-    if (overlay) {
-        overlay.remove();
-    }
-}
-
-function showNotification(message, type) {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.classList.add('show');
-    }, 100);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, 5000);
-}      
-        // File input handler
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            handleFiles(e.target.files);
-        });
-        
-        // Drag and drop handlers
-        const uploadArea = document.querySelector('.upload-area');
-        
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
-            uploadArea.style.backgroundColor = '#e8f5e9';
+            uploadArea.classList.add('dragover');
         });
-        
+
         uploadArea.addEventListener('dragleave', () => {
-            uploadArea.style.backgroundColor = '';
+            uploadArea.classList.remove('dragover');
         });
-        
+
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
-            uploadArea.style.backgroundColor = '';
-            handleFiles(e.dataTransfer.files);
+            uploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            handleFiles(files);
         });
-        
+
+        fileInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            handleFiles(files);
+        });
+
         function handleFiles(files) {
-            uploadedFiles = Array.from(files);
-            displayFileList();
-            
-            if (uploadedFiles.length > 1) {
-                document.getElementById('timeSeriesControls').style.display = 'block';
-                createTimestampInputs();
-            } else {
-                document.getElementById('timeSeriesControls').style.display = 'none';
+            const validFiles = files.filter(file => {
+                const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/bmp', 'image/tiff'];
+                return validTypes.includes(file.type) && file.size <= 50 * 1024 * 1024;
+            });
+
+            if (validFiles.length === 0) {
+                alert('No valid image files selected. Please select PNG, JPG, BMP, or TIFF files under 50MB.');
+                return;
             }
-            
-            document.querySelector('.analyze-btn').style.display = 'block';
+
+            // Upload files
+            const formData = new FormData();
+            validFiles.forEach(file => formData.append('files', file));
+            formData.append('use_tophat', document.getElementById('useTophat').checked);
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    uploadedFiles = data.files;
+                    displayFiles();
+                    document.getElementById('analyzeBtn').disabled = false;
+                    document.getElementById('startTrainingBtn').disabled = false;
+                } else {
+                    alert('Upload failed: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Upload error:', error);
+                alert('Upload failed. Please try again.');
+            });
         }
-        
-        function displayFileList() {
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '<h3>Selected Files:</h3>';
-            
-            uploadedFiles.forEach((file, index) => {
+
+        function displayFiles() {
+            const filesList = document.getElementById('filesList');
+            filesList.innerHTML = '';
+
+            uploadedFiles.forEach(file => {
                 const fileItem = document.createElement('div');
                 fileItem.className = 'file-item';
                 fileItem.innerHTML = `
-                    <span>${file.name}</span>
-                    <button onclick="removeFile(${index})">Remove</button>
-                `;
-                fileList.appendChild(fileItem);
-            });
-        }
-        
-        function removeFile(index) {
-            uploadedFiles.splice(index, 1);
-            displayFileList();
-            
-            if (uploadedFiles.length === 0) {
-                document.querySelector('.analyze-btn').style.display = 'none';
-            }
-        }
-        
-        function createTimestampInputs() {
-            const container = document.getElementById('timestampInputs');
-            container.innerHTML = '<h4>Enter timestamps for each image:</h4>';
-            
-            uploadedFiles.forEach((file, index) => {
-                const input = document.createElement('div');
-                input.innerHTML = `
-                    <label>
-                        ${file.name}: 
-                        <input type="text" id="timestamp_${index}" value="T${index}" placeholder="e.g., 0h, Day1, etc.">
-                    </label>
-                `;
-                container.appendChild(input);
-            });
-        }
-        
-
-        async function startAnalysis() {
-            if (uploadedFiles.length === 0) return;
-            
-            // Show loading
-            document.getElementById('loadingSpinner').style.display = 'block';
-            document.getElementById('progressBar').style.display = 'block';
-            document.getElementById('analysisResults').style.display = 'none';
-            
-            // Prepare form data
-            const formData = new FormData();
-            uploadedFiles.forEach(file => {
-                formData.append('files', file);
-            });
-            
-            try {
-                // Upload files
-                const uploadResponse = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const uploadResult = await uploadResponse.json();
-                
-                if (uploadResult.success) {
-                    currentAnalysisId = uploadResult.analysis_id;
-
-                    // Poll for analysis status
-                    pollAnalysisStatus();
-                }
-                else {
-                    alert('Upload failed: ' + uploadResult.error);
-                    hideLoading();
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-                hideLoading();
-            }
-        }
-        
-        // Update the pollAnalysisStatus function to handle errors better:
-        async function pollAnalysisStatus() {
-            const maxAttempts = 100000; // 3 minute timeout
-            let attempts = 0;
-            
-            const pollInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`/api/analyze/${currentAnalysisId}`);
-                    
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('Server error response:', errorText);
-                        
-                        // Try to parse as JSON if possible
-                        let errorMessage = 'Server error';
-                        try {
-                            const errorJson = JSON.parse(errorText);
-                            errorMessage = errorJson.error || errorJson.message || 'Unknown error';
-                        } catch (e) {
-                            // If not JSON, use the text directly
-                            errorMessage = errorText.substring(0, 200); // Limit length
-                        }
-                        
-                        clearInterval(pollInterval);
-                        alert('Analysis error: ' + errorMessage);
-                        hideLoading();
-                        return;
-                    }
-                    
-                    const result = await response.json();
-                    
-                    if (result.status === 'completed') {
-                        clearInterval(pollInterval);
-                        displayResults(result);
-                        hideLoading();
-                    } else if (result.status === 'failed') {
-                        clearInterval(pollInterval);
-                        const errorDetails = result.error_details ? '\n\nDetails: ' + result.error_details : '';
-                        alert('Analysis failed: ' + (result.error || result.message) + errorDetails);
-                        hideLoading();
-                    } else if (result.status === 'error') {
-                        clearInterval(pollInterval);
-                        alert('Server error: ' + result.error);
-                        hideLoading();
-                    } else {
-                        // Update progress
-                        if (result.progress !== undefined) {
-                            document.getElementById('progressFill').style.width = result.progress + '%';
-                            document.getElementById('loadingSpinner').innerHTML = `
-                                <p>${result.current_step || 'Processing...'}</p>
-                                <p>${result.progress || 0}%</p>
-                            `;
-                        }
-                    }
-                    
-                    attempts++;
-                    if (attempts >= maxAttempts) {
-                        clearInterval(pollInterval);
-                        alert('Analysis timeout - please try again with fewer images or check server logs');
-                        hideLoading();
-                    }
-                } catch (error) {
-                    clearInterval(pollInterval);
-                    console.error('Polling error:', error);
-                    alert('Error checking status: ' + error.message);
-                    hideLoading();
-                }
-            }, 1000);
-        }
-        function hideLoading() {
-            document.getElementById('loadingSpinner').style.display = 'none';
-            document.getElementById('progressBar').style.display = 'none';
-            document.getElementById('progressFill').style.width = '0%';
-        }
-        
-
-        function displayStats(summary) {
-            const statsGrid = document.getElementById('statsGrid');
-            if (!statsGrid) {
-                console.warn('Stats grid element not found');
-                return;
-            }
-            
-            statsGrid.innerHTML = '';
-            console.log("[DEBUG] Professional Summary object:", summary);
-
-            function safeFixed(val, digits) {
-                if (val === null || val === undefined || val === '') {
-                    return '0.' + '0'.repeat(digits);
-                }
-                const num = Number(val);
-                if (isNaN(num)) {
-                    console.warn(`[WARN] Value is not a number:`, val, 'type:', typeof val);
-                    return '0.' + '0'.repeat(digits);
-                }
-                return num.toFixed(digits);
-            }
-
-            function safeValue(val, fallback = 0) {
-                return (val !== null && val !== undefined && !isNaN(val)) ? val : fallback;
-            }
-
-            // FIXED: Use correct field names and handle multiple possible field names
-            const totalCells = safeValue(
-                summary.total_cells_detected || 
-                summary.total_cells || 
-                summary.cells_detected || 0
-            );
-            
-            const greenCells = safeValue(
-                summary.total_green_cells || 
-                summary.green_cells || 0
-            );
-            
-            const totalBiomass = safeValue(
-                summary.total_biomass || 
-                summary.biomass || 0
-            );
-            
-            const avgArea = safeValue(
-                summary.average_cell_area || 
-                summary.average_area || 
-                summary.avg_area || 0
-            );
-            
-            const quality = safeValue(
-                summary.average_quality || 
-                summary.quality || 0
-            );
-
-            const stats = [
-                { 
-                    label: 'Total Cells', 
-                    value: totalCells,
-                    icon: '🔬'
-                },
-                { 
-                    label: 'Green Cells', 
-                    value: greenCells,
-                    icon: '🌱'
-                },
-                { 
-                    label: 'Total Biomass (μg)', 
-                    value: safeFixed(totalBiomass, 3),
-                    icon: '⚖️'
-                },
-                { 
-                    label: 'Avg Cell Area (μm²)', 
-                    value: safeFixed(avgArea, 1),
-                    icon: '📏'
-                },
-                { 
-                    label: 'Analysis Quality', 
-                    value: safeFixed(quality, 3),
-                    icon: '📊'
-                }
-            ];
-
-            // Add growth metrics if available
-            if (summary.growth_metrics && summary.growth_metrics.biomass_growth_rate !== undefined) {
-                stats.push({
-                    label: 'Biomass Growth Rate',
-                    value: safeFixed(summary.growth_metrics.biomass_growth_rate, 1) + '%',
-                    icon: '📈'
-                });
-            }
-
-            stats.forEach(stat => {
-                const card = document.createElement('div');
-                card.className = 'stat-card';
-                card.innerHTML = `
-                    <div class="stat-icon">${stat.icon || '📊'}</div>
-                    <h3>${stat.value}</h3>
-                    <p>${stat.label}</p>
-                `;
-                statsGrid.appendChild(card);
-            });
-            
-            console.log(`📊 Stats displayed: ${totalCells} cells, ${greenCells} green, ${totalBiomass} biomass`);
-        }
-
-        // Cellpose displayResults function
-        function displaySegmentationInfo(results) {
-            const statusDiv = document.getElementById('segmentationStatus');
-            statusDiv.style.display = 'block';
-            
-            if (results[0] && results[0].segmentation_methods) {
-                const method = results[0].segmentation_methods.method || 'unknown';
-                document.getElementById('segmentationMethod').textContent = 
-                    `Method: ${method.charAt(0).toUpperCase() + method.slice(1)}`;
-                
-                if (results[0].segmentation_methods.quality_score) {
-                    const quality = results[0].segmentation_methods.quality_score;
-                    document.getElementById('segmentationQuality').innerHTML = `
-                        <div class="quality-indicator">
-                            <span>Quality Score: ${(quality.overall_score * 100).toFixed(1)}%</span>
-                            <div class="quality-bar">
-                                <div class="quality-fill" style="width: ${quality.overall_score * 100}%"></div>
-                            </div>
+                    <div class="file-info">
+                        <div class="file-name">${file.filename}</div>
+                        <div class="file-status" id="status-${file.id}">Ready for analysis</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-${file.id}"></div>
                         </div>
-                    `;
-                }
-            }
+                    </div>
+                `;
+                filesList.appendChild(fileItem);
+            });
         }
 
-        // Professional visualization display function
-        function displayVisualizations(results) {
-            const container = document.getElementById('visualizationContainer');
-            if (!container) {
-                console.warn('Visualization container not found');
-                return;
-            }
+        function startAnalysis() {
+            document.getElementById('resultsSection').style.display = 'block';
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = '';
+
+            // Add overall progress indicator
+            const progressIndicator = document.createElement('div');
+            progressIndicator.className = 'alert alert-info';
+            progressIndicator.id = 'overall-progress';
+            progressIndicator.innerHTML = `
+                <h4>📊 Analyzing ${uploadedFiles.length} images...</h4>
+                <div class="progress-bar" style="margin-top: 10px;">
+                    <div class="progress-fill" id="overall-progress-fill" style="width: 0%;"></div>
+                </div>
+                <p style="margin-top: 10px;">Processing: <span id="current-progress">0</span> / ${uploadedFiles.length} completed</p>
+            `;
+            resultsContainer.appendChild(progressIndicator);
+
+            // Track completion
+            let completedAnalyses = 0;
             
-            container.innerHTML = '';
-            console.log('[DEBUG] Visualizations from results:', results);
-            
-            if (!Array.isArray(results) || results.length === 0) {
-                container.innerHTML = '<p class="no-viz">⚠️ No analysis results available</p>';
-                return;
-            }
-            
-            let hasVisualizations = false;
-            
-            results.forEach((result, index) => {
-                console.log(`[DEBUG] Processing result ${index}:`, result);
-                
-                if (result.visualizations) {
-                    // Professional cell detection visualization
-                    if (result.visualizations.cell_detection) {
-                        const vizItem = document.createElement('div');
-                        vizItem.className = 'visualization-item professional-viz';
-                        vizItem.style.gridColumn = 'span 2';
+            // Analyze each file
+            uploadedFiles.forEach((file, index) => {
+                setTimeout(() => {
+                    analyzeFile(file, () => {
+                        completedAnalyses++;
+                        updateOverallProgress(completedAnalyses, uploadedFiles.length);
                         
-                        // FIXED: Show cell count in title
-                        const cellCount = result.cells ? result.cells.length : 
-                                        (result.summary ? result.summary.total_cells_detected || result.summary.total_cells || 0 : 0);
-                        
-                        vizItem.innerHTML = `
-                            <div class="viz-header">
-                                <h3>🧬 Cell Detection Analysis - ${cellCount} cells found</h3>
-                                <span class="viz-badge">Professional Pipeline</span>
-                            </div>
-                            <img src="data:image/png;base64,${result.visualizations.cell_detection}" 
-                                alt="Professional Cell Detection" 
-                                class="analysis-image"
-                                onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                            >
-                            <div class="image-error" style="display:none;">❌ Visualization failed to load</div>
-                            <div class="viz-info">
-                                <small>🔬 Detected: ${cellCount} cells | Quality: ${(result.quality?.overall_quality || 0).toFixed(3)}</small>
-                            </div>
-                        `;
-                        container.appendChild(vizItem);
-                        hasVisualizations = true;
-                        
-                        console.log(`✅ Added cell detection visualization for result ${index} with ${cellCount} cells`);
-                    }
-                    
-                    // Quality assessment visualization
-                    if (result.visualizations.quality_assessment) {
-                        const vizItem = document.createElement('div');
-                        vizItem.className = 'visualization-item professional-viz';
-                        vizItem.innerHTML = `
-                            <div class="viz-header">
-                                <h3>📈 Cell Quality Analysis</h3>
-                                <span class="viz-badge">Quality Metrics</span>
-                            </div>
-                            <img src="data:image/png;base64,${result.visualizations.quality_assessment}" 
-                                alt="Quality Assessment" 
-                                class="analysis-image"
-                                onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                            >
-                            <div class="image-error" style="display:none;">❌ Quality visualization failed to load</div>
-                        `;
-                        container.appendChild(vizItem);
-                        hasVisualizations = true;
-                    }
-                    
-                    // Handle legacy visualization keys for backward compatibility
-                    const legacyKeys = ['main_cells', 'area_chlorophyll', 'biomass_analysis', 'summary_stats'];
-                    legacyKeys.forEach(key => {
-                        if (result.visualizations[key]) {
-                            const vizItem = document.createElement('div');
-                            vizItem.className = 'visualization-item legacy-viz';
-                            if (key === 'main_cells' || key === 'summary_stats') {
-                                vizItem.style.gridColumn = 'span 2';
-                            }
-                            vizItem.innerHTML = `
-                                <div class="viz-header">
-                                    <h3>📊 ${key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
-                                    <span class="viz-badge">Legacy Analysis</span>
-                                </div>
-                                <img src="data:image/png;base64,${result.visualizations[key]}" 
-                                    alt="${key}" 
-                                    class="analysis-image"
-                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                                >
-                                <div class="image-error" style="display:none;">❌ Image failed to load</div>
-                            `;
-                            container.appendChild(vizItem);
-                            hasVisualizations = true;
+                        if (completedAnalyses === uploadedFiles.length) {
+                            // All analyses complete
+                            setTimeout(() => {
+                                const progressDiv = document.getElementById('overall-progress');
+                                if (progressDiv) {
+                                    progressDiv.innerHTML = `
+                                        <h4>✅ All analyses completed!</h4>
+                                        <p>Successfully processed ${uploadedFiles.length} images.</p>
+                                    `;
+                                    progressDiv.className = 'alert alert-success';
+                                }
+                            }, 1000);
                         }
                     });
-                }
-            });
-            
-            if (!hasVisualizations) {
-                container.innerHTML = `
-                    <div class="no-visualizations">
-                        <h3>⚠️ No Visualizations Generated</h3>
-                        <p>The analysis completed but visualizations could not be created.</p>
-                        <p>This might occur when:</p>
-                        <ul>
-                            <li>No cells were detected in the image</li>
-                            <li>Image processing encountered an error</li>
-                            <li>Visualization rendering failed</li>
-                        </ul>
-                    </div>
-                `;
-            } else {
-                console.log(`✅ Successfully displayed ${container.children.length} visualizations`);
-            }
-        }
-
-        // Update the displayCellTable function:
-        function displayCellTable(results) {
-            const tbody = document.getElementById('cellTableBody');
-            tbody.innerHTML = '';
-
-            if (!Array.isArray(results)) {
-                console.warn("displayCellTable expected array but got:", results);
-                return;
-            }
-
-            results.forEach((result, index) => {
-                if (Array.isArray(result.cells)) {
-                    result.cells.forEach(cell => {
-                        const row = document.createElement('tr');
-                        const isGreen = cell.chlorophyll_index > 0.6 || cell.is_green_cell;
-                        const healthStatus = cell.health_status || cell.ml_health_status || 'unknown';
-                        
-                        // Safe value extraction with better error handling
-                        const cellId = cell.cell_id || cell.id || 'N/A';
-                        const area = Number(cell.area_microns_sq || cell.area_microns || 0);
-                        const perimeter = Number(cell.perimeter_microns || cell.perimeter || 0);
-                        const circularity = Number(cell.circularity || 0);
-                        const chlorophyll = Number(cell.chlorophyll_index || 0);
-                        const biomass = Number(cell.biomass_estimate_ug || cell.biomass_ensemble || 0);
-                        
-                        row.innerHTML = `
-                            <td style="font-weight: bold;">${cellId}</td>
-                            <td>${isNaN(area) ? '0.00' : area.toFixed(2)}</td>
-                            <td>${isNaN(perimeter) ? '0.00' : perimeter.toFixed(2)}</td>
-                            <td>${isNaN(circularity) ? '0.000' : circularity.toFixed(3)}</td>
-                            <td>${isNaN(chlorophyll) ? '0.000' : chlorophyll.toFixed(3)}</td>
-                            <td>${isNaN(biomass) ? '0.000' : biomass.toFixed(3)}</td>
-                            <td style="text-align: center; color: ${isGreen ? 'green' : 'gray'}; font-weight: bold;">
-                                ${isGreen ? '✓' : '✗'}
-                            </td>
-                            <td class="health-${healthStatus}">${healthStatus}</td>
-                        `;
-                        tbody.appendChild(row);
-                    });
-                } else {
-                    console.warn(`[displayCellTable] result ${index} has no 'cells' array`, result);
-                }
+                }, index * 100); // Stagger the starts slightly
             });
         }
 
-        // Update the displayTimeSeries function:
-        function displayTimeSeries(results) {
-            console.log('📈 displayTimeSeries called with results:', results);
+        function updateOverallProgress(completed, total) {
+            const progressFill = document.getElementById('overall-progress-fill');
+            const currentProgress = document.getElementById('current-progress');
             
-            const container = document.getElementById('timeSeriesContainer');
-            if (!container) {
-                console.error('❌ timeSeriesContainer element not found!');
-                return;
+            if (progressFill) {
+                const percentage = (completed / total) * 100;
+                progressFill.style.width = `${percentage}%`;
             }
             
-            container.innerHTML = '';
-            
-            if (!Array.isArray(results) || results.length < 2) {
-                container.innerHTML = '<p class="no-time-series">⚠️ Time series analysis requires multiple images</p>';
-                return;
-            }
-            
-            console.log(`📈 Processing time series for ${results.length} images`);
-            
-            try {
-                // Check for time series visualizations in the last result
-                const lastResult = results[results.length - 1];
-                let hasTimeSeriesVisualizations = false;
-                
-                if (lastResult && lastResult.time_series_visualizations) {
-                    if (lastResult.time_series_visualizations.enhanced_time_series) {
-                        const vizItem = document.createElement('div');
-                        vizItem.className = 'visualization-item';
-                        vizItem.style.gridColumn = 'span 2';
-                        vizItem.innerHTML = `
-                            <div class="viz-header">
-                                <h3>📈 Time Series Analysis</h3>
-                                <span class="viz-badge">Population Dynamics</span>
-                            </div>
-                            <img src="data:image/png;base64,${lastResult.time_series_visualizations.enhanced_time_series}" 
-                                alt="Time Series Analysis" 
-                                class="analysis-image"
-                                onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                            <div class="image-error" style="display:none;">❌ Time series visualization failed to load</div>
-                        `;
-                        container.appendChild(vizItem);
-                        hasTimeSeriesVisualizations = true;
-                    }
-                    
-                    if (lastResult.time_series_visualizations.growth_analysis) {
-                        const vizItem = document.createElement('div');
-                        vizItem.className = 'visualization-item';
-                        vizItem.innerHTML = `
-                            <div class="viz-header">
-                                <h3>📊 Growth Rate Analysis</h3>
-                                <span class="viz-badge">Growth Metrics</span>
-                            </div>
-                            <img src="data:image/png;base64,${lastResult.time_series_visualizations.growth_analysis}" 
-                                alt="Growth Rate Analysis" 
-                                class="analysis-image"
-                                onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                            <div class="image-error" style="display:none;">❌ Growth analysis visualization failed to load</div>
-                        `;
-                        container.appendChild(vizItem);
-                        hasTimeSeriesVisualizations = true;
-                    }
-                }
-                
-                // Create basic time series analysis from available data
-                if (!hasTimeSeriesVisualizations) {
-                    console.log('📊 Creating basic time series analysis from available data');
-                    createBasicTimeSeriesAnalysis(results, container);
-                }
-                
-                // Display population dynamics if available
-                if (lastResult && lastResult.population_dynamics) {
-                    displayPopulationDynamics(lastResult.population_dynamics, container);
-                } else {
-                    // Create basic population metrics from results
-                    createBasicPopulationMetrics(results, container);
-                }
-                
-                console.log('✅ Time series display completed');
-                
-            } catch (error) {
-                console.error('❌ Error in displayTimeSeries:', error);
-                container.innerHTML = `
-                    <div class="error-message">
-                        <h3>❌ Time Series Display Error</h3>
-                        <p>Failed to display time series analysis: ${error.message}</p>
-                        <p>Check console for details.</p>
-                    </div>
-                `;
+            if (currentProgress) {
+                currentProgress.textContent = completed;
             }
         }
 
-        // NEW: Create basic time series analysis when advanced visualizations aren't available
-        function createBasicTimeSeriesAnalysis(results, container) {
-            const timeSeriesData = [];
+        function analyzeFile(file, onComplete) {
+            const statusElement = document.getElementById(`status-${file.id}`);
+            const progressElement = document.getElementById(`progress-${file.id}`);
             
-            results.forEach((result, index) => {
-                if (result.success) {
-                    const cellCount = result.cells?.length || result.summary?.total_cells_detected || 0;
-                    const greenCells = result.summary?.total_green_cells || 0;
-                    const biomass = result.summary?.total_biomass || 0;
-                    
-                    timeSeriesData.push({
-                        timepoint: index + 1,
-                        timestamp: result.timestamp || `T${index + 1}`,
-                        cellCount: cellCount,
-                        greenCells: greenCells,
-                        biomass: biomass
-                    });
-                }
-            });
-            
-            if (timeSeriesData.length > 0) {
-                const analysisDiv = document.createElement('div');
-                analysisDiv.className = 'visualization-item time-series-basic';
-                analysisDiv.style.gridColumn = 'span 2';
-                
-                // Create table of time series data
-                let tableHTML = `
-                    <div class="viz-header">
-                        <h3>📈 Time Series Data Summary</h3>
-                        <span class="viz-badge">Basic Analysis</span>
-                    </div>
-                    <div class="time-series-table-container">
-                        <table class="time-series-table">
-                            <thead>
-                                <tr>
-                                    <th>Time Point</th>
-                                    <th>Total Cells</th>
-                                    <th>Green Cells</th>
-                                    <th>Biomass (μg)</th>
-                                    <th>Change from Previous</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                
-                timeSeriesData.forEach((data, index) => {
-                    const prevData = index > 0 ? timeSeriesData[index - 1] : null;
-                    const cellChange = prevData ? data.cellCount - prevData.cellCount : 0;
-                    const changeClass = cellChange > 0 ? 'trend-improving' : (cellChange < 0 ? 'trend-declining' : 'trend-stable');
-                    const changeSymbol = cellChange > 0 ? '↗️' : (cellChange < 0 ? '↘️' : '➡️');
-                    
-                    tableHTML += `
-                        <tr>
-                            <td><strong>${data.timestamp}</strong></td>
-                            <td>${data.cellCount}</td>
-                            <td>${data.greenCells}</td>
-                            <td>${data.biomass.toFixed(3)}</td>
-                            <td class="${changeClass}">
-                                ${index === 0 ? 'Baseline' : `${changeSymbol} ${cellChange > 0 ? '+' : ''}${cellChange}`}
-                            </td>
-                        </tr>
-                    `;
-                });
-                
-                tableHTML += '</tbody></table></div>';
-                analysisDiv.innerHTML = tableHTML;
-                container.appendChild(analysisDiv);
-            }
-        }
+            statusElement.textContent = 'Starting analysis...';
+            progressElement.style.width = '10%';
 
-        // NEW: Display population dynamics
-        function displayPopulationDynamics(populationDynamics, container) {
-            const pd = populationDynamics;
-            const metricsDiv = document.createElement('div');
-            metricsDiv.className = 'visualization-item population-dynamics';
-            metricsDiv.innerHTML = `
-                <div class="viz-header">
-                    <h3>🧬 Population Dynamics</h3>
-                    <span class="viz-badge">Advanced Metrics</span>
-                </div>
-                <div class="population-metrics">
-                    <div class="metric-row">
-                        <span class="metric-label">Cell Growth Rate:</span>
-                        <span class="metric-value">${pd.growth_analysis?.cell_count_growth_rate?.toFixed(3) || 'N/A'}</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Biomass Growth Rate:</span>
-                        <span class="metric-value">${pd.growth_analysis?.biomass_growth_rate?.toFixed(3) || 'N/A'}</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Doubling Time (cells):</span>
-                        <span class="metric-value">${pd.growth_analysis?.doubling_time_cells?.toFixed(1) || 'N/A'} time units</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Doubling Time (biomass):</span>
-                        <span class="metric-value">${pd.growth_analysis?.doubling_time_biomass?.toFixed(1) || 'N/A'} time units</span>
-                    </div>
-                </div>
-            `;
-            container.appendChild(metricsDiv);
-        }
+            // Get analysis options
+            const useTophat = document.getElementById('useTophat').checked;
+            const useCellDetection = document.getElementById('useCellDetection').checked;
 
-        // NEW: Create basic population metrics when advanced analysis isn't available
-        function createBasicPopulationMetrics(results, container) {
-            if (results.length < 2) return;
-            
-            const firstResult = results[0];
-            const lastResult = results[results.length - 1];
-            
-            const initialCells = firstResult.cells?.length || firstResult.summary?.total_cells_detected || 0;
-            const finalCells = lastResult.cells?.length || lastResult.summary?.total_cells_detected || 0;
-            const initialBiomass = firstResult.summary?.total_biomass || 0;
-            const finalBiomass = lastResult.summary?.total_biomass || 0;
-            
-            const cellChange = finalCells - initialCells;
-            const cellChangePercent = initialCells > 0 ? ((cellChange / initialCells) * 100) : 0;
-            const biomassChange = finalBiomass - initialBiomass;
-            const biomassChangePercent = initialBiomass > 0 ? ((biomassChange / initialBiomass) * 100) : 0;
-            
-            const metricsDiv = document.createElement('div');
-            metricsDiv.className = 'visualization-item basic-metrics';
-            metricsDiv.innerHTML = `
-                <div class="viz-header">
-                    <h3>📊 Growth Summary</h3>
-                    <span class="viz-badge">Basic Metrics</span>
-                </div>
-                <div class="growth-summary">
-                    <div class="growth-metric">
-                        <h4>Cell Count Change</h4>
-                        <p class="change-value ${cellChange >= 0 ? 'positive' : 'negative'}">
-                            ${cellChange >= 0 ? '+' : ''}${cellChange} cells (${cellChangePercent.toFixed(1)}%)
-                        </p>
-                        <small>From ${initialCells} to ${finalCells} cells</small>
-                    </div>
-                    <div class="growth-metric">
-                        <h4>Biomass Change</h4>
-                        <p class="change-value ${biomassChange >= 0 ? 'positive' : 'negative'}">
-                            ${biomassChange >= 0 ? '+' : ''}${biomassChange.toFixed(3)} μg (${biomassChangePercent.toFixed(1)}%)
-                        </p>
-                        <small>From ${initialBiomass.toFixed(3)} to ${finalBiomass.toFixed(3)} μg</small>
-                    </div>
-                </div>
-            `;
-            container.appendChild(metricsDiv);
-        }
-                
-        function showTab(tabName) {
-            console.log('🎯 Switching to tab:', tabName);
-            
-            // Hide all tab contents
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-                tab.style.display = 'none';
-            });
-            
-            // Remove active class from all buttons
-            document.querySelectorAll('.tab-button').forEach(button => {
-                button.classList.remove('active');
-            });
-
-            // Handle different tab naming conventions and show the correct tab
-            let tabId, buttonId;
-            
-            switch(tabName) {
-                case 'visualizations':
-                    tabId = 'visualizationsTab';
-                    buttonId = 0; // First button
-                    break;
-                case 'cellData':
-                    tabId = 'cellDataTab';
-                    buttonId = 1; // Second button
-                    break;
-                case 'timeSeries':
-                    tabId = 'timeSeriesTab';
-                    buttonId = 2; // Third button
-                    break;
-                case 'tophat':
-                    tabId = 'tophatTabContent';
-                    buttonId = 3; // Fourth button
-                    break;
-                default:
-                    console.warn('Unknown tab:', tabName);
-                    return;
-            }
-            
-            const targetTab = document.getElementById(tabId);
-            if (targetTab) {
-                targetTab.classList.add('active');
-                targetTab.style.display = 'block';
-                console.log('✅ Showed tab:', tabId);
-            } else {
-                console.error('❌ Tab not found:', tabId);
-                return;
-            }
-            
-            // Activate the corresponding button
-            const buttons = document.querySelectorAll('.tab-button');
-            if (buttons[buttonId]) {
-                buttons[buttonId].classList.add('active');
-            }
-            
-            // Initialize tophat training if needed
-            if (tabName === 'tophat') {
-                initializeTophatTraining();
-            }
-        }
-
-
-
-
-        async function updateParameters() {
-            const pixelToMicron = parseFloat(document.getElementById('pixelToMicron').value);
-            const chlorophyllThreshold = parseFloat(document.getElementById('chlorophyllThreshold').value);
-            
-            // Get professional parameters if available
-            const params = {
-                pixel_to_micron: pixelToMicron,
-                chlorophyll_threshold: chlorophyllThreshold
-            };
-            
-            // Add professional parameters if elements exist
-            const diameterInput = document.getElementById('segmentationDiameter');
-            const flowThresholdInput = document.getElementById('flowThreshold');
-            const minAreaInput = document.getElementById('minAreaMicrons');
-            const maxAreaInput = document.getElementById('maxAreaMicrons');
-            
-            if (diameterInput) params.diameter = parseFloat(diameterInput.value);
-            if (flowThresholdInput) params.flow_threshold = parseFloat(flowThresholdInput.value);
-            if (minAreaInput) params.min_area_microns = parseFloat(minAreaInput.value);
-            if (maxAreaInput) params.max_area_microns = parseFloat(maxAreaInput.value);
-            
-            try {
-                const response = await fetch('/api/set_parameters', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(params)
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    showNotification('Parameters updated successfully', 'success');
-                    // Show professional features if available
-                    if (result.enhanced_features) {
-                        document.getElementById('professionalParams').style.display = 'block';
-                    }
-                } else {
-                    showNotification('Failed to update parameters', 'error');
-                }
-            } catch (error) {
-                showNotification('Error updating parameters: ' + error.message, 'error');
-            }
-        }
-        
-        async function loadParameters() {
-            try {
-                const response = await fetch('/api/get_parameters');
-                const result = await response.json();
-                
-                if (result.success) {
-                    const params = result.parameters;
-                    
-                    // Update basic parameters
-                    document.getElementById('pixelToMicron').value = params.pixel_to_micron || 0.5;
-                    document.getElementById('chlorophyllThreshold').value = params.chlorophyll_threshold || 0.6;
-                    
-                    // Update professional parameters if available
-                    if (params.wolffia_params) {
-                        const wolffiaParams = params.wolffia_params;
-                        
-                        const diameterInput = document.getElementById('segmentationDiameter');
-                        const flowThresholdInput = document.getElementById('flowThreshold');
-                        const minAreaInput = document.getElementById('minAreaMicrons');
-                        const maxAreaInput = document.getElementById('maxAreaMicrons');
-                        
-                        if (diameterInput) diameterInput.value = wolffiaParams.diameter || 30;
-                        if (flowThresholdInput) flowThresholdInput.value = wolffiaParams.flow_threshold || 0.4;
-                        if (minAreaInput) minAreaInput.value = wolffiaParams.min_area_microns || 30;
-                        if (maxAreaInput) maxAreaInput.value = wolffiaParams.max_area_microns || 10000;
-                    }
-                    
-                    // Show professional parameters if enhanced features are available
-                    if (result.enhanced_features) {
-                        document.getElementById('professionalParams').style.display = 'block';
-                    }
-                    
-                    showNotification('Parameters loaded successfully', 'success');
-                } else {
-                    showNotification('Failed to load parameters', 'error');
-                }
-            } catch (error) {
-                showNotification('Error loading parameters: ' + error.message, 'error');
-            }
-        }
-        
-        function resetToDefaults() {
-            document.getElementById('pixelToMicron').value = 0.5;
-            document.getElementById('chlorophyllThreshold').value = 0.6;
-            
-            const diameterInput = document.getElementById('segmentationDiameter');
-            const flowThresholdInput = document.getElementById('flowThreshold');
-            const minAreaInput = document.getElementById('minAreaMicrons');
-            const maxAreaInput = document.getElementById('maxAreaMicrons');
-            
-            if (diameterInput) diameterInput.value = 30;
-            if (flowThresholdInput) flowThresholdInput.value = 0.4;
-            if (minAreaInput) minAreaInput.value = 30;
-            if (maxAreaInput) maxAreaInput.value = 10000;
-            
-            showNotification('Parameters reset to defaults', 'info');
-        }
-        
-        function showNotification(message, type = 'info') {
-            // Create notification element
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            
-            // Style the notification
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 12px 24px;
-                border-radius: 4px;
-                color: white;
-                font-weight: 500;
-                z-index: 1000;
-                transition: opacity 0.3s ease;
-            `;
-            
-            // Set color based on type
-            switch(type) {
-                case 'success': notification.style.backgroundColor = '#4CAF50'; break;
-                case 'error': notification.style.backgroundColor = '#f44336'; break;
-                case 'warning': notification.style.backgroundColor = '#ff9800'; break;
-                default: notification.style.backgroundColor = '#2196F3';
-            }
-            
-            document.body.appendChild(notification);
-            
-            // Auto-remove after 3 seconds
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                setTimeout(() => document.body.removeChild(notification), 300);
-            }, 3000);
-        }
-        
-        function showCalibrationDialog() {
-            const pixelsInput = prompt('Enter known distance in pixels:');
-            const micronsInput = prompt('Enter known distance in microns:');
-            
-            if (pixelsInput && micronsInput) {
-                calibrateSystem(parseFloat(pixelsInput), parseFloat(micronsInput));
-            }
-        }
-        
-        async function calibrateSystem(pixels, microns) {
-            try {
-                const response = await fetch('/api/calibrate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        known_distance_pixels: pixels,
-                        known_distance_microns: microns
-                    })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    document.getElementById('pixelToMicron').value = result.pixel_to_micron_ratio.toFixed(4);
-                    alert(result.message);
-                } else {
-                    alert('Calibration failed');
-                }
-            } catch (error) {
-                alert('Error during calibration: ' + error.message);
-            }
-        }
-        
-        async function exportResults(format) {
-            if (!currentAnalysisId) return;
-            
-            try {
-                const response = await fetch(`/api/export/${currentAnalysisId}/${format}`);
-                
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `wolffia_analysis.${format === 'zip' ? 'zip' : format}`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                } else {
-                    alert('Export failed');
-                }
-            } catch (error) {
-                alert('Error exporting results: ' + error.message);
-            }
-        }
-        
-        
-function displayComparisonResults(comparisons) {
-    const container = document.getElementById('comparisonResults');
-    container.innerHTML = '<h3>Cell Tracking Results</h3>';
-
-    if (!Array.isArray(comparisons)) {
-        console.warn("Expected array of comparisons:", comparisons);
-        return;
-    }
-
-    comparisons.forEach(comparison => {
-        const section = document.createElement('div');
-        section.className = 'comparison-section';
-        section.innerHTML = `
-            <h4>${comparison.from ?? 'T1'} → ${comparison.to ?? 'T2'}</h4>
-            <p>Matched cells: ${comparison.matched_cells ?? 0}</p>
-        `;
-
-        if (Array.isArray(comparison.matches) && comparison.matches.length > 0) {
-            const table = document.createElement('table');
-            table.className = 'cell-table';
-            table.innerHTML = `
-                <thead>
-                    <tr>
-                        <th>Cell ID (T1)</th>
-                        <th>Cell ID (T2)</th>
-                        <th>Area Change (μm²)</th>
-                        <th>Chlorophyll Change</th>
-                        <th>Biomass Change (μg)</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            `;
-
-            const tbody = table.querySelector('tbody');
-            comparison.matches.forEach(match => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${match.cell_id_1 ?? 'N/A'}</td>
-                    <td>${match.cell_id_2 ?? 'N/A'}</td>
-                    <td>${(match.area_change ?? 0).toFixed(2)}</td>
-                    <td>${(match.chlorophyll_change ?? 0).toFixed(3)}</td>
-                    <td>${(match.biomass_change ?? 0).toFixed(3)}</td>
-                `;
-                tbody.appendChild(row);
-            });
-
-            section.appendChild(table);
-        }
-
-        container.appendChild(section);
-    });
-}
-
-
-        
-        // Add styles for health status
-        const style = document.createElement('style');
-        style.textContent = `
-            .health-healthy { color: green; font-weight: bold; }
-            .health-moderate { color: orange; font-weight: bold; }
-            .health-stressed { color: red; font-weight: bold; }
-            
-            .comparison-section {
-                margin: 20px 0;
-                padding: 15px;
-                background: #f5f5f5;
-                border-radius: 8px;
-            }
-            
-            .file-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 10px;
-                margin: 5px 0;
-                background: #f0f0f0;
-                border-radius: 5px;
-            }
-            
-            .file-item button {
-                background: #ff4444;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                cursor: pointer;
-            }
-            
-            .file-item button:hover {
-                background: #cc0000;
-            }
-        `;
-        document.head.appendChild(style);
-
-
-// Professional Pipeline Initialization
-let pipelineStatus = {
-    initialized: false,
-    modules: {}
-};
-
-// Initialize professional pipeline status on page load
-document.addEventListener('DOMContentLoaded', function() {
-    checkProfessionalPipelineStatus();
-    loadParameters(); // Load current parameters
-    setInterval(updatePipelineDisplay, 30000); // Update every 30 seconds
-});
-
-async function checkProfessionalPipelineStatus() {
-    try {
-        const response = await fetch('/api/health_check');
-        const data = await response.json();
-        
-        if (data.status === 'healthy') {
-            pipelineStatus.initialized = true;
-            pipelineStatus.modules = data.modules_status || {};
-            
-            updatePipelineDisplay(data);
-            
-            // Check if tophat training is available
-            if (data.tophat_training && data.tophat_training.available) {
-                document.getElementById('tophatTab').style.display = 'block';
-                updateTophatStatus(data.tophat_training);
-            }
-        } else {
-            console.error('Pipeline health check failed:', data);
-        }
-    } catch (error) {
-        console.error('Error checking pipeline status:', error);
-        updatePipelineDisplay({ status: 'error', error: error.message });
-    }
-}
-
-function updatePipelineDisplay(data) {
-    const statusBadge = document.getElementById('statusBadge');
-    const pipelineModules = document.getElementById('pipelineModules');
-    
-    if (data && data.status === 'healthy') {
-        statusBadge.innerHTML = '✅ Professional Pipeline Ready';
-        statusBadge.className = 'status-badge status-ready';
-        
-        // Update module statuses
-        if (data.modules_status) {
-            Object.entries(data.modules_status).forEach(([module, status]) => {
-                const moduleElement = document.getElementById(`${module}Status`);
-                if (moduleElement) {
-                    moduleElement.textContent = status;
-                    moduleElement.className = status.includes('✅') ? 'status-ready' : 'status-fallback';
-                }
-            });
-        }
-        
-        pipelineModules.style.display = 'block';
-        
-        // Add pipeline info to status badge
-        if (data.pipeline) {
-            statusBadge.title = `Pipeline: ${data.pipeline} | Version: ${data.version}`;
-        }
-        
-    } else {
-        statusBadge.innerHTML = '❌ Pipeline Error';
-        statusBadge.className = 'status-badge status-error';
-        
-        if (data && data.error) {
-            statusBadge.title = `Error: ${data.error}`;
-        }
-    }
-}
-
-// Manual annotation functions (kept for backward compatibility)
-let annotations = [];
-let currentImage = null;
-
-function initAnnotationCanvas(imageUrl) {
-    const canvas = document.getElementById('annotationCanvas');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-    
-    img.onload = function() {
-        currentImage = img;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    };
-    img.src = imageUrl;
-    
-    canvas.addEventListener('click', function(e) {
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        const cellTypeSelect = document.getElementById('cellTypeSelect');
-        const cellType = cellTypeSelect ? cellTypeSelect.value : 'unknown';
-        
-        annotations.push({
-            x: x,
-            y: y,
-            type: cellType,
-            timestamp: new Date().toISOString()
-        });
-        
-        // Draw annotation
-        ctx.beginPath();
-        ctx.arc(x, y, 10, 0, 2 * Math.PI);
-        ctx.strokeStyle = getColorForType(cellType);
-        ctx.lineWidth = 2;
-        ctx.stroke();
-    });
-}
-
-function getColorForType(type) {
-    const colors = {
-        'healthy': '#4CAF50',
-        'stressed': '#FF9800',
-        'dying': '#F44336',
-        'unknown': '#9E9E9E'
-    };
-    return colors[type] || colors.unknown;
-}
-
-// ================ TOPHAT TRAINING FUNCTIONALITY ================
-
-let selectedImageForTraining = null;
-let currentAnnotations = [];
-let annotationMode = 'positive'; // 'positive' or 'negative'
-let isDrawing = false;
-let startX, startY;
-let canvas, ctx;
-
-function initializeTophatTraining() {
-    console.log('Initializing tophat training...');
-    
-    // Initialize canvas
-    canvas = document.getElementById('trainingCanvas');
-    if (canvas) {
-        ctx = canvas.getContext('2d');
-        setupCanvasEvents();
-    }
-    
-    // Setup event listeners
-    setupTophatEventListeners();
-    
-    // Load training status
-    loadTophatStatus();
-    
-    // Populate image selector
-    populateImageSelector();
-}
-
-function setupTophatEventListeners() {
-    // Tool buttons
-    document.getElementById('positiveToolBtn')?.addEventListener('click', () => setAnnotationMode('positive'));
-    document.getElementById('negativeToolBtn')?.addEventListener('click', () => setAnnotationMode('negative'));
-    document.getElementById('panToolBtn')?.addEventListener('click', () => setAnnotationMode('pan'));
-    
-    // Action buttons
-    document.getElementById('undoAnnotation')?.addEventListener('click', undoLastAnnotation);
-    document.getElementById('clearAllAnnotations')?.addEventListener('click', clearAllAnnotations);
-    document.getElementById('saveTrainingData')?.addEventListener('click', saveTrainingData);
-    document.getElementById('applyTrainingBtn')?.addEventListener('click', applyTophatTraining);
-    
-    // Image selector
-    document.getElementById('tophatImageSelect')?.addEventListener('change', loadSelectedImage);
-}
-
-function setupCanvasEvents() {
-    if (!canvas) return;
-    
-    canvas.addEventListener('mousedown', startDrawing);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseleave', stopDrawing);
-}
-
-function setAnnotationMode(mode) {
-    annotationMode = mode;
-    
-    // Update tool button styles
-    document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-    
-    if (mode === 'positive') {
-        document.getElementById('positiveToolBtn').classList.add('active');
-        canvas.style.cursor = 'crosshair';
-    } else if (mode === 'negative') {
-        document.getElementById('negativeToolBtn').classList.add('active');
-        canvas.style.cursor = 'crosshair';
-    } else if (mode === 'pan') {
-        document.getElementById('panToolBtn').classList.add('active');
-        canvas.style.cursor = 'move';
-    }
-}
-
-// Helper functions for coordinate transformation
-function canvasToImageCoords(canvasX, canvasY) {
-    if (!canvas.scaleX || !canvas.scaleY) {
-        // Fallback if scaling info not available
-        return { x: canvasX, y: canvasY };
-    }
-    
-    const imageX = (canvasX - (canvas.offsetX || 0)) / (canvas.scaleX || 1);
-    const imageY = (canvasY - (canvas.offsetY || 0)) / (canvas.scaleY || 1);
-    
-    return { x: Math.max(0, imageX), y: Math.max(0, imageY) };
-}
-
-function imageToCanvasCoords(imageX, imageY) {
-    if (!canvas.scaleX || !canvas.scaleY) {
-        // Fallback if scaling info not available
-        return { x: imageX, y: imageY };
-    }
-    
-    const canvasX = imageX * (canvas.scaleX || 1) + (canvas.offsetX || 0);
-    const canvasY = imageY * (canvas.scaleY || 1) + (canvas.offsetY || 0);
-    
-    return { x: canvasX, y: canvasY };
-}
-
-function startDrawing(e) {
-    if (annotationMode === 'pan') return;
-    
-    isDrawing = true;
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = e.clientX - rect.left;
-    const canvasY = e.clientY - rect.top;
-    
-    // Convert to image coordinates for consistent annotation storage
-    const imageCoords = canvasToImageCoords(canvasX, canvasY);
-    startX = imageCoords.x;
-    startY = imageCoords.y;
-}
-
-function draw(e) {
-    if (!isDrawing || annotationMode === 'pan') return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = e.clientX - rect.left;
-    const canvasY = e.clientY - rect.top;
-    
-    // Clear canvas and redraw image + existing annotations
-    redrawCanvas();
-    
-    // Convert image coordinates back to canvas coordinates for drawing
-    const startCanvas = imageToCanvasCoords(startX, startY);
-    
-    // Draw current annotation preview
-    ctx.strokeStyle = annotationMode === 'positive' ? '#4CAF50' : '#f44336';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(startCanvas.x, startCanvas.y, canvasX - startCanvas.x, canvasY - startCanvas.y);
-}
-
-function stopDrawing(e) {
-    if (!isDrawing) return;
-    
-    isDrawing = false;
-    
-    if (annotationMode === 'pan') return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const canvasX = e.clientX - rect.left;
-    const canvasY = e.clientY - rect.top;
-    
-    // Convert to image coordinates
-    const endImageCoords = canvasToImageCoords(canvasX, canvasY);
-    const endX = endImageCoords.x;
-    const endY = endImageCoords.y;
-    
-    // Calculate annotation rectangle in image coordinates
-    const annotation = {
-        type: annotationMode,
-        x: Math.min(startX, endX),
-        y: Math.min(startY, endY),
-        width: Math.abs(endX - startX),
-        height: Math.abs(endY - startY),
-        timestamp: Date.now()
-    };
-    
-    // Only add if rectangle is large enough (check in canvas coordinates for user experience)
-    const startCanvas = imageToCanvasCoords(startX, startY);
-    const endCanvas = imageToCanvasCoords(endX, endY);
-    const canvasWidth = Math.abs(endCanvas.x - startCanvas.x);
-    const canvasHeight = Math.abs(endCanvas.y - startCanvas.y);
-    
-    if (canvasWidth > 5 && canvasHeight > 5) {
-        currentAnnotations.push(annotation);
-        updateAnnotationCounts();
-        redrawCanvas();
-    }
-}
-
-// FIXED: Enhanced image loading for tophat training
-function redrawCanvas() {
-    if (!canvas || !ctx || !selectedImageForTraining) return;
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    const img = new Image();
-    img.onload = function() {
-        // Calculate scaling to fit canvas while maintaining aspect ratio
-        const canvasAspect = canvas.width / canvas.height;
-        const imageAspect = img.width / img.height;
-        
-        let drawWidth, drawHeight;
-        if (imageAspect > canvasAspect) {
-            drawWidth = canvas.width;
-            drawHeight = canvas.width / imageAspect;
-        } else {
-            drawHeight = canvas.height;
-            drawWidth = canvas.height * imageAspect;
-        }
-        
-        const offsetX = (canvas.width - drawWidth) / 2;
-        const offsetY = (canvas.height - drawHeight) / 2;
-        
-        // Draw the original image
-        ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-        
-        // Store scaling factors for annotation conversion
-        canvas.scaleX = drawWidth / img.width;
-        canvas.scaleY = drawHeight / img.height;
-        canvas.offsetX = offsetX;
-        canvas.offsetY = offsetY;
-        
-        // Draw all annotations scaled appropriately
-        currentAnnotations.forEach(annotation => {
-            ctx.strokeStyle = annotation.type === 'positive' ? '#4CAF50' : '#f44336';
-            ctx.lineWidth = 3;
-            
-            // Convert image coordinates to canvas coordinates
-            const topLeft = imageToCanvasCoords(annotation.x, annotation.y);
-            const bottomRight = imageToCanvasCoords(annotation.x + annotation.width, annotation.y + annotation.height);
-            
-            const scaledX = topLeft.x;
-            const scaledY = topLeft.y;
-            const scaledWidth = bottomRight.x - topLeft.x;
-            const scaledHeight = bottomRight.y - topLeft.y;
-            
-            ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
-            
-            // Add semi-transparent fill
-            ctx.fillStyle = annotation.type === 'positive' ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)';
-            ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
-        });
-        
-        console.log('✅ Canvas redrawn with image and annotations');
-    };
-    
-    img.onerror = function() {
-        console.error('Failed to load image for tophat training');
-        console.error('Attempted URL:', img.src);
-        console.error('Selected training image:', selectedImageForTraining);
-        
-        // Draw error message
-        ctx.fillStyle = '#ff0000';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Failed to load image', canvas.width/2, canvas.height/2);
-        ctx.fillText('Check console for details', canvas.width/2, canvas.height/2 + 25);
-    };
-    
-    // ENHANCED: Multiple strategies to find the correct image URL with validation
-    console.log('🖼️ Loading image for tophat training...', selectedImageForTraining);
-    
-    const imageStrategies = [
-        // Strategy 1: Use web_image_url if available
-        () => {
-            if (selectedImageForTraining.web_image_url) {
-                console.log('📍 Strategy 1: Using web_image_url:', selectedImageForTraining.web_image_url);
-                return selectedImageForTraining.web_image_url;
-            }
-            return null;
-        },
-        
-        // Strategy 2: Use image_filename if available
-        () => {
-            if (selectedImageForTraining.image_filename) {
-                const url = `/uploads/${selectedImageForTraining.image_filename}`;
-                console.log('📍 Strategy 2: Using image_filename:', url);
-                return url;
-            }
-            return null;
-        },
-        
-        // Strategy 3: Extract filename from image_path
-        () => {
-            if (selectedImageForTraining.image_path) {
-                const imagePath = selectedImageForTraining.image_path;
-                const filename = imagePath.split('/').pop().split('\\').pop();
-                const url = `/uploads/${filename}`;
-                console.log('📍 Strategy 3: Extracted from path:', filename, '-> URL:', url);
-                return url;
-            }
-            return null;
-        },
-        
-        // Strategy 4: Try using analysis_id to find image
-        () => {
-            if (selectedImageForTraining.analysis_id || currentAnalysisId) {
-                const id = selectedImageForTraining.analysis_id || currentAnalysisId;
-                const url = `/api/get_image/${id}`;
-                console.log('📍 Strategy 4: Using analysis ID:', url);
-                return url;
-            }
-            return null;
-        },
-        
-        // Strategy 5: Try finding the image in current uploads
-        () => {
-            // If we have a timestamp, try to construct a likely filename
-            if (selectedImageForTraining.timestamp && selectedImageForTraining.image_path) {
-                const originalName = selectedImageForTraining.image_path.split('/').pop().split('\\').pop();
-                const timestampStr = new Date(selectedImageForTraining.timestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                const url = `/uploads/${timestampStr}_${originalName}`;
-                console.log('📍 Strategy 5: Using timestamp:', url);
-                return url;
-            }
-            return null;
-        }
-    ];
-    
-    // Try each strategy sequentially
-    let imageUrl = null;
-    for (let i = 0; i < imageStrategies.length; i++) {
-        imageUrl = imageStrategies[i]();
-        if (imageUrl) break;
-    }
-    
-    if (!imageUrl) {
-        console.error('❌ No image path information available after trying all strategies!');
-        console.error('selectedImageForTraining object:', selectedImageForTraining);
-        
-        // Try to get available files and suggest alternatives
-        fetch('/api/debug/uploads')
+            // Start analysis with options
+            fetch(`/api/analyze/${file.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    files: [file],
+                    use_tophat: useTophat,
+                    use_celldetection: useCellDetection  // NEW option
+                })
+            })
             .then(response => response.json())
             .then(data => {
-                console.log('📁 Available uploaded files:', data);
-                
-                // Try to find a matching file
-                if (data.files && selectedImageForTraining.image_path) {
-                    const originalName = selectedImageForTraining.image_path.split('/').pop().split('\\').pop();
-                    const matchingFile = data.files.find(file => file.includes(originalName));
-                    if (matchingFile) {
-                        console.log('🎯 Found matching file:', matchingFile);
-                        const fallbackUrl = `/uploads/${matchingFile}`;
-                        console.log('🔄 Retrying with fallback URL:', fallbackUrl);
-                        img.src = fallbackUrl;
-                        return;
-                    }
+                if (data.success) {
+                    pollAnalysisStatus(file.id, file.filename, onComplete);
+                } else {
+                    statusElement.textContent = 'Analysis failed: ' + data.error;
+                    statusElement.style.color = 'red';
+                    if (onComplete) onComplete();
                 }
-                
-                // Show error message on canvas
-                ctx.fillStyle = '#ff0000';
-                ctx.font = '16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('Image not found', canvas.width/2, canvas.height/2);
-                ctx.fillText('Check browser console for details', canvas.width/2, canvas.height/2 + 25);
             })
-            .catch(err => {
-                console.error('Failed to get debug info:', err);
-                // Show error message on canvas
-                ctx.fillStyle = '#ff0000';
-                ctx.font = '16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('Image not available', canvas.width/2, canvas.height/2);
+            .catch(error => {
+                console.error('Analysis error:', error);
+                statusElement.textContent = 'Analysis failed';
+                statusElement.style.color = 'red';
+                if (onComplete) onComplete();
             });
-        
-        return;
-    }
-    
-    console.log('🖼️ Loading image from:', imageUrl);
-    
-    // Validate URL before loading
-    fetch(imageUrl, { method: 'HEAD' })
-        .then(response => {
-            if (response.ok) {
-                console.log('✅ Image URL validated, loading...');
-                img.src = imageUrl;
-            } else {
-                console.warn('⚠️ Image URL returned status:', response.status, 'trying direct load...');
-                img.src = imageUrl; // Try anyway, might work
-            }
-        })
-        .catch(err => {
-            console.warn('⚠️ Could not validate image URL, trying direct load...', err);
-            img.src = imageUrl; // Try anyway
-        });
-}
+        }
 
-// ENHANCED: Better image selection with debugging
-function loadSelectedImage() {
-    const selector = document.getElementById('tophatImageSelect');
-    const index = parseInt(selector.value);
-    
-    if (isNaN(index) || !currentAnalysisResults?.results?.[index]) {
-        document.getElementById('annotationInterface').style.display = 'none';
-        return;
-    }
-    
-    selectedImageForTraining = currentAnalysisResults.results[index];
-    currentAnnotations = [];
-    
-    console.log('🎯 Selected image for training:', selectedImageForTraining);
-    
-    // Show annotation interface
-    document.getElementById('annotationInterface').style.display = 'block';
-    
-    // Setup canvas
-    if (canvas) {
-        canvas.width = 800;
-        canvas.height = 600;
-        
-        // Debug: Check if we have proper image information
-        console.log('Image path info:');
-        console.log('- image_path:', selectedImageForTraining.image_path);
-        console.log('- image_filename:', selectedImageForTraining.image_filename);
-        console.log('- web_image_url:', selectedImageForTraining.web_image_url);
-        
-        redrawCanvas();
-    }
-    
-    updateAnnotationCounts();
-}
+        function pollAnalysisStatus(analysisId, filename, onComplete) {
+            const statusElement = document.getElementById(`status-${analysisId}`);
+            const progressElement = document.getElementById(`progress-${analysisId}`);
 
-// ENHANCED: Better image selector population
-function populateImageSelector() {
-    const selector = document.getElementById('tophatImageSelect');
-    if (!selector || !currentAnalysisResults) return;
-    
-    // Clear existing options
-    selector.innerHTML = '<option value="">Choose an analyzed image...</option>';
-    
-    // Add options for each analyzed image
-    if (currentAnalysisResults.results) {
-        currentAnalysisResults.results.forEach((result, index) => {
-            if (result.success) {
-                const cellCount = result.cells?.length || 0;
-                const imageName = result.image_filename || 
-                                result.image_path?.split('/').pop() || 
-                                `Image ${index + 1}`;
+            const poll = () => {
+                fetch(`/api/status/${analysisId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        progressElement.style.width = data.progress + '%';
+                        
+                        if (data.status === 'completed') {
+                            statusElement.textContent = 'Analysis completed';
+                            statusElement.style.color = 'green';
+                            progressElement.style.width = '100%';
+                            displayResults(analysisId, filename, data.result);
+                            if (onComplete) onComplete();
+                        } else if (data.status === 'error') {
+                            statusElement.textContent = 'Analysis failed: ' + data.error;
+                            statusElement.style.color = 'red';
+                            if (onComplete) onComplete();
+                        } else {
+                            statusElement.textContent = 'Processing...';
+                            setTimeout(poll, 1000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Status check error:', error);
+                        statusElement.textContent = 'Status check failed';
+                        statusElement.style.color = 'red';
+                        if (onComplete) onComplete();
+                    });
+            };
+
+            poll();
+        }
+
+        function displayResults(analysisId, filename, result) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            // Create safe values with fallbacks
+            const cellsDetected = result.cells_detected || 0;
+            const totalArea = result.total_cell_area || 0;
+            const avgArea = result.average_cell_area || 0;
+            const processingTime = result.processing_time || 0;
+            
+            // Extract method information
+            let detectionMethods = [];
+            let primaryMethod = "Unknown";
+            
+            if (result.cells_data && result.cells_data.length > 0) {
+                // Analyze methods used
+                const methodCounts = {};
+                result.cells_data.forEach(cell => {
+                    const method = cell.method || 'unknown';
+                    methodCounts[method] = (methodCounts[method] || 0) + 1;
+                });
                 
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = `${imageName} (${cellCount} cells detected)`;
-                selector.appendChild(option);
+                // Find primary method (most cells)
+                primaryMethod = Object.keys(methodCounts).reduce((a, b) => 
+                    methodCounts[a] > methodCounts[b] ? a : b, 'unknown');
                 
-                console.log(`Added image option: ${imageName} with ${cellCount} cells`);
+                detectionMethods = Object.entries(methodCounts).map(([method, count]) => 
+                    `${method}: ${count} cells`);
             }
-        });
-    }
-}
-
-// Add debugging function to test image loading
-async function debugImageLoading() {
-    try {
-        console.log('🔍 Debugging image loading...');
-        
-        // Check uploads directory
-        const response = await fetch('/api/debug/uploads');
-        const data = await response.json();
-        
-        console.log('📂 Upload directory contents:', data);
-        
-        // Test loading each file
-        if (data.files && data.files.length > 0) {
-            const testFile = data.files[0];
-            const testUrl = `/uploads/${testFile.filename}`;
             
-            console.log(`🧪 Testing image load: ${testUrl}`);
+            // Enhanced metrics display
+            const enhancedMetrics = result.enhanced_metrics || {};
+            const biomassAnalysis = enhancedMetrics.biomass_analysis || {};
+            const colorAnalysis = enhancedMetrics.color_analysis || {};
             
-            const testImg = new Image();
-            testImg.onload = () => console.log('✅ Test image loaded successfully');
-            testImg.onerror = () => console.error('❌ Test image failed to load');
-            testImg.src = testUrl;
-        }
-        
-    } catch (error) {
-        console.error('❌ Debug failed:', error);
-    }
-}
-
-// Enhanced error handling for image display
-function displayResults(analysisResult) {
-    document.getElementById('analysisResults').style.display = 'block';
-    
-    // Store for tophat training
-    currentAnalysisResults = analysisResult;
-    
-    console.log('📊 Displaying results:', analysisResult);
-    
-    // Display summary statistics
-    displayStats(analysisResult.summary);
-    
-    // Display visualizations
-    displayVisualizations(analysisResult.results);
-    
-    // Display cell data table
-    displayCellTable(analysisResult.results);
-    
-    // FIXED: Show time series tab and display data for multiple images
-    if (analysisResult.results && analysisResult.results.length > 1) {
-        console.log('📈 Multiple images detected, showing time series tab');
-        document.getElementById('timeSeriesTab').style.display = 'block';
-        displayTimeSeries(analysisResult.results);
-    } else {
-        // Hide time series tab for single images
-        document.getElementById('timeSeriesTab').style.display = 'none';
-    }
-    
-    // Show tophat training tab and populate image selector
-    document.getElementById('tophatTab').style.display = 'block';
-    populateImageSelector();
-    
-    // Debug image paths
-    console.log('🔍 Analysis results for debugging:');
-    if (analysisResult.results) {
-        analysisResult.results.forEach((result, index) => {
-            console.log(`Result ${index}:`, {
-                image_path: result.image_path,
-                image_filename: result.image_filename,
-                web_image_url: result.web_image_url,
-                success: result.success,
-                cells_count: result.cells?.length || 0
-            });
-        });
-    }
-}
-
-function undoLastAnnotation() {
-    if (currentAnnotations.length > 0) {
-        currentAnnotations.pop();
-        updateAnnotationCounts();
-        redrawCanvas();
-        showNotification('Last annotation removed', 'info');
-    } else {
-        showNotification('No annotations to undo', 'warning');
-    }
-}
-
-function clearAllAnnotations() {
-    if (currentAnnotations.length > 0) {
-        currentAnnotations = [];
-        updateAnnotationCounts();
-        redrawCanvas();
-        showNotification('All annotations cleared', 'info');
-    } else {
-        showNotification('No annotations to clear', 'warning');
-    }
-}
-
-function updateAnnotationCounts() {
-    const positive = currentAnnotations.filter(a => a.type === 'positive').length;
-    const negative = currentAnnotations.filter(a => a.type === 'negative').length;
-    
-    document.getElementById('positiveCount').textContent = `Correct: ${positive}`;
-    document.getElementById('negativeCount').textContent = `Incorrect: ${negative}`;
-}
-
-function populateImageSelector() {
-    const selector = document.getElementById('tophatImageSelect');
-    if (!selector || !currentAnalysisResults) return;
-    
-    // Clear existing options
-    selector.innerHTML = '<option value="">Choose an analyzed image...</option>';
-    
-    // Add options for each analyzed image
-    if (currentAnalysisResults.results) {
-        currentAnalysisResults.results.forEach((result, index) => {
-            if (result.success) {
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = `Image ${index + 1} (${result.cells?.length || 0} cells detected)`;
-                selector.appendChild(option);
-            }
-        });
-    }
-}
-
-async function saveTrainingData() {
-    if (!selectedImageForTraining || currentAnnotations.length === 0) {
-        showNotification('Please create some annotations first', 'warning');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/tophat/save_annotations', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                analysis_id: currentAnalysisId,
-                image_path: selectedImageForTraining.image_path,
-                annotations: currentAnnotations
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`Saved ${currentAnnotations.length} annotations`, 'success');
-            updateTophatStatus(result.training_status);
-            currentAnnotations = []; // Clear annotations after saving
-            updateAnnotationCounts();
-            redrawCanvas();
-        } else {
-            showNotification('Failed to save annotations: ' + result.error, 'error');
-        }
-        
-    } catch (error) {
-        showNotification('Error saving annotations: ' + error.message, 'error');
-    }
-}
-
-async function applyTophatTraining() {
-    if (!currentAnalysisId) {
-        showNotification('No analysis results to improve', 'warning');
-        return;
-    }
-    
-    try {
-        showNotification('Applying tophat training...', 'info');
-        
-        const response = await fetch(`/api/tophat/apply_training/${currentAnalysisId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('Tophat training applied successfully!', 'success');
-            
-            // Update the current results with improved results
-            currentAnalysisResults = result.results;
-            
-            // Refresh the visualizations
-            if (currentAnalysisResults.results) {
-                displayVisualizations(currentAnalysisResults.results);
-                displayCellData(currentAnalysisResults.results);
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item';
+            resultItem.innerHTML = `
+                <h3>📄 ${filename}</h3>
                 
-                // Update summary stats
-                if (currentAnalysisResults.summary) {
-                    displaySummaryStats(currentAnalysisResults.summary);
-                }
-            }
-            
-            // Show improvement message
-            const improvedMessage = `Analysis improved! Check the Results Overview for updated cell detection.`;
-            showNotification(improvedMessage, 'success');
-            
-        } else {
-            showNotification('Failed to apply training: ' + result.error, 'error');
-        }
-        
-    } catch (error) {
-        showNotification('Error applying training: ' + error.message, 'error');
-    }
-}
-
-async function loadTophatStatus() {
-    try {
-        const response = await fetch('/api/tophat/status');
-        const result = await response.json();
-        
-        if (result.success) {
-            updateTophatStatus(result.status);
-        }
-    } catch (error) {
-        console.error('Error loading tophat status:', error);
-    }
-}
-
-function updateTophatStatus(status) {
-    if (!status) return;
-    
-    // Update annotation count
-    document.getElementById('totalAnnotations').textContent = status.num_annotations || 0;
-    
-    // Update model status
-    const modelStatusElement = document.getElementById('modelStatus');
-    if (status.model_trained) {
-        modelStatusElement.textContent = 'Trained & Ready';
-        modelStatusElement.style.color = '#4CAF50';
-    } else if (status.status === 'training') {
-        modelStatusElement.textContent = 'Training...';
-        modelStatusElement.style.color = '#ff9800';
-    } else {
-        modelStatusElement.textContent = 'Not Trained';
-        modelStatusElement.style.color = '#666';
-    }
-    
-    // Update progress bar
-    const progressBar = document.getElementById('trainingProgressBar');
-    const progress = Math.min((status.num_annotations / 10) * 100, 100);
-    progressBar.style.width = progress + '%';
-    
-    // Show apply button if model is trained
-    const applySection = document.getElementById('applyTrainingSection');
-    if (status.model_trained) {
-        applySection.style.display = 'block';
-    } else {
-        applySection.style.display = 'none';
-    }
-}
-
-
-
-
-
-
-// Enhanced JavaScript functions for neural network tophat training
-// Add these functions to the index.html <script> section
-
-// Enhanced tophat training status with neural network info
-async function loadEnhancedTophatStatus() {
-    try {
-        const response = await fetch('/api/tophat/enhanced_status');
-        const result = await response.json();
-        
-        if (result.success) {
-            updateEnhancedTophatDisplay(result.status);
-        } else {
-            console.error('Failed to load enhanced tophat status:', result.error);
-        }
-    } catch (error) {
-        console.error('Error loading enhanced tophat status:', error);
-    }
-}
-
-function updateEnhancedTophatDisplay(status) {
-    // Update basic status
-    updateTophatStatus(status);
-    
-    // Update neural network specific information
-    const statusSection = document.getElementById('trainingStatusSection');
-    if (!statusSection) return;
-    
-    // Add neural network model status
-    let neuralNetworkInfo = statusSection.querySelector('.neural-network-status');
-    if (!neuralNetworkInfo) {
-        neuralNetworkInfo = document.createElement('div');
-        neuralNetworkInfo.className = 'neural-network-status';
-        statusSection.appendChild(neuralNetworkInfo);
-    }
-    
-    const models = status.models_trained || {};
-    const systemCaps = status.system_capabilities || {};
-    const annotationStats = status.annotation_stats || {};
-    
-    neuralNetworkInfo.innerHTML = `
-        <h4>🧠 Neural Network Models</h4>
-        <div class="models-grid">
-            <div class="model-card ${models.tensorflow ? 'model-trained' : 'model-not-trained'}">
-                <h5>🔥 TensorFlow Neural Network</h5>
-                <p>Status: ${models.tensorflow ? '✅ Trained' : '❌ Not Trained'}</p>
-                <p>Deep learning with dropout and early stopping</p>
-            </div>
-            <div class="model-card ${models.simple_nn ? 'model-trained' : 'model-not-trained'}">
-                <h5>🧠 Simple Neural Network</h5>
-                <p>Status: ${models.simple_nn ? '✅ Trained' : '❌ Not Trained'}</p>
-                <p>NumPy-based multi-layer perceptron</p>
-            </div>
-            <div class="model-card ${models.random_forest ? 'model-trained' : 'model-not-trained'}">
-                <h5>🌲 Random Forest</h5>
-                <p>Status: ${models.random_forest ? '✅ Trained' : '❌ Not Trained'}</p>
-                <p>Ensemble classifier with 100 trees</p>
-            </div>
-        </div>
-        
-        <div class="system-info">
-            <h5>📊 Training Statistics</h5>
-            <div class="stats-row">
-                <span>Total Annotation Sessions: <strong>${annotationStats.total_sessions || 0}</strong></span>
-                <span>Total Examples: <strong>${annotationStats.total_examples || 0}</strong></span>
-            </div>
-            <div class="stats-row">
-                <span>Positive Examples: <strong style="color: #4CAF50">${annotationStats.positive_examples || 0}</strong></span>
-                <span>Negative Examples: <strong style="color: #f44336">${annotationStats.negative_examples || 0}</strong></span>
-            </div>
-            <div class="stats-row">
-                <span>Best Model: <strong>${status.best_model?.replace(/_/g, ' ') || 'None'}</strong></span>
-                <span>TensorFlow Available: ${systemCaps.tensorflow_available ? '✅' : '❌'}</span>
-            </div>
-        </div>
-        
-        <div class="training-actions">
-            <button id="forceRetrainBtn" class="action-btn primary" 
-                    onclick="forceRetrainModels()" 
-                    ${status.can_force_retrain ? '' : 'disabled'}>
-                🚀 Force Retrain All Models
-            </button>
-            <button id="modelInfoBtn" class="action-btn secondary" onclick="showModelInfo()">
-                📊 Model Details
-            </button>
-        </div>
-        
-        <div class="recommendation">
-            <p><strong>💡 Recommendation:</strong> ${status.recommended_action || 'Continue training'}</p>
-        </div>
-    `;
-    
-    // Show enhanced apply button if models are trained
-    const applySection = document.getElementById('applyTrainingSection');
-    if (status.any_model_trained && applySection) {
-        applySection.style.display = 'block';
-        const applyBtn = document.getElementById('applyTrainingBtn');
-        if (applyBtn) {
-            applyBtn.innerHTML = `🧠 Apply Neural Network Enhancement`;
-            applyBtn.onclick = applyNeuralNetworkTraining;
-        }
-    }
-}
-
-// Force retrain all models with neural networks
-async function forceRetrainModels() {
-    if (!confirm('Force retrain all models? This will use all your annotations to create new neural network and Random Forest models.')) {
-        return;
-    }
-    
-    try {
-        showNotification('Starting model retraining...', 'info');
-        
-        const retrainBtn = document.getElementById('forceRetrainBtn');
-        if (retrainBtn) {
-            retrainBtn.disabled = true;
-            retrainBtn.innerHTML = '🔄 Training Models...';
-        }
-        
-        const response = await fetch('/api/tophat/force_retrain', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification(`Models trained successfully! Best model: ${result.best_model}`, 'success');
-            
-            // Update the display with new training status
-            updateEnhancedTophatDisplay(result.training_status);
-            
-            // Show success details
-            showModelTrainingResults(result);
-            
-        } else {
-            showNotification(`Training failed: ${result.error}`, 'error');
-        }
-        
-    } catch (error) {
-        showNotification(`Error during training: ${error.message}`, 'error');
-    } finally {
-        // Re-enable button
-        const retrainBtn = document.getElementById('forceRetrainBtn');
-        if (retrainBtn) {
-            retrainBtn.disabled = false;
-            retrainBtn.innerHTML = '🚀 Force Retrain All Models';
-        }
-    }
-}
-
-// Apply neural network-enhanced tophat training
-async function applyNeuralNetworkTraining() {
-    if (!currentAnalysisId) {
-        showNotification('No analysis results to enhance', 'warning');
-        return;
-    }
-    
-    if (!confirm('Apply neural network enhancement? This will re-analyze all images using your trained neural network models.')) {
-        return;
-    }
-    
-    try {
-        showNotification('Applying neural network enhancement...', 'info');
-        
-        const applyBtn = document.getElementById('applyTrainingBtn');
-        if (applyBtn) {
-            applyBtn.disabled = true;
-            applyBtn.innerHTML = '🧠 Enhancing with Neural Networks...';
-        }
-        
-        const response = await fetch(`/api/tophat/apply_neural_training/${currentAnalysisId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showNotification('Neural network enhancement applied successfully!', 'success');
-            
-            // Update the current results with enhanced results
-            currentAnalysisResults = result.results;
-            
-            // Refresh all displays
-            if (currentAnalysisResults.results) {
-                displayVisualizations(currentAnalysisResults.results);
-                displayCellTable(currentAnalysisResults.results);
-                
-                // Update summary stats
-                if (currentAnalysisResults.summary) {
-                    displayStats(currentAnalysisResults.summary);
-                }
-            }
-            
-            // Show enhancement statistics
-            showEnhancementResults(result.enhancement_stats, result.model_used);
-            
-        } else {
-            showNotification(`Enhancement failed: ${result.error}`, 'error');
-        }
-        
-    } catch (error) {
-        showNotification(`Error during enhancement: ${error.message}`, 'error');
-    } finally {
-        // Re-enable button
-        const applyBtn = document.getElementById('applyTrainingBtn');
-        if (applyBtn) {
-            applyBtn.disabled = false;
-            applyBtn.innerHTML = '🧠 Apply Neural Network Enhancement';
-        }
-    }
-}
-
-// Show detailed model information
-async function showModelInfo() {
-    try {
-        const response = await fetch('/api/tophat/model_info');
-        const result = await response.json();
-        
-        if (result.success) {
-            showModelInfoModal(result.models, result.total_models);
-        } else {
-            showNotification(`Failed to get model info: ${result.error}`, 'error');
-        }
-    } catch (error) {
-        showNotification(`Error getting model info: ${error.message}`, 'error');
-    }
-}
-
-// Show model information in a modal
-function showModelInfoModal(models, totalModels) {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>🧠 Tophat Model Information</h3>
-                <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p><strong>Total Models Available: ${totalModels}</strong></p>
-                
-                <div class="models-detailed">
-                    ${Object.entries(models).map(([name, info]) => `
-                        <div class="model-detail-card ${info.available ? 'available' : 'unavailable'}">
-                            <h4>${getModelIcon(info.type)} ${name.replace(/_/g, ' ').replace(/model/g, '').trim()}</h4>
-                            <p><strong>Status:</strong> ${info.available ? '✅ Available' : '❌ Not Available'}</p>
-                            <p><strong>Type:</strong> ${info.type.replace(/_/g, ' ')}</p>
-                            <p><strong>Description:</strong> ${info.description}</p>
-                            ${info.available && info.size_mb ? `<p><strong>Size:</strong> ${info.size_mb} MB</p>` : ''}
-                            ${info.available && info.last_modified ? `<p><strong>Last Updated:</strong> ${new Date(info.last_modified).toLocaleString()}</p>` : ''}
-                            ${info.error ? `<p style="color: red;"><strong>Error:</strong> ${info.error}</p>` : ''}
+                <!-- Detection Method Info -->
+                <div class="detection-info" style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0; color: #1976d2;">🔬 Detection Method</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                        <div>
+                            <strong>Primary Method:</strong><br>
+                            <span style="color: ${primaryMethod.includes('celldetection') ? '#4caf50' : '#ff9800'};">
+                                ${primaryMethod.replace('_', ' ').toUpperCase()}
+                                ${primaryMethod.includes('celldetection') ? ' 🧠' : ' 🔧'}
+                            </span>
                         </div>
-                    `).join('')}
+                        <div>
+                            <strong>Methods Used:</strong><br>
+                            ${detectionMethods.join('<br>')}
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="modal-actions">
-                    <button class="close-modal-btn" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                <!-- Basic Metrics -->
+                <div class="result-summary">
+                    <div class="metric-card">
+                        <div class="metric-value">${cellsDetected}</div>
+                        <div class="metric-label">Cells Detected</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${totalArea.toFixed(0)}</div>
+                        <div class="metric-label">Total Cell Area (px²)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${avgArea.toFixed(1)}</div>
+                        <div class="metric-label">Average Cell Area (px²)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${processingTime.toFixed(2)}s</div>
+                        <div class="metric-label">Processing Time</div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-}
 
-// Get appropriate icon for model type
-function getModelIcon(type) {
-    switch(type) {
-        case 'deep_neural_network': return '🔥';
-        case 'simple_neural_network': return '🧠';
-        case 'ensemble_classifier': return '🌲';
-        default: return '📊';
-    }
-}
-
-// Show model training results
-function showModelTrainingResults(result) {
-    const resultsDiv = document.createElement('div');
-    resultsDiv.className = 'training-results-popup';
-    resultsDiv.innerHTML = `
-        <div class="training-success">
-            <h3>🎉 Training Complete!</h3>
-            <p><strong>Models Created:</strong></p>
-            <ul>
-                ${Object.entries(result.models_created || {}).map(([model, status]) => 
-                    `<li>${status ? '✅' : '❌'} ${model.replace(/_/g, ' ')}</li>`
-                ).join('')}
-            </ul>
-            <p><strong>Best Model:</strong> ${result.best_model?.replace(/_/g, ' ') || 'Unknown'}</p>
-            <p><strong>Total Annotations Used:</strong> ${result.training_status?.num_annotations || 0}</p>
-            <button onclick="this.parentElement.remove()" class="close-popup-btn">Close</button>
-        </div>
-    `;
-    
-    document.body.appendChild(resultsDiv);
-    
-    // Auto-remove after 10 seconds
-    setTimeout(() => {
-        if (resultsDiv.parentElement) {
-            resultsDiv.remove();
-        }
-    }, 10000);
-}
-
-// Show enhancement results
-function showEnhancementResults(stats, modelUsed) {
-    const enhancementDiv = document.createElement('div');
-    enhancementDiv.className = 'enhancement-results-popup';
-    enhancementDiv.innerHTML = `
-        <div class="enhancement-success">
-            <h3>🧠 Neural Enhancement Complete!</h3>
-            <div class="enhancement-stats">
-                <p><strong>Model Used:</strong> ${modelUsed?.replace(/_/g, ' ') || 'Unknown'}</p>
-                <p><strong>Images Processed:</strong> ${stats.total_images}</p>
-                <p><strong>Images Enhanced:</strong> ${stats.improved_images}</p>
-                <p><strong>Cells Before:</strong> ${stats.cells_before}</p>
-                <p><strong>Cells After:</strong> ${stats.cells_after}</p>
-                <p><strong>Improvement:</strong> ${stats.cells_after - stats.cells_before} cells 
-                   (${((stats.cells_after - stats.cells_before) / Math.max(stats.cells_before, 1) * 100).toFixed(1)}%)</p>
-                <p><strong>Average Confidence:</strong> ${stats.confidence_scores.length > 0 ? 
-                    (stats.confidence_scores.reduce((sum, s) => sum + s.confidence, 0) / stats.confidence_scores.length).toFixed(3) : 'N/A'}</p>
-            </div>
-            <button onclick="this.parentElement.remove()" class="close-popup-btn">Close</button>
-        </div>
-    `;
-    
-    document.body.appendChild(enhancementDiv);
-    
-    // Auto-remove after 15 seconds
-    setTimeout(() => {
-        if (enhancementDiv.parentElement) {
-            enhancementDiv.remove();
-        }
-    }, 15000);
-}
-
-// Enhanced initialization
-document.addEventListener('DOMContentLoaded', function() {
-    // Load enhanced tophat status on page load
-    loadEnhancedTophatStatus();
-    
-    // Set up periodic updates
-    setInterval(loadEnhancedTophatStatus, 30000); // Update every 30 seconds
-});
-
-// Enhanced display results function to include neural network features
-function displayResultsEnhanced(analysisResult) {
-    // Call original display function
-    displayResults(analysisResult);
-    
-    // Add neural network enhancement notice if present
-    if (analysisResult.neural_enhanced) {
-        const enhancementNotice = document.createElement('div');
-        enhancementNotice.className = 'enhancement-notice';
-        enhancementNotice.innerHTML = `
-            <div class="notice-content">
-                <h4>🧠 Neural Network Enhanced Results</h4>
-                <p>These results have been enhanced using trained neural network models.</p>
-                <p><strong>Enhancement Applied:</strong> ${new Date(analysisResult.enhancement_timestamp).toLocaleString()}</p>
-                ${analysisResult.enhancement_stats ? `
-                    <p><strong>Improvement:</strong> 
-                       ${analysisResult.enhancement_stats.improved_images}/${analysisResult.enhancement_stats.total_images} images enhanced
-                    </p>
+                <!-- Enhanced Metrics (if available) -->
+                ${Object.keys(biomassAnalysis).length > 0 ? `
+                <h4>🧬 Biomass Analysis</h4>
+                <div class="result-summary">
+                    <div class="metric-card" style="background: linear-gradient(135deg, #4CAF50, #66BB6A);">
+                        <div class="metric-value">${biomassAnalysis.total_biomass_mg?.toFixed(3) || '0.000'}</div>
+                        <div class="metric-label">Total Biomass (mg)</div>
+                    </div>
+                    <div class="metric-card" style="background: linear-gradient(135deg, #8BC34A, #AED581);">
+                        <div class="metric-value">${biomassAnalysis.average_biomass_mg?.toFixed(4) || '0.0000'}</div>
+                        <div class="metric-label">Average Biomass (mg)</div>
+                    </div>
+                    <div class="metric-card" style="background: linear-gradient(135deg, #2E7D32, #388E3C);">
+                        <div class="metric-value">${biomassAnalysis.total_chlorophyll_mg?.toFixed(4) || '0.0000'}</div>
+                        <div class="metric-label">Total Chlorophyll (mg)</div>
+                    </div>
+                </div>
                 ` : ''}
-            </div>
-        `;
-        
-        const resultsSection = document.getElementById('analysisResults');
-        if (resultsSection) {
-            resultsSection.insertBefore(enhancementNotice, resultsSection.firstChild);
+
+                <!-- Visualization -->
+                <div class="visualization">
+                    ${result.visualization ? 
+                        `<img src="data:image/png;base64,${result.visualization}" 
+                            alt="Cell Detection Results for ${filename}"
+                            style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">` :
+                        `<div style="background: #f8f9fa; padding: 40px; border-radius: 8px; text-align: center; color: #666;">
+                            <h4>✅ Analysis Completed Successfully</h4>
+                            <p>Detected ${cellsDetected} cells using ${primaryMethod.replace('_', ' ')} method.</p>
+                        </div>`
+                    }
+                </div>
+
+                <!-- Export Buttons -->
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn" onclick="exportResults('${analysisId}', 'csv')">📊 Export CSV</button>
+                    <button class="btn" onclick="exportResults('${analysisId}', 'json')">📄 Export JSON</button>
+                    ${biomassAnalysis.total_biomass_mg ? 
+                        `<button class="btn btn-success" onclick="exportResults('${analysisId}', 'biomass_report')">🧬 Biomass Report</button>` : ''
+                    }
+                </div>
+            `;
+            
+            resultsContainer.appendChild(resultItem);
+            resultItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
-    }
-}
+
+        // NEW: Function to download comprehensive biomass report
+        function downloadBiomassReport(analysisId, filename) {
+            // This will trigger a new endpoint for comprehensive biomass reports
+            window.open(`/api/export/${analysisId}/biomass_report`, '_blank');
+        }
+
+        function exportResults(analysisId, format) {
+            window.open(`/api/export/${analysisId}/${format}`, '_blank');
+        }
+
+        function startTophatTraining() {
+            if (uploadedFiles.length === 0) {
+                alert('Please upload images first');
+                return;
+            }
+
+            const trainingContainer = document.getElementById('trainingContainer');
+            trainingContainer.style.display = 'block';
+            trainingContainer.innerHTML = '<p>Starting training session...</p>';
+
+            fetch('/api/tophat/start_training', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: uploadedFiles })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentTrainingSession = data.session;
+                    displayTrainingInterface(data.session);
+                } else {
+                    trainingContainer.innerHTML = `<div class="alert alert-error">Training failed: ${data.error}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Training start error:', error);
+                trainingContainer.innerHTML = '<div class="alert alert-error">Failed to start training session</div>';
+            });
+        }
+
+        function displayTrainingInterface(session) {
+            const trainingContainer = document.getElementById('trainingContainer');
+            
+            let html = `
+                <div class="alert alert-success">
+                    Training session started with ${session.images_count} images
+                </div>
+                <p><strong>Instructions:</strong> For each image, you will draw directly on the image to mark correct cells (green) and false positives (red). This trains the AI to recognize cell patterns.</p>
+                
+                <div class="training-legend" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <h4>🎨 Drawing Instructions:</h4>
+                    <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 20px; height: 20px; background: #28a745; border-radius: 50%;"></div>
+                            <span><strong>Green:</strong> Draw around correct cells</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 20px; height: 20px; background: #dc3545; border-radius: 50%;"></div>
+                            <span><strong>Red:</strong> Draw around false positives</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 20px; height: 20px; background: #007bff; border-radius: 50%;"></div>
+                            <span><strong>Blue:</strong> Draw around missed cells</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            session.images.forEach((image, index) => {
+                html += `
+                    <div class="result-item">
+                        <h4>Image ${index + 1}: ${image.filename}</h4>
+                        <p>Auto-detected cells: ${image.cells_count}</p>
+                        <div style="text-align: center; margin: 20px 0;">
+                            <button class="btn btn-warning" onclick="startDrawingAnnotation(${index})">
+                                🎨 Start Drawing Annotations
+                            </button>
+                        </div>
+                        <div id="annotation-${index}" style="display: none;"></div>
+                    </div>
+                `;
+            });
+
+            html += `
+                <div style="text-align: center; margin-top: 30px;">
+                    <button class="btn btn-success" onclick="finalizeTraining()">
+                        🧠 Finalize Training
+                    </button>
+                </div>
+            `;
+
+            trainingContainer.innerHTML = html;
+        }
+
+        function startDrawingAnnotation(imageIndex) {
+            const annotationDiv = document.getElementById(`annotation-${imageIndex}`);
+            annotationDiv.style.display = 'block';
+            
+            // Get the original image from the training session
+            const image = currentTrainingSession.images[imageIndex];
+            
+            annotationDiv.innerHTML = `
+                <div class="drawing-interface" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <div class="drawing-controls" style="text-align: center; margin-bottom: 20px;">
+                        <h4>🎨 Drawing Tools</h4>
+                        <div style="display: flex; justify-content: center; gap: 15px; margin: 15px 0; flex-wrap: wrap;">
+                            <button class="btn btn-success" onclick="setDrawingMode(${imageIndex}, 'correct')" id="correct-btn-${imageIndex}">
+                                ✅ Mark Correct Cells
+                            </button>
+                            <button class="btn btn-danger" onclick="setDrawingMode(${imageIndex}, 'false_positive')" id="false-btn-${imageIndex}">
+                                ❌ Mark False Positives
+                            </button>
+                            <button class="btn btn-primary" onclick="setDrawingMode(${imageIndex}, 'missed')" id="missed-btn-${imageIndex}">
+                                🔍 Mark Missed Cells
+                            </button>
+                            <button class="btn" onclick="clearDrawing(${imageIndex})" style="background: #6c757d; color: white;">
+                                🗑️ Clear All
+                            </button>
+                        </div>
+                        <p style="color: #666; margin: 10px 0;">
+                            <strong>Instructions:</strong> Select a tool above, then draw circles around cells on the image below.
+                        </p>
+                    </div>
+                    
+                    <div style="text-align: center; position: relative; display: inline-block;">
+                        <canvas id="drawing-canvas-${imageIndex}" 
+                                style="border: 2px solid #007bff; border-radius: 8px; cursor: crosshair; max-width: 100%;"
+                                onmousedown="startDrawing(event, ${imageIndex})"
+                                onmousemove="draw(event, ${imageIndex})"
+                                onmouseup="stopDrawing(${imageIndex})"
+                                onmouseleave="stopDrawing(${imageIndex})">
+                        </canvas>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button class="btn btn-warning" onclick="saveDrawingAnnotations(${imageIndex})">
+                            💾 Save Annotations for this Image
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Load the original image onto the canvas
+            loadImageToCanvas(imageIndex, image);
+        }
+
+        function finalizeTraining() {
+            if (!currentTrainingSession) {
+                alert('No active training session');
+                return;
+            }
+
+            fetch('/api/tophat/train_model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: currentTrainingSession.id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Tophat AI model trained successfully! You can now use it for analysis.');
+                    checkTophatStatus(); // Refresh status
+                } else {
+                    alert('Training failed: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Training finalization error:', error);
+                alert('Training finalization failed');
+            });
+        }
+
+        // Drawing functionality for tophat training
+        let drawingState = {};
+        let annotations = {};
+
+        function loadImageToCanvas(imageIndex, imageData) {
+            const canvas = document.getElementById(`drawing-canvas-${imageIndex}`);
+            const ctx = canvas.getContext('2d');
+            
+            // Create an image element to load the original image
+            const img = new Image();
+            img.onload = function() {
+                // Set canvas size to match image
+                canvas.width = Math.min(img.width, 800); // Max width for display
+                canvas.height = (canvas.width / img.width) * img.height;
+                
+                // Draw the original image
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // Initialize drawing state
+                drawingState[imageIndex] = {
+                    isDrawing: false,
+                    mode: 'correct',
+                    lastX: 0,
+                    lastY: 0
+                };
+                
+                // Initialize annotations
+                annotations[imageIndex] = {
+                    correct: [],
+                    false_positive: [],
+                    missed: []
+                };
+                
+                // Overlay detected cells if available
+                if (imageData.image_data && imageData.image_data.visualization) {
+                    overlayDetectedCells(imageIndex, imageData.image_data.cells_data);
+                }
+            };
+            
+            // Load image from the analysis result or create a data URL
+            if (imageData.image_data && imageData.image_data.visualization) {
+                img.src = `data:image/png;base64,${imageData.image_data.visualization}`;
+            } else {
+                // Load original image - handle both local paths and server paths
+                const imagePath = imageData.path;
+                if (imagePath.includes('uploads/')) {
+                    // Server uploaded file
+                    const filename = imagePath.split('/').pop();
+                    img.src = `/uploads/${filename}`;
+                } else {
+                    // Direct path
+                    img.src = imagePath;
+                }
+            }
+        }
+
+        function overlayDetectedCells(imageIndex, cellsData) {
+            const canvas = document.getElementById(`drawing-canvas-${imageIndex}`);
+            const ctx = canvas.getContext('2d');
+            
+            if (!cellsData || cellsData.length === 0) return;
+            
+            // Draw detected cell boundaries in light gray
+            ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+            ctx.lineWidth = 1;
+            
+            cellsData.forEach(cell => {
+                if (cell.contour && cell.contour.length > 0) {
+                    ctx.beginPath();
+                    const contour = cell.contour;
+                    
+                    // Scale contour to canvas size
+                    const scaleX = canvas.width / (cell.image_width || canvas.width);
+                    const scaleY = canvas.height / (cell.image_height || canvas.height);
+                    
+                    contour.forEach((point, index) => {
+                        const x = point[0] * scaleX;
+                        const y = point[1] * scaleY;
+                        
+                        if (index === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    });
+                    
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function setDrawingMode(imageIndex, mode) {
+            if (!drawingState[imageIndex]) return;
+            
+            drawingState[imageIndex].mode = mode;
+            
+            // Update button styles
+            const buttons = {
+                'correct': document.getElementById(`correct-btn-${imageIndex}`),
+                'false_positive': document.getElementById(`false-btn-${imageIndex}`),
+                'missed': document.getElementById(`missed-btn-${imageIndex}`)
+            };
+            
+            // Reset all button styles
+            Object.values(buttons).forEach(btn => {
+                if (btn) btn.style.transform = 'scale(1)';
+            });
+            
+            // Highlight selected button
+            if (buttons[mode]) {
+                buttons[mode].style.transform = 'scale(1.1)';
+            }
+            
+            // Update cursor and canvas style based on mode
+            const canvas = document.getElementById(`drawing-canvas-${imageIndex}`);
+            const colors = {
+                'correct': '#28a745',
+                'false_positive': '#dc3545',
+                'missed': '#007bff'
+            };
+            
+            canvas.style.borderColor = colors[mode];
+        }
+
+        function startDrawing(event, imageIndex) {
+            if (!drawingState[imageIndex]) return;
+            
+            drawingState[imageIndex].isDrawing = true;
+            const rect = event.target.getBoundingClientRect();
+            drawingState[imageIndex].lastX = event.clientX - rect.left;
+            drawingState[imageIndex].lastY = event.clientY - rect.top;
+        }
+
+        function draw(event, imageIndex) {
+            if (!drawingState[imageIndex] || !drawingState[imageIndex].isDrawing) return;
+            
+            const canvas = document.getElementById(`drawing-canvas-${imageIndex}`);
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            
+            const currentX = event.clientX - rect.left;
+            const currentY = event.clientY - rect.top;
+            
+            const colors = {
+                'correct': '#28a745',
+                'false_positive': '#dc3545',
+                'missed': '#007bff'
+            };
+            
+            ctx.strokeStyle = colors[drawingState[imageIndex].mode];
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(drawingState[imageIndex].lastX, drawingState[imageIndex].lastY);
+            ctx.lineTo(currentX, currentY);
+            ctx.stroke();
+            
+            drawingState[imageIndex].lastX = currentX;
+            drawingState[imageIndex].lastY = currentY;
+        }
+
+        function stopDrawing(imageIndex) {
+            if (!drawingState[imageIndex]) return;
+            drawingState[imageIndex].isDrawing = false;
+        }
+
+        function clearDrawing(imageIndex) {
+            const canvas = document.getElementById(`drawing-canvas-${imageIndex}`);
+            const ctx = canvas.getContext('2d');
+            
+            // Reload the original image
+            const image = currentTrainingSession.images[imageIndex];
+            loadImageToCanvas(imageIndex, image);
+            
+            // Clear annotations
+            annotations[imageIndex] = {
+                correct: [],
+                false_positive: [],
+                missed: []
+            };
+        }
+
+        function saveDrawingAnnotations(imageIndex) {
+            if (!annotations[imageIndex]) {
+                alert('No annotations to save');
+                return;
+            }
+            
+            const canvas = document.getElementById(`drawing-canvas-${imageIndex}`);
+            const imageData = canvas.toDataURL('image/png');
+            
+            // Extract annotation data from canvas
+            const annotationData = {
+                session_id: currentTrainingSession.id,
+                image_index: imageIndex,
+                image_filename: currentTrainingSession.images[imageIndex].filename,
+                annotations: annotations[imageIndex],
+                annotated_image: imageData
+            };
+            
+            // Save to server
+            fetch('/api/tophat/save_annotations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(annotationData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Annotations saved successfully!');
+                    // Show success indicator
+                    const saveBtn = document.querySelector(`#annotation-${imageIndex} .btn-warning`);
+                    if (saveBtn) {
+                        saveBtn.innerHTML = '✅ Annotations Saved';
+                        saveBtn.className = 'btn btn-success';
+                        saveBtn.disabled = true;
+                    }
+                } else {
+                    alert('Failed to save annotations: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Annotation save error:', error);
+                alert('Failed to save annotations');
+            });
+        }
     </script>
 </body>
 </html>

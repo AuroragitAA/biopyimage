@@ -16,7 +16,12 @@
       "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -C 2 \"cellprob_threshold\" /mnt/c/Users/Aun/Desktop/Projects/biopyimage/bioimaging_professional_improved.py)",
       "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -C 2 \"min_size.*=\" /mnt/c/Users/Aun/Desktop/Projects/biopyimage/bioimaging_professional_improved.py)",
       "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -C 2 \"resample.*=\" /mnt/c/Users/Aun/Desktop/Projects/biopyimage/bioimaging_professional_improved.py)",
-      "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -C 2 \"cluster.*=\" /mnt/c/Users/Aun/Desktop/Projects/biopyimage/bioimaging_professional_improved.py)"
+      "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -C 2 \"cluster.*=\" /mnt/c/Users/Aun/Desktop/Projects/biopyimage/bioimaging_professional_improved.py)",
+      "Bash(sed:*)",
+      "Bash(cat:*)",
+      "Bash(pkill:*)",
+      "Bash(cp:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

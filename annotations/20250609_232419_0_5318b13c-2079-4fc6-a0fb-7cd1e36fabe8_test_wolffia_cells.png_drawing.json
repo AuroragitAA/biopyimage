@@ -1,0 +1,12 @@
+{
+  "session_id": "20250609_232419",
+  "image_filename": "5318b13c-2079-4fc6-a0fb-7cd1e36fabe8_test_wolffia_cells.png",
+  "image_index": 0,
+  "annotations": {
+    "correct": [],
+    "false_positive": [],
+    "missed": []
+  },
+  "timestamp": "2025-06-09T23:25:08.266267",
+  "annotation_type": "drawing"
+}
