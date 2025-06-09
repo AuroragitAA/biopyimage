@@ -1,0 +1,32 @@
+{
+  "image_path": "uploads\\20250608_024817_2405-1.jfif",
+  "timestamp": "2025-06-08T02:48:23.476311",
+  "segmentation_quality": 0.85,
+  "restoration_quality": 0.16550283325602405,
+  "num_cells": 11,
+  "technical_details": {
+    "restoration_method": "full",
+    "segmentation_method": "Advanced_Multi_Method",
+    "num_features": 19,
+    "total_processing_time": "TBD",
+    "pipeline_version": "Professional_v1.0"
+  },
+  "summary": {
+    "total_cells_detected": 11,
+    "total_green_cells": 0,
+    "average_cell_area": 33.43181818181818,
+    "total_biomass": 0.001571653001385973,
+    "average_chlorophyll": 1.15276025597832,
+    "health_distribution": {
+      "moderate": 10,
+      "very_healthy": 1
+    },
+    "area_statistics": {
+      "min": 8.0,
+      "max": 166.0,
+      "std": 46.71109221976763
+    },
+    "average_quality": 0.6263797322974626,
+    "quality_status": "Acceptable"
+  }
+}

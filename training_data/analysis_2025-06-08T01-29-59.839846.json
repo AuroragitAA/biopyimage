@@ -1,0 +1,16 @@
+{
+  "image_path": "uploads\\20250608_012958_image-test-1.png",
+  "timestamp": "2025-06-08T01:29:59.839846",
+  "segmentation_quality": 0.48999999999999994,
+  "restoration_quality": 0.14554687567812552,
+  "num_cells": 3,
+  "technical_details": {
+    "restoration_method": "full",
+    "segmentation_method": "Professional_Watershed_cyto_0",
+    "num_features": 19,
+    "total_processing_time": "TBD",
+    "pipeline_version": "Professional_v1.0"
+  },
+  "summary": {
+    "total_cells_detected": 3,
+    "total_green_cells": 

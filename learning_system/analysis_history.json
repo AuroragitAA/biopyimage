@@ -1,0 +1,114 @@
+[
+  {
+    "timestamp": "2025-06-08T13:19:01.158922",
+    "model": "cellpose_cyto3",
+    "quality": 0.8145631347914598,
+    "num_cells": 6,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-08T13:20:55.709217",
+    "model": "cellpose_cyto3",
+    "quality": 0.8145631347914598,
+    "num_cells": 6,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-08T13:36:51.613695",
+    "model": "cellpose_cyto3",
+    "quality": 0.8325679417725883,
+    "num_cells": 8,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-08T13:56:08.700408",
+    "model": "cellpose_cyto3",
+    "quality": 0.7272675572989931,
+    "num_cells": 2,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-08T14:00:44.682846",
+    "model": "cellpose_cyto3",
+    "quality": 0.7101386303518377,
+    "num_cells": 2,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-08T14:05:20.566128",
+    "model": "cellpose_cyto3",
+    "quality": 0.6894990236057627,
+    "num_cells": 4,
+    "success": false
+  },
+  {
+    "timestamp": "2025-06-08T23:55:27.624309",
+    "model": "watershed_fallback",
+    "quality": 0.65,
+    "num_cells": 5,
+    "success": false
+  },
+  {
+    "timestamp": "2025-06-09T00:02:19.393197",
+    "model": "cellpose_cyto3_gpu",
+    "quality": 0.7481309251997436,
+    "num_cells": 3,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T00:03:28.819529",
+    "model": "cellpose_cyto3_gpu",
+    "quality": 0.8339151791787689,
+    "num_cells": 7,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T00:04:42.992318",
+    "model": "cellpose_cyto3_gpu",
+    "quality": 0.759798841787981,
+    "num_cells": 2,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T00:06:14.917565",
+    "model": "cellpose_cyto3_gpu",
+    "quality": 0.7399444927296249,
+    "num_cells": 2,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T00:07:47.102251",
+    "model": "cellpose_cyto3_gpu",
+    "quality": 0.8440652927846387,
+    "num_cells": 5,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T00:27:32.921915",
+    "model": "optimized_watershed_fallback",
+    "quality": 0.7833333333333333,
+    "num_cells": 5,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T00:44:53.342092",
+    "model": "cellpose_cyto3_gpu",
+    "quality": 0.7349396884441376,
+    "num_cells": 1,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T00:54:01.140209",
+    "model": "cellpose_cyto3_gpu",
+    "quality": 0.7599623887184489,
+    "num_cells": 2,
+    "success": true
+  },
+  {
+    "timestamp": "2025-06-09T01:52:26.338938",
+    "model": "optimized_watershed_fallback",
+    "quality": 0.6841246263509976,
+    "num_cells": 5,
+    "success": false
+  }
+]

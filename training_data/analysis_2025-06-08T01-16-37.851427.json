@@ -1,0 +1,15 @@
+{
+  "image_path": "uploads\\20250608_011636_2205-1.jpg",
+  "timestamp": "2025-06-08T01:16:37.851427",
+  "segmentation_quality": 0.7,
+  "restoration_quality": 0.16550753742988528,
+  "num_cells": 16,
+  "technical_details": {
+    "restoration_method": "full",
+    "segmentation_method": "Professional_Watershed_cyto_0",
+    "num_features": 19,
+    "total_processing_time": "TBD"
+  },
+  "summary": {
+    "total_cells_detected": 16,
+    "total_green_cells": 

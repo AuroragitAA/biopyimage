@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-06-09T00:44:54.717951",
+  "success": true,
+  "num_cells": 2,
+  "quality": {
+    "overall_quality": 0.7599623887184489,
+    "restoration_quality": 1.0,
+    "segmentation_quality": 0.27988716615534687,
+    "feature_quality": 1.0,
+    "status": "Good",
+    "recommendations": [
+      "Check segmentation parameters or image quality"
+    ]
+  },
+  "parameters": {
+    "restoration_mode": "auto",
+    "segmentation_model": "cellpose_cyto3_gpu",
+    "diameter": 30,
+    "flow_threshold": 0.2,
+    "pixel_to_micron": 0.5,
+    "use_gpu": true
+  }
+}

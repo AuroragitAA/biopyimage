@@ -1,0 +1,15 @@
+{
+  "image_path": "images/1/2205-1.jpg",
+  "timestamp": "2025-06-08T01:21:43.772057",
+  "segmentation_quality": 0.7,
+  "restoration_quality": 0.2085220179650099,
+  "num_cells": 9,
+  "technical_details": {
+    "restoration_method": "full",
+    "segmentation_method": "Advanced_Watershed_Fallback",
+    "num_features": 19,
+    "total_processing_time": "TBD"
+  },
+  "summary": {
+    "total_cells_detected": 9,
+    "total_green_cells": 

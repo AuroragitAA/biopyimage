@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-06-08T12:54:38.667611",
+  "success": true,
+  "num_cells": 15,
+  "quality": {
+    "overall_quality": 0.7560906678503386,
+    "restoration_quality": 0.8,
+    "segmentation_quality": 0.4682720035510161,
+    "feature_quality": 1.0,
+    "status": "Good",
+    "recommendations": [
+      "Check segmentation parameters or image quality"
+    ]
+  },
+  "parameters": {
+    "restoration_mode": "auto",
+    "segmentation_model": "cyto3",
+    "diameter": 30.0,
+    "flow_threshold": 0.4,
+    "pixel_to_micron": 0.5
+  }
+}

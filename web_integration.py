@@ -2,22 +2,73 @@
 
 import base64
 import json
+import mimetypes
 import os
 import queue
 import threading
 import uuid
+import warnings
 import zipfile
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# Add after your existing imports
+from complete_advanced_integration import (
+    UltimateWolffiaAnalyzer,
+)
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+import cv2
 from flask import Flask, Response, jsonify, render_template, request, send_file
 from flask_cors import CORS
 from PIL import Image
-from werkzeug.utils import secure_filename
+from werkzeug.utils import safe_join, secure_filename
 
-from bioimaging import WolffiaAnalyzer, analyze_multiple_images, analyze_uploaded_image
+try:
+    import numexpr
+    NUMEXPR_AVAILABLE = True
+except ImportError:
+    NUMEXPR_AVAILABLE = False
+
+try:
+    import cupy
+    CUPY_AVAILABLE = True
+except ImportError:
+    CUPY_AVAILABLE = False
+
+try:
+    import cellpose
+    CELLPOSE_AVAILABLE = True
+except ImportError:
+    CELLPOSE_AVAILABLE = False
+
+
+# Try to import from the improved professional module first, then fallbacks
+try:
+    from bioimaging_professional_improved import WolffiaAnalyzer
+    PIPELINE_TYPE = "professional_improved"
+    print("✅ Using Improved Professional Bioinformatics Pipeline")
+except ImportError:
+    try:
+        from bioimaging_professional import WolffiaAnalyzer
+        PIPELINE_TYPE = "professional"
+        print("✅ Using Professional Bioinformatics Pipeline")
+    except ImportError:
+        try:
+            from bioimaging import WolffiaAnalyzer
+            PIPELINE_TYPE = "legacy"
+            print("⚠️ Using Legacy Bioimaging Module")
+        except ImportError:
+            print("❌ No bioimaging module found")
+            raise ImportError("Cannot import WolffiaAnalyzer")
 
 app = Flask(__name__)
 CORS(app)
@@ -35,8 +86,10 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
 
-# Global analyzer instance with ML enhancement
+# Global analyzer instance with professional enhancement
+print("🔬 Initializing Professional Wolffia Analyzer...")
 analyzer = WolffiaAnalyzer(pixel_to_micron_ratio=0.5, chlorophyll_threshold=0.6)
+print("✅ Professional analyzer ready for web integration")
 
 # Analysis queue for real-time updates
 analysis_queue = queue.Queue()
@@ -45,6 +98,159 @@ analysis_progress = {}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def convert_professional_result_to_json(result, timestamp):
+    """Convert professional analysis result to JSON-serializable format - FIXED VERSION"""
+    try:
+        if not result or not result.get('success'):
+            return None
+        
+        # FIXED: Better data extraction and conversion
+        cells_data = result.get('cells', [])
+        summary_data = result.get('summary', {})
+        
+        # Ensure cells is a list and properly formatted
+        if isinstance(cells_data, pd.DataFrame):
+            cells_data = cells_data.to_dict('records')
+        elif not isinstance(cells_data, list):
+            cells_data = []
+        
+        # FIXED: Create proper summary with actual cell counts
+        if cells_data and len(cells_data) > 0:
+            # Recalculate summary from actual cell data
+            total_cells = len(cells_data)
+            
+            # Count green cells
+            green_cells = sum(1 for cell in cells_data 
+                            if cell.get('is_green_cell', False) or 
+                               cell.get('green_cell', False))
+            
+            # Calculate total biomass
+            total_biomass = sum(float(cell.get('biomass_estimate_ug', 0) or 
+                                    cell.get('biomass_ug', 0) or 0) 
+                              for cell in cells_data)
+            
+            # Calculate average area
+            areas = [float(cell.get('area_microns_sq', 0) or 
+                          cell.get('area_microns', 0) or 0) 
+                    for cell in cells_data]
+            avg_area = sum(areas) / len(areas) if areas else 0
+            
+            # FIXED: Create corrected summary
+            corrected_summary = {
+                'total_cells_detected': total_cells,
+                'total_cells': total_cells,
+                'total_green_cells': green_cells,
+                'total_biomass': total_biomass,
+                'average_area': avg_area,
+                'average_cell_area': avg_area
+            }
+            
+            print(f"🔧 Data conversion: {total_cells} cells → {green_cells} green → {total_biomass:.3f} μg")
+        else:
+            corrected_summary = {
+                'total_cells_detected': 0,
+                'total_cells': 0,
+                'total_green_cells': 0,
+                'total_biomass': 0,
+                'average_area': 0,
+                'average_cell_area': 0
+            }
+        
+        json_result = {
+            'timestamp': timestamp,
+            'image_path': result.get('image_path', ''),
+            'success': result.get('success', False),
+            'cells': convert_to_json_serializable(cells_data),  # FIXED: Ensure conversion
+            'summary': corrected_summary,  # FIXED: Use corrected summary
+            'quality': {
+                'overall_quality': result.get('quality', {}).get('overall_quality', 0),
+                'status': result.get('quality', {}).get('status', 'Unknown'),
+                'restoration_quality': result.get('quality', {}).get('restoration_quality', 0),
+                'segmentation_quality': result.get('quality', {}).get('segmentation_quality', 0),
+                'feature_quality': result.get('quality', {}).get('feature_quality', 0)
+            },
+            'technical_details': result.get('technical_details', {}),
+            'visualizations': result.get('visualizations', {})
+        }
+        
+        return json_result
+        
+    except Exception as e:
+        print(f"❌ Error converting professional result to JSON: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def convert_to_json_serializable(obj):
+    """Convert any object to JSON-serializable format - ENHANCED VERSION"""
+    try:
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, (np.integer, np.int64, np.int32)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64, np.float32)):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {k: convert_to_json_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_json_serializable(item) for item in obj]
+        elif isinstance(obj, tuple):
+            return tuple(convert_to_json_serializable(item) for item in obj)
+        elif pd.isna(obj) or obj is None:  # ADDED: Handle pandas NaN
+            return None
+        elif isinstance(obj, (bool, np.bool_)):
+            return bool(obj)
+        elif hasattr(obj, 'item'):  # For numpy scalars
+            return obj.item()
+        elif isinstance(obj, pd.DataFrame):  # ADDED: Handle DataFrames
+            return obj.to_dict('records')
+        else:
+            return obj
+    except:
+        return str(obj)  # fallback to string representation
+
+def create_enhanced_summary(results, all_cells):
+    """Create enhanced summary from analysis results"""
+    try:
+        if not results or not all_cells:
+            return {
+                'total_cells_detected': 0,
+                'total_green_cells': 0,
+                'average_area': 0,
+                'total_biomass': 0,
+                'images_processed': len(results) if results else 0
+            }
+        
+        # Convert to DataFrame for easier processing
+        cells_df = pd.DataFrame(all_cells)
+        
+        summary = {
+            'total_cells_detected': len(all_cells),
+            'images_processed': len(results),
+            'average_area': float(cells_df.get('area_microns_sq', pd.Series([0])).mean()),
+            'total_biomass': float(cells_df.get('biomass_estimate_ug', pd.Series([0])).sum()),
+            'total_green_cells': int(cells_df.get('is_green_cell', pd.Series([False])).sum()),
+            'area_statistics': {
+                'min': float(cells_df.get('area_microns_sq', pd.Series([0])).min()),
+                'max': float(cells_df.get('area_microns_sq', pd.Series([0])).max()),
+                'std': float(cells_df.get('area_microns_sq', pd.Series([0])).std())
+            },
+            'quality_statistics': {
+                'average_quality': float(np.mean([r.get('quality', {}).get('overall_quality', 0) for r in results if r.get('success')])),
+                'successful_analyses': sum(1 for r in results if r.get('success'))
+            }
+        }
+        
+        return summary
+        
+    except Exception as e:
+        print(f"⚠️ Error creating enhanced summary: {e}")
+        return {
+            'total_cells_detected': len(all_cells) if all_cells else 0,
+            'images_processed': len(results) if results else 0,
+            'error': str(e)
+        }
 
 @app.route('/')
 def index():
@@ -105,7 +311,7 @@ def upload_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Update the get_analysis_status endpoint to handle errors better:
+# Professional analysis status endpoint with enhanced error handling
 @app.route('/api/analyze/<analysis_id>', methods=['GET'])
 def get_analysis_status(analysis_id):
     """Get analysis status with progress updates"""
@@ -131,32 +337,16 @@ def get_analysis_status(analysis_id):
             'error_details': error_traceback
         }), 500
 
-@app.route('/api/set_parameters', methods=['POST'])
-def set_parameters():
-    """Update analyzer parameters including ML settings"""
+@app.route('/api/get_parameters', methods=['GET'])
+def get_parameters():
+    """Get current analyzer parameters"""
     try:
-        data = request.json
-        
-        if 'pixel_to_micron' in data:
-            analyzer.pixel_to_micron = float(data['pixel_to_micron'])
-        
-        if 'chlorophyll_threshold' in data:
-            analyzer.chlorophyll_threshold = float(data['chlorophyll_threshold'])
-        
-        if 'min_area_microns' in data:
-            analyzer.wolffia_params['min_area_microns'] = float(data['min_area_microns'])
-        
-        if 'max_area_microns' in data:
-            analyzer.wolffia_params['max_area_microns'] = float(data['max_area_microns'])
-        
-        if 'expected_circularity' in data:
-            analyzer.wolffia_params['expected_circularity'] = float(data['expected_circularity'])
-        
         return jsonify({
             'success': True,
-            'parameters': analyzer.get_current_parameters()
+            'parameters': analyzer.get_current_parameters(),
+            'pipeline_type': PIPELINE_TYPE,
+            'enhanced_features': PIPELINE_TYPE == "professional_improved"
         })
-        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -268,20 +458,1109 @@ def calibrate():
 
 
 
+
+# Replace analyzer initialization
+analyzer = UltimateWolffiaAnalyzer(pixel_to_micron_ratio=0.5, chlorophyll_threshold=0.6)
+
+
+# Add ultimate analysis endpoint
+@app.route('/api/analyze_ultimate', methods=['POST'])
+def analyze_ultimate():
+    """Ultimate analysis endpoint using the best pipeline"""
+    try:
+        if 'files' not in request.files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        files = request.files.getlist('files')
+        config = request.form.to_dict()
+        
+        # Extract configuration
+        analysis_mode = config.get('analysis_mode', 'auto')
+        confidence_threshold = float(config.get('confidence_threshold', 0.05))
+        detailed_analysis = config.get('detailed_analysis', 'true').lower() == 'true'
+        force_advanced = config.get('force_advanced', 'false').lower() == 'true'
+        generate_visualizations = config.get('generate_visualizations', 'true').lower() == 'true'
+        
+        # Save uploaded files
+        uploaded_files = []
+        for file in files:
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                unique_filename = f"{timestamp}_{filename}"
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                file.save(filepath)
+                uploaded_files.append(filepath)
+        
+        # Analyze each file
+        results = []
+        for filepath in uploaded_files:
+            result = analyzer.analyze_image_ultimate(
+                filepath,
+                mode=analysis_mode,
+                confidence_threshold=confidence_threshold,
+                force_advanced=force_advanced,
+                detailed_analysis=detailed_analysis,
+                save_visualizations=generate_visualizations
+            )
+            
+            if result:
+                json_result = convert_to_json_serializable(result)
+                results.append(json_result)
+        
+        # Generate summary
+        summary = generate_ultimate_summary(results)
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'summary': summary,
+            'analysis_type': 'ultimate_multi_pipeline',
+            'configuration': config,
+            'total_images': len(uploaded_files)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/system_status', methods=['GET'])
+def get_system_status():
+    """Get comprehensive system status"""
+    try:
+        health = analyzer.health_check()
+        params = analyzer.get_current_parameters()
+        
+        return jsonify({
+            'health': health,
+            'parameters': params,
+            'gpu_available': params['gpu_info']['cuda_available'],
+            'advanced_pipeline_available': params['available_pipelines']['advanced_8_stage'],
+            'system_capabilities': params['system_capabilities'],
+            'performance_stats': params['performance_stats']
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def generate_ultimate_summary(results):
+    """Generate summary for ultimate results"""
+    if not results:
+        return {}
+    
+    total_cells = sum(len(r.get('cells', [])) for r in results)
+    total_green = sum(r.get('summary', {}).get('total_green_cells', 0) for r in results)
+    total_biomass = sum(r.get('summary', {}).get('total_biomass', 0) for r in results)
+    
+    # Advanced metrics
+    all_confidences = []
+    viable_cells = 0
+    
+    for result in results:
+        for cell in result.get('cells', []):
+            all_confidences.append(cell.get('confidence', 0))
+            if cell.get('viability_estimate') == 'high':
+                viable_cells += 1
+    
+    return {
+        'total_images_analyzed': len(results),
+        'total_cells_detected': total_cells,
+        'total_green_cells': total_green,
+        'total_biomass': total_biomass,
+        'green_cell_percentage': (total_green / total_cells * 100) if total_cells else 0,
+        'average_cells_per_image': total_cells / len(results) if results else 0,
+        'confidence_metrics': {
+            'mean_confidence': np.mean(all_confidences) if all_confidences else 0,
+            'high_confidence_cells': sum(1 for c in all_confidences if c > 0.8)
+        },
+        'quality_indicators': {
+            'viable_cells': viable_cells,
+            'viability_rate': (viable_cells / total_cells * 100) if total_cells else 0
+        },
+        'pipeline_statistics': {
+            'advanced_pipeline_used': sum(1 for r in results if r.get('advanced_pipeline', False)),
+            'professional_pipeline_used': sum(1 for r in results if not r.get('advanced_pipeline', True)),
+            'hybrid_analysis_used': sum(1 for r in results if r.get('hybrid_analysis', False))
+        }
+    }
+
+# Add this route to web_integration.py to serve uploaded images
+
+# Add these imports at the top if not present
+import mimetypes
+
+from werkzeug.utils import safe_join
+
+
+# Add this route to serve uploaded files
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    """Serve uploaded files for tophat training and visualization"""
+    try:
+        safe_filename = secure_filename(filename)
+        file_path = safe_join(app.config['UPLOAD_FOLDER'], safe_filename)
+        
+        print(f"🔍 Serving file request: {filename}")
+        print(f"📁 Looking for file at: {file_path}")
+        
+        if file_path and os.path.exists(file_path):
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if mime_type is None:
+                mime_type = 'application/octet-stream'
+            
+            print(f"✅ File found, serving: {file_path}")
+            return send_file(file_path, mimetype=mime_type)
+        else:
+            print(f"❌ File not found: {file_path}")
+            if os.path.exists(app.config['UPLOAD_FOLDER']):
+                available_files = os.listdir(app.config['UPLOAD_FOLDER'])
+                print(f"📋 Available files: {available_files}")
+            return jsonify({'error': 'File not found', 'requested': filename}), 404
+            
+    except Exception as e:
+        print(f"❌ Error serving file {filename}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Add debug endpoint
+@app.route('/api/debug/uploads', methods=['GET'])
+def debug_uploads():
+    """Debug endpoint to check uploaded files"""
+    try:
+        upload_dir = app.config['UPLOAD_FOLDER']
+        if os.path.exists(upload_dir):
+            files = []
+            for filename in os.listdir(upload_dir):
+                file_path = os.path.join(upload_dir, filename)
+                if os.path.isfile(file_path):
+                    files.append({
+                        'filename': filename,
+                        'size': os.path.getsize(file_path),
+                        'modified': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
+                    })
+            
+            return jsonify({
+                'upload_directory': upload_dir,
+                'files': files,
+                'total_files': len(files)
+            })
+        else:
+            return jsonify({'error': 'Upload directory does not exist', 'path': upload_dir}), 404
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def process_core_analysis(analysis_id, uploaded_files):
+    """Enhanced core analysis processing with better error handling and data validation"""
+    try:
+        # Update status
+        analysis_progress[analysis_id] = {
+            'status': 'processing',
+            'progress': 10,
+            'current_step': 'Starting Professional Analysis',
+            'total_images': len(uploaded_files),
+            'processed_images': 0
+        }
+
+        file_paths = [f['path'] for f in uploaded_files]
+        timestamps = [f"T{i}" for i in range(len(file_paths))]
+
+        results = []
+        
+        for i, (path, timestamp) in enumerate(zip(file_paths, timestamps)):
+            analysis_progress[analysis_id]['current_step'] = f'Analyzing Image {i+1}/{len(file_paths)}'
+            analysis_progress[analysis_id]['progress'] = 10 + (80 * i / len(file_paths))
+            
+            print(f"\n{'='*60}")
+            print(f"🧬 Professional Analysis {i+1}/{len(file_paths)}")
+            print(f"📁 Path: {path}")
+            print(f"⏰ Timestamp: {timestamp}")
+            print(f"{'='*60}")
+            
+            # Use the appropriate analyzer method based on pipeline type
+            if PIPELINE_TYPE == "professional_improved":
+                # Use improved professional pipeline
+                result = analyzer.analyze_image_professional(
+                    path, 
+                    restoration_mode='auto',
+                    segmentation_model='auto',
+                    diameter=analyzer.wolffia_params.get('diameter'),
+                    flow_threshold=analyzer.wolffia_params.get('flow_threshold'),
+                    learn_from_analysis=True,
+                    save_visualizations=True
+                )
+            elif hasattr(analyzer, 'analyze_image_professional'):
+                # Use original professional pipeline
+                result = analyzer.analyze_image_professional(path, model='auto', restoration='auto')
+            else:
+                # Fallback to legacy method
+                result = analyzer.analyze_single_image_enhanced(path, timestamp, save_visualization=True)
+            
+            if result and result.get('success'):
+                # ENHANCED: Better data validation and conversion
+                print(f"📊 Raw result summary: {result.get('summary', {})}")
+                print(f"🔬 Raw cells count: {len(result.get('cells', []))}")
+                
+                # Convert to JSON-serializable format for web
+                json_result = convert_professional_result_to_json(result, timestamp)
+                if json_result:
+                    # VALIDATION: Check if data was converted correctly
+                    converted_cells = len(json_result.get('cells', []))
+                    converted_summary = json_result.get('summary', {})
+                    
+                    print(f"✅ Converted result - Cells: {converted_cells}, Summary: {converted_summary.get('total_cells_detected', 0)}")
+                    
+                    # ENSURE: Summary matches actual cell data
+                    if converted_cells > 0 and converted_summary.get('total_cells_detected', 0) == 0:
+                        print("🔧 Fixing summary mismatch...")
+                        json_result['summary']['total_cells_detected'] = converted_cells
+                        json_result['summary']['total_cells'] = converted_cells
+                    
+                    results.append(json_result)
+                    print(f"✅ Professional analysis {i+1} completed successfully")
+                else:
+                    print(f"❌ Failed to serialize results for image {i+1}")
+            else:
+                error_msg = result.get('error', 'Unknown error') if result else 'Analysis failed'
+                print(f"❌ Professional analysis {i+1} failed: {error_msg}")
+                
+            analysis_progress[analysis_id]['processed_images'] = i + 1
+
+        if results:
+            # Generate comprehensive summary with VALIDATION
+            print(f"\n🔍 Generating summary from {len(results)} results...")
+            
+            for i, result in enumerate(results):
+                cell_count = len(result.get('cells', []))
+                summary_count = result.get('summary', {}).get('total_cells_detected', 0)
+                print(f"Result {i+1}: {cell_count} cells in data, {summary_count} in summary")
+            
+            summary = generate_professional_summary(results)
+            print(f"📈 Generated summary: {summary}")
+            
+            # Store results with validation
+            analysis_results[analysis_id] = {
+                'status': 'completed',
+                'message': 'Professional analysis completed successfully',
+                'results': results,
+                'summary': summary,
+                'timestamp': datetime.now().isoformat(),
+                'analysis_type': 'professional_time_series' if len(results) > 1 else 'professional_single_image',
+                'total_images_processed': len(results),
+                'pipeline_version': 'Professional_v1.0_Fixed'
+            }
+            
+            # Final validation
+            final_cell_count = summary.get('total_cells_detected', 0)
+            print(f"🎯 FINAL VALIDATION: {final_cell_count} total cells across all images")
+            
+            # Update progress
+            analysis_progress[analysis_id] = {
+                'status': 'completed',
+                'progress': 100,
+                'current_step': 'Analysis complete',
+                'total_images': len(uploaded_files),
+                'processed_images': len(results)
+            }
+            
+            print(f"\n{'='*60}")
+            print(f"🎉 PROFESSIONAL ANALYSIS COMPLETE")
+            print(f"🖼️ Images: {len(results)}")
+            print(f"🔬 Total cells: {final_cell_count}")
+            print(f"🌱 Green cells: {summary.get('total_green_cells', 0)}")
+            print(f"⚖️ Biomass: {summary.get('total_biomass', 0):.2f} μg")
+            print(f"📈 Quality: {summary.get('average_quality', 0):.3f}")
+            print(f"{'='*60}\n")
+            
+        else:
+            analysis_results[analysis_id] = {
+                'status': 'completed_with_warnings',
+                'message': 'Analysis completed but no valid results generated',
+                'results': [],
+                'timestamp': datetime.now().isoformat(),
+                'pipeline_version': 'Professional_v1.0_Fixed'
+            }
+            
+            analysis_progress[analysis_id]['status'] = 'completed_with_warnings'
+            analysis_progress[analysis_id]['current_step'] = 'Analysis complete - no valid results'
+
+    except Exception as e:
+        import traceback
+        error_message = str(e)
+        error_traceback = traceback.format_exc()
+        
+        print(f"\n{'='*60}")
+        print(f"❌ CRITICAL ERROR in Professional Analysis")
+        print(f"Error: {error_message}")
+        print(f"{'='*60}")
+        print(error_traceback)
+        
+        analysis_results[analysis_id] = {
+            'status': 'failed',
+            'message': 'Professional analysis failed with critical error',
+            'error': error_message,
+            'timestamp': datetime.now().isoformat(),
+            'pipeline_version': 'Professional_v1.0_Fixed'
+        }
+        
+        analysis_progress[analysis_id] = {
+            'status': 'failed',
+            'current_step': f'Error: {error_message}',
+            'progress': 0
+        }
+
+# Enhanced web integration with GPU status reporting
+
 @app.route('/api/health_check', methods=['GET'])
 def health_check():
-    """API health check"""
-    return jsonify({
-        'status': 'healthy',
-        'version': '2.0-Core',
-        'analyzer_status': 'ready',
-        'parameters': {
-            'pixel_to_micron': analyzer.pixel_to_micron,
-            'chlorophyll_threshold': analyzer.chlorophyll_threshold
-        }
-    })
+    """Enhanced health check with GPU status and performance monitoring"""
+    try:
+        params = analyzer.get_current_parameters()
+        
+        # Get GPU information
+        gpu_info = params.get('gpu_info', {})
+        gpu_status = params.get('gpu_status', {})
+        performance_stats = params.get('performance_stats', {})
+        
+        # Get tophat training status if available
+        tophat_status = {}
+        if hasattr(analyzer, 'get_tophat_training_status'):
+            tophat_status = analyzer.get_tophat_training_status()
+        
+        # Determine overall GPU status
+        gpu_enabled = gpu_info.get('cuda_available', False)
+        gpu_name = gpu_info.get('gpu_name', 'None')
+        gpu_memory = gpu_info.get('gpu_memory', 0)
+        
+        # GPU status message
+        if gpu_enabled:
+            gpu_status_msg = f"✅ {gpu_name} ({gpu_memory:.1f} GB)"
+        else:
+            gpu_status_msg = "❌ CPU Only (Install CUDA + GPU PyTorch for acceleration)"
+        
+        # Performance recommendations
+        recommendations = []
+        if not gpu_enabled:
+            recommendations.append("Install CUDA and GPU-enabled PyTorch for 5-10x speed improvement")
+        
+        if not NUMEXPR_AVAILABLE:
+            recommendations.append("Install numexpr for faster NumPy operations: pip install numexpr")
+        
+        if gpu_enabled and not CUPY_AVAILABLE:
+            recommendations.append("Install CuPy for GPU array operations: pip install cupy-cuda11x")
+        
+        # Memory usage info
+        memory_info = {}
+        if gpu_enabled and 'memory_usage' in gpu_status:
+            memory_usage = gpu_status['memory_usage']
+            memory_info = {
+                'gpu_allocated_gb': memory_usage.get('allocated', 0),
+                'gpu_cached_gb': memory_usage.get('cached', 0),
+                'gpu_peak_gb': memory_usage.get('max_allocated', 0)
+            }
+        
+        return jsonify({
+            'status': 'healthy',
+            'version': '2.0-Professional-GPU',
+            'pipeline': 'Professional_Bioinformatics_GPU_v1.0',
+            'pipeline_type': PIPELINE_TYPE,
+            'analyzer_status': 'ready',
+            'gpu_acceleration': {
+                'enabled': gpu_enabled,
+                'status': gpu_status_msg,
+                'device_name': gpu_name,
+                'memory_gb': gpu_memory,
+                'memory_usage': memory_info,
+                'cuda_version': torch.version.cuda if (TORCH_AVAILABLE and gpu_enabled) else None,
+                'pytorch_version': torch.__version__ if TORCH_AVAILABLE else 'Not installed'
+            },
+            'performance': {
+                'total_analyses': performance_stats.get('total_analyses', 0),
+                'avg_processing_time': performance_stats.get('avg_processing_time', 0),
+                'gpu_memory_peak_mb': performance_stats.get('gpu_memory_peak', 0)
+            },
+            'modules_status': params.get('engines_status', params.get('modules_status', {})),
+            'optimization_libraries': {
+                'numexpr': '✅ Available' if NUMEXPR_AVAILABLE else '❌ Not installed',
+                'cupy': '✅ Available' if CUPY_AVAILABLE else '❌ Not installed (GPU only)',
+                'tensorrt': '❓ Optional'
+            },
+            'recommendations': recommendations,
+            'tophat_training': tophat_status,
+            'parameters': {
+                'pixel_to_micron': analyzer.pixel_to_micron,
+                'chlorophyll_threshold': analyzer.chlorophyll_threshold,
+                'use_gpu': analyzer.wolffia_params.get('use_gpu', False),
+                'gpu_batch_size': analyzer.wolffia_params.get('batch_size', 1)
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'version': '2.0-Professional-GPU',
+            'error': str(e),
+            'gpu_acceleration': {
+                'enabled': False,
+                'status': '❌ Error checking GPU status'
+            }
+        }), 500
 
-# In web_integration.py, update the process_enhanced_analysis function:
+@app.route('/api/gpu_status', methods=['GET'])
+def get_gpu_status():
+    """Detailed GPU status endpoint"""
+    try:
+        if hasattr(analyzer, 'segmentation_engine') and analyzer.segmentation_engine:
+            gpu_status = analyzer.segmentation_engine.get_gpu_status()
+            
+            # Add real-time GPU monitoring
+            if gpu_status['gpu_available']:
+                try:
+                    import subprocess
+                    result = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu', '--format=csv,noheader,nounits'], 
+                                          capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0:
+                        gpu_util, mem_used, mem_total, temp = result.stdout.strip().split(', ')
+                        gpu_status['real_time'] = {
+                            'utilization_percent': int(gpu_util),
+                            'memory_used_mb': int(mem_used),
+                            'memory_total_mb': int(mem_total),
+                            'temperature_c': int(temp)
+                        }
+                except:
+                    gpu_status['real_time'] = {'error': 'nvidia-smi not available'}
+            
+            return jsonify({
+                'success': True,
+                'gpu_status': gpu_status,
+                'optimization_tips': [
+                    "Use batch processing for multiple images",
+                    "Monitor GPU memory usage to prevent OOM errors",
+                    "Clear GPU cache between analyses if needed",
+                    "Consider mixed precision for faster inference"
+                ]
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Segmentation engine not available'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/optimize_gpu', methods=['POST'])
+def optimize_gpu_settings():
+    """Optimize GPU settings based on current hardware"""
+    try:
+        data = request.json or {}
+        
+        if not hasattr(analyzer, 'gpu_info') or not analyzer.gpu_info['cuda_available']:
+            return jsonify({
+                'success': False,
+                'error': 'GPU not available'
+            }), 400
+        
+        # Get current GPU memory usage
+        try:
+            current_memory = torch.cuda.memory_allocated(0) / 1e9 if TORCH_AVAILABLE else 0  # GB
+            total_memory = analyzer.gpu_info['gpu_memory']
+            
+            # Optimize batch size based on available memory
+            available_memory = total_memory - current_memory
+            
+            if available_memory > 6:
+                recommended_batch = 8
+                recommended_diameter = 35
+            elif available_memory > 3:
+                recommended_batch = 4
+                recommended_diameter = 30
+            else:
+                recommended_batch = 2
+                recommended_diameter = 25
+            
+            # Apply optimizations
+            analyzer.wolffia_params['batch_size'] = recommended_batch
+            analyzer.wolffia_params['diameter'] = recommended_diameter
+            
+            # Clear GPU cache
+            if TORCH_AVAILABLE:
+                torch.cuda.empty_cache()
+            
+            return jsonify({
+                'success': True,
+                'optimizations_applied': {
+                    'batch_size': recommended_batch,
+                    'diameter': recommended_diameter,
+                    'cache_cleared': True
+                },
+                'gpu_memory': {
+                    'total_gb': total_memory,
+                    'available_gb': available_memory,
+                    'current_usage_gb': current_memory
+                },
+                'message': f'GPU settings optimized for {analyzer.gpu_info["gpu_name"]}'
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to optimize GPU settings: {str(e)}'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# Enhanced parameter setting with GPU optimization
+@app.route('/api/set_parameters', methods=['POST'])
+def set_parameters():
+    """Update analyzer parameters with GPU-aware optimization"""
+    try:
+        data = request.json
+        
+        # Basic parameters
+        if 'pixel_to_micron' in data:
+            analyzer.pixel_to_micron = float(data['pixel_to_micron'])
+        
+        if 'chlorophyll_threshold' in data:
+            analyzer.chlorophyll_threshold = float(data['chlorophyll_threshold'])
+        
+        # Enhanced professional parameters
+        if hasattr(analyzer, 'set_parameters'):
+            analyzer.set_parameters(**data)
+        else:
+            # Fallback for legacy parameters
+            if 'min_area_microns' in data:
+                analyzer.wolffia_params['min_area_microns'] = float(data['min_area_microns'])
+            
+            if 'max_area_microns' in data:
+                analyzer.wolffia_params['max_area_microns'] = float(data['max_area_microns'])
+            
+            if 'expected_circularity' in data:
+                analyzer.wolffia_params['expected_circularity'] = float(data['expected_circularity'])
+        
+        # GPU-specific parameters
+        if 'diameter' in data and hasattr(analyzer, 'wolffia_params'):
+            diameter = float(data['diameter'])
+            # Validate diameter for GPU memory constraints
+            if analyzer.wolffia_params.get('use_gpu', False):
+                max_diameter = analyzer.gpu_info['recommended_settings'].get('diameter', 30) + 10
+                if diameter > max_diameter:
+                    diameter = max_diameter
+                    print(f"⚠️ Diameter limited to {max_diameter} for GPU memory constraints")
+            
+            analyzer.wolffia_params['diameter'] = diameter
+        
+        if 'flow_threshold' in data and hasattr(analyzer, 'wolffia_params'):
+            analyzer.wolffia_params['flow_threshold'] = float(data['flow_threshold'])
+        
+        if 'batch_size' in data and hasattr(analyzer, 'wolffia_params'):
+            batch_size = int(data['batch_size'])
+            # Validate batch size for GPU memory
+            if analyzer.wolffia_params.get('use_gpu', False):
+                max_batch = analyzer.gpu_info['recommended_settings'].get('batch_size', 4)
+                if batch_size > max_batch:
+                    batch_size = max_batch
+                    print(f"⚠️ Batch size limited to {max_batch} for GPU memory constraints")
+            
+            analyzer.wolffia_params['batch_size'] = batch_size
+        
+        # Clear GPU cache after parameter changes
+        if analyzer.wolffia_params.get('use_gpu', False):
+            try:
+                if TORCH_AVAILABLE:
+                    torch.cuda.empty_cache()
+            except:
+                pass
+        
+        return jsonify({
+            'success': True,
+            'parameters': analyzer.get_current_parameters(),
+            'pipeline_type': PIPELINE_TYPE,
+            'gpu_optimized': analyzer.wolffia_params.get('use_gpu', False),
+            'message': 'Parameters updated successfully'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Add GPU installation check helper
+@app.route('/api/check_gpu_setup', methods=['GET'])
+def check_gpu_setup():
+    """Check GPU setup and provide installation guidance"""
+    try:
+        setup_status = {
+            'cuda_available': torch.cuda.is_available() if TORCH_AVAILABLE else False,
+            'pytorch_version': torch.__version__ if TORCH_AVAILABLE else 'Not installed',
+            'torch_cuda_version': torch.version.cuda if TORCH_AVAILABLE else None,
+            'gpu_count': torch.cuda.device_count() if (TORCH_AVAILABLE and torch.cuda.is_available()) else 0,
+            'recommendations': []
+        }
+        
+        if TORCH_AVAILABLE and torch.cuda.is_available():
+            setup_status['gpu_name'] = torch.cuda.get_device_name(0)
+            setup_status['gpu_memory'] = torch.cuda.get_device_properties(0).total_memory / 1e9
+        elif not TORCH_AVAILABLE:
+            setup_status['recommendations'].extend([
+                "1. Install PyTorch: pip install torch torchvision torchaudio",
+                "2. For GPU support: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118",
+                "3. Install NVIDIA GPU drivers if not already installed",
+                "4. Install CUDA Toolkit from developer.nvidia.com/cuda-downloads"
+            ])
+        else:
+            setup_status['recommendations'].extend([
+                "1. Install NVIDIA GPU drivers from nvidia.com",
+                "2. Install CUDA Toolkit from developer.nvidia.com/cuda-downloads",
+                "3. Uninstall current PyTorch: pip uninstall torch torchvision torchaudio",
+                "4. Install GPU PyTorch: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118",
+                "5. Install performance packages: pip install numexpr cupy-cuda11x"
+            ])
+        
+        # Check for performance libraries
+        setup_status['libraries'] = {
+            'numexpr': NUMEXPR_AVAILABLE,
+            'cupy': CUPY_AVAILABLE,
+            'cellpose_version': getattr(cellpose, '__version__', 'unknown') if CELLPOSE_AVAILABLE else 'not_installed'
+        }
+        
+        return jsonify(setup_status)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/tophat/save_annotations', methods=['POST'])
+def save_tophat_annotations():
+    """Save user annotations for tophat training"""
+    try:
+        data = request.json
+        analysis_id = data.get('analysis_id')
+        image_path = data.get('image_path')
+        annotations = data.get('annotations', [])
+        
+        if not analysis_id or not image_path or not annotations:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        # Save annotations using analyzer
+        if hasattr(analyzer, 'save_tophat_annotations'):
+            success = analyzer.save_tophat_annotations(analysis_id, image_path, annotations)
+            
+            if success:
+                # Get updated training status
+                training_status = analyzer.get_tophat_training_status()
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Saved {len(annotations)} annotations',
+                    'training_status': training_status
+                })
+            else:
+                return jsonify({'error': 'Failed to save annotations'}), 500
+        else:
+            return jsonify({'error': 'Tophat training not available'}), 400
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/tophat/apply_training/<analysis_id>', methods=['POST'])
+def apply_tophat_training(analysis_id):
+    """Apply tophat training to improve analysis results"""
+    try:
+        if analysis_id not in analysis_results:
+            return jsonify({'error': 'Analysis not found'}), 404
+        
+        # Get the analysis results
+        result_data = analysis_results[analysis_id]
+        if not result_data.get('results'):
+            return jsonify({'error': 'No analysis results found'}), 400
+        
+        # Apply tophat training to each image in the results
+        improved_results = []
+        
+        for result in result_data['results']:
+            if not result.get('success'):
+                improved_results.append(result)
+                continue
+            
+            image_path = result.get('image_path')
+            if not image_path or not os.path.exists(image_path):
+                improved_results.append(result)
+                continue
+            
+            # Apply tophat training if available
+            if hasattr(analyzer, 'apply_tophat_training'):
+                # Get original segmentation (we need to re-run analysis with tophat)
+                if PIPELINE_TYPE == "professional_improved":
+                    tophat_result = analyzer.analyze_image_professional(
+                        image_path,
+                        restoration_mode='auto',
+                        segmentation_model='auto',
+                        learn_from_analysis=False,  # Don't learn during tophat application
+                        save_visualizations=True
+                    )
+                    
+                    if tophat_result and tophat_result.get('success'):
+                        # Convert to JSON serializable and add tophat flag
+                        tophat_result['tophat_applied'] = True
+                        tophat_result['original_cells'] = len(result.get('cells', []))
+                        tophat_result['improved_cells'] = len(tophat_result.get('cells', []))
+                        
+                        json_result = convert_professional_result_to_json(tophat_result, result.get('timestamp'))
+                        if json_result:
+                            improved_results.append(json_result)
+                        else:
+                            improved_results.append(result)
+                    else:
+                        improved_results.append(result)
+                else:
+                    # Fallback for non-improved pipelines
+                    improved_results.append(result)
+            else:
+                improved_results.append(result)
+        
+        # Update the stored results
+        result_data['results'] = improved_results
+        result_data['tophat_applied'] = True
+        result_data['tophat_timestamp'] = datetime.now().isoformat()
+        
+        # Recalculate summary
+        all_cells = []
+        for result in improved_results:
+            if result.get('success') and result.get('cells'):
+                all_cells.extend(result['cells'])
+        
+        summary = create_enhanced_summary(improved_results, all_cells)
+        result_data['summary'] = summary
+        
+        return jsonify({
+            'success': True,
+            'message': f'Tophat training applied to {len(improved_results)} images',
+            'results': convert_to_json_serializable(result_data),
+            'training_status': analyzer.get_tophat_training_status() if hasattr(analyzer, 'get_tophat_training_status') else {}
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/tophat/status', methods=['GET'])
+def get_tophat_status():
+    """Get tophat training system status"""
+    try:
+        if hasattr(analyzer, 'get_tophat_training_status'):
+            status = analyzer.get_tophat_training_status()
+            return jsonify({
+                'success': True,
+                'status': status
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Tophat training not available'
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+    
+    # Enhanced web endpoints for neural network training
+# Add these endpoints to web_integration.py
+
+@app.route('/api/tophat/force_retrain', methods=['POST'])
+def force_retrain_tophat():
+    """Force retrain the tophat models with all available annotations"""
+    try:
+        if not hasattr(analyzer, 'learning_engine') or not analyzer.learning_engine:
+            return jsonify({'error': 'Learning engine not available'}), 400
+        
+        # Check if we have enough annotations
+        num_annotations = len(analyzer.learning_engine.user_annotations)
+        if num_annotations < 5:
+            return jsonify({
+                'error': f'Need at least 5 annotation sessions, have {num_annotations}',
+                'current_annotations': num_annotations,
+                'min_required': 5
+            }), 400
+        
+        print(f"🚀 Force retraining initiated with {num_annotations} annotation sessions...")
+        
+        # Trigger force retraining
+        success = analyzer.learning_engine.force_retrain()
+        
+        if success:
+            # Get updated training status
+            training_status = analyzer.get_tophat_training_status()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully retrained models with {num_annotations} annotation sessions',
+                'training_status': training_status,
+                'models_created': training_status.get('models_trained', {}),
+                'best_model': training_status.get('best_model', 'unknown'),
+                'recommendations': training_status.get('recommended_action', '')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Retraining failed - check server logs for details',
+                'num_annotations': num_annotations
+            }), 500
+            
+    except Exception as e:
+        print(f"❌ Error during force retrain: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_details': traceback.format_exc()
+        }), 500
+
+@app.route('/api/tophat/enhanced_status', methods=['GET'])
+def get_enhanced_tophat_status():
+    """Get enhanced tophat training system status with neural network info"""
+    try:
+        if hasattr(analyzer, 'get_tophat_training_status'):
+            status = analyzer.get_tophat_training_status()
+            
+            # Add system capabilities info
+            status['system_capabilities'] = {
+                'tensorflow_available': False,
+                'sklearn_available': True,
+                'can_train_neural_networks': True,
+                'supported_models': ['tensorflow_neural_network', 'simple_neural_network', 'random_forest']
+            }
+            
+            # Check TensorFlow availability
+            try:
+                import tensorflow as tf
+                status['system_capabilities']['tensorflow_available'] = True
+                status['system_capabilities']['tensorflow_version'] = tf.__version__
+            except ImportError:
+                pass
+            
+            # Add annotation details
+            if hasattr(analyzer.learning_engine, 'user_annotations'):
+                annotations = analyzer.learning_engine.user_annotations
+                annotation_stats = {
+                    'total_sessions': len(annotations),
+                    'total_examples': sum(len(ann.get('annotations', [])) for ann in annotations),
+                    'positive_examples': 0,
+                    'negative_examples': 0
+                }
+                
+                for session in annotations:
+                    for ann in session.get('annotations', []):
+                        if ann.get('type') == 'positive':
+                            annotation_stats['positive_examples'] += 1
+                        elif ann.get('type') == 'negative':
+                            annotation_stats['negative_examples'] += 1
+                
+                status['annotation_stats'] = annotation_stats
+            
+            return jsonify({
+                'success': True,
+                'status': status
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Enhanced tophat training not available'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'error': str(e)
+        }), 500
+
+@app.route('/api/tophat/apply_neural_training/<analysis_id>', methods=['POST'])
+def apply_neural_tophat_training(analysis_id):
+    """Apply neural network-enhanced tophat training to improve analysis results"""
+    try:
+        if analysis_id not in analysis_results:
+            return jsonify({'error': 'Analysis not found'}), 404
+        
+        # Get the analysis results
+        result_data = analysis_results[analysis_id]
+        if not result_data.get('results'):
+            return jsonify({'error': 'No analysis results found'}), 400
+        
+        # Check if any neural network models are available
+        training_status = analyzer.get_tophat_training_status()
+        if not training_status.get('any_model_trained', False):
+            return jsonify({
+                'error': 'No trained models available',
+                'training_status': training_status,
+                'suggestion': 'Create annotations and train models first'
+            }), 400
+        
+        print(f"🧠 Applying neural network-enhanced tophat training to analysis {analysis_id}")
+        print(f"🎯 Best available model: {training_status.get('best_model', 'unknown')}")
+        
+        # Apply enhanced tophat training to each image in the results
+        improved_results = []
+        improvement_stats = {
+            'total_images': 0,
+            'improved_images': 0,
+            'cells_before': 0,
+            'cells_after': 0,
+            'confidence_scores': []
+        }
+        
+        for result in result_data['results']:
+            improvement_stats['total_images'] += 1
+            
+            if not result.get('success'):
+                improved_results.append(result)
+                continue
+            
+            image_path = result.get('image_path')
+            if not image_path or not os.path.exists(image_path):
+                improved_results.append(result)
+                continue
+            
+            # Apply enhanced tophat training
+            if PIPELINE_TYPE == "professional_improved":
+                enhanced_result = analyzer.analyze_image_professional(
+                    image_path,
+                    restoration_mode='auto',
+                    segmentation_model='auto',
+                    learn_from_analysis=False,  # Don't learn during enhancement
+                    save_visualizations=True
+                )
+                
+                if enhanced_result and enhanced_result.get('success'):
+                    # Apply the neural network model
+                    original_labels = enhanced_result.get('segmentation', {}).get('labels')
+                    if original_labels is not None:
+                        # Load image for tophat application
+                        image = cv2.imread(image_path)
+                        if image is not None:
+                            improved_labels, confidence_scores = analyzer.learning_engine.apply_tophat_model(
+                                image, original_labels
+                            )
+                            
+                            # Update the segmentation results
+                            if np.max(improved_labels) > 0:
+                                enhanced_result['segmentation']['labels'] = improved_labels
+                                enhanced_result['tophat_enhanced'] = True
+                                enhanced_result['tophat_confidence'] = confidence_scores
+                                enhanced_result['improvement_info'] = {
+                                    'original_cells': len(result.get('cells', [])),
+                                    'enhanced_cells': len(enhanced_result.get('cells', [])),
+                                    'model_used': training_status.get('best_model', 'unknown'),
+                                    'confidence_scores': confidence_scores
+                                }
+                                
+                                improvement_stats['improved_images'] += 1
+                                improvement_stats['cells_before'] += len(result.get('cells', []))
+                                improvement_stats['cells_after'] += len(enhanced_result.get('cells', []))
+                                improvement_stats['confidence_scores'].extend(confidence_scores)
+                    
+                    # Convert to JSON serializable and add enhancement flags
+                    json_result = convert_professional_result_to_json(enhanced_result, result.get('timestamp'))
+                    if json_result:
+                        json_result['neural_enhanced'] = True
+                        improved_results.append(json_result)
+                    else:
+                        improved_results.append(result)
+                else:
+                    improved_results.append(result)
+            else:
+                # Fallback for non-improved pipelines
+                improved_results.append(result)
+        
+        # Update the stored results
+        result_data['results'] = improved_results
+        result_data['neural_enhanced'] = True
+        result_data['enhancement_timestamp'] = datetime.now().isoformat()
+        result_data['enhancement_stats'] = improvement_stats
+        
+        # Recalculate summary
+        all_cells = []
+        for result in improved_results:
+            if result.get('success') and result.get('cells'):
+                all_cells.extend(result['cells'])
+        
+        summary = create_enhanced_summary(improved_results, all_cells)
+        result_data['summary'] = summary
+        
+        return jsonify({
+            'success': True,
+            'message': f'Neural network enhancement applied to {improvement_stats["total_images"]} images',
+            'results': convert_to_json_serializable(result_data),
+            'enhancement_stats': improvement_stats,
+            'training_status': training_status,
+            'model_used': training_status.get('best_model', 'unknown')
+        })
+        
+    except Exception as e:
+        print(f"❌ Error applying neural tophat training: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_details': traceback.format_exc()
+        }), 500
+
+@app.route('/api/tophat/model_info', methods=['GET'])
+def get_tophat_model_info():
+    """Get detailed information about available tophat models"""
+    try:
+        if not hasattr(analyzer, 'learning_engine') or not analyzer.learning_engine:
+            return jsonify({'error': 'Learning engine not available'}), 400
+        
+        learning_dir = analyzer.learning_engine.learning_dir
+        model_info = {
+            'tensorflow_model': {
+                'available': (learning_dir / 'neural_segmentation_model').exists(),
+                'path': str(learning_dir / 'neural_segmentation_model'),
+                'type': 'deep_neural_network',
+                'description': 'TensorFlow/Keras deep neural network with multiple layers and dropout'
+            },
+            'simple_nn_model': {
+                'available': (learning_dir / 'simple_neural_network.pkl').exists(),
+                'path': str(learning_dir / 'simple_neural_network.pkl'),
+                'type': 'simple_neural_network',
+                'description': 'NumPy-based neural network with ReLU and sigmoid activations'
+            },
+            'random_forest_model': {
+                'available': (learning_dir / 'tophat_classifier.pkl').exists(),
+                'path': str(learning_dir / 'tophat_classifier.pkl'),
+                'type': 'ensemble_classifier',
+                'description': 'Random Forest ensemble classifier with 100 trees'
+            }
+        }
+        
+        # Add file sizes and modification times
+        for model_name, info in model_info.items():
+            if info['available']:
+                try:
+                    model_path = Path(info['path'])
+                    if model_path.exists():
+                        if model_path.is_dir():  # TensorFlow model directory
+                            total_size = sum(f.stat().st_size for f in model_path.rglob('*') if f.is_file())
+                            info['size_mb'] = round(total_size / 1024 / 1024, 2)
+                        else:  # Pickle file
+                            info['size_mb'] = round(model_path.stat().st_size / 1024 / 1024, 2)
+                        info['last_modified'] = datetime.fromtimestamp(model_path.stat().st_mtime).isoformat()
+                except Exception as e:
+                    info['error'] = str(e)
+        
+        return jsonify({
+            'success': True,
+            'models': model_info,
+            'total_models': sum(1 for m in model_info.values() if m['available']),
+            'learning_directory': str(learning_dir)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 def process_enhanced_analysis(analysis_id, uploaded_files):
     """Process analysis with ML enhancement and progress updates"""
@@ -642,100 +1921,174 @@ def generate_enhanced_analysis_report(results):
     except Exception as e:
         return f"Error generating report: {str(e)}"
 
-def process_core_analysis(analysis_id, uploaded_files):
-    """Process core analysis with essential functionality only"""
+
+# Helper functions for professional pipeline integration
+
+def convert_professional_result_to_json(result, timestamp):
+    """Convert professional analysis result to JSON-serializable format"""
     try:
-        # Update status
-        analysis_progress[analysis_id] = {
-            'status': 'processing',
-            'progress': 10,
-            'current_step': 'Starting analysis',
-            'total_images': len(uploaded_files),
-            'processed_images': 0
+        json_result = {
+            'timestamp': timestamp,
+            'image_path': result.get('image_path', ''),
+            'success': result.get('success', False),
+            'cells': result.get('cells', []),
+            'summary': result.get('summary', {}),
+            'quality': {
+                'overall_quality': result.get('quality', {}).get('overall_quality', 0),
+                'status': result.get('quality', {}).get('status', 'Unknown'),
+                'restoration_quality': result.get('quality', {}).get('restoration_quality', 0),
+                'segmentation_quality': result.get('quality', {}).get('segmentation_quality', 0),
+                'feature_quality': result.get('quality', {}).get('feature_quality', 0)
+            },
+            'technical_details': result.get('technical_details', {}),
+            'visualizations': result.get('visualizations', {})
         }
-
-        file_paths = [f['path'] for f in uploaded_files]
-        timestamps = [f"T{i}" for i in range(len(file_paths))]
-
-        results = []
         
-        for i, (path, timestamp) in enumerate(zip(file_paths, timestamps)):
-            analysis_progress[analysis_id]['current_step'] = f'Analyzing image {i+1}/{len(file_paths)}'
-            analysis_progress[analysis_id]['progress'] = 10 + (80 * i / len(file_paths))
-            
-            # Core analysis using bioimaging module
-            result = analyze_uploaded_image(path, analyzer)
-            
-            if result:
-                # Convert to JSON-serializable format
-                json_result = convert_to_json_serializable(result)
-                if json_result:
-                    json_result['timestamp'] = timestamp
-                    json_result['image_path'] = path
-                    results.append(json_result)
-                    
-            analysis_progress[analysis_id]['processed_images'] = i + 1
-
-        if results:
-            # Generate summary
-            summary = generate_enhanced_summary(results)
-            
-            # Store results
-            analysis_results[analysis_id] = {
-                'status': 'completed',
-                'message': 'Analysis completed successfully',
-                'results': results,
-                'summary': summary,
-                'timestamp': datetime.now().isoformat(),
-                'analysis_type': 'time_series' if len(results) > 1 else 'single_image',
-                'total_images_processed': len(results)
-            }
-            
-            # Update progress
-            analysis_progress[analysis_id] = {
-                'status': 'completed',
-                'progress': 100,
-                'current_step': 'Analysis complete',
-                'total_images': len(uploaded_files),
-                'processed_images': len(results)
-            }
-            
-        else:
-            analysis_results[analysis_id] = {
-                'status': 'failed',
-                'message': 'No results generated',
-                'results': [],
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            analysis_progress[analysis_id]['status'] = 'failed'
-            analysis_progress[analysis_id]['current_step'] = 'Analysis failed - no results'
-
+        # Ensure all values are JSON serializable
+        return convert_to_json_serializable(json_result)
+        
     except Exception as e:
-        import traceback
-        error_message = str(e)
-        error_traceback = traceback.format_exc()
+        print(f"Error converting professional result to JSON: {e}")
+        return None
+
+def generate_time_series_summary(results):
+    """Generate time series summary for multiple images"""
+    try:
+        successful_results = [r for r in results if r.get('success', False)]
         
-        print(f"Error in process_core_analysis: {error_message}")
-        print(f"Traceback: {error_traceback}")
+        if len(successful_results) < 2:
+            return None
+            
+        # Calculate growth metrics
+        cell_counts = [r.get('summary', {}).get('total_cells_detected', 0) for r in successful_results]
+        biomass_values = [r.get('summary', {}).get('total_biomass', 0) for r in successful_results]
         
-        analysis_results[analysis_id] = {
-            'status': 'failed',
-            'message': 'Analysis failed',
-            'error': error_message,
-            'timestamp': datetime.now().isoformat()
+        time_series = {
+            'total_timepoints': len(successful_results),
+            'cell_count_trend': {
+                'initial': cell_counts[0] if cell_counts else 0,
+                'final': cell_counts[-1] if cell_counts else 0,
+                'change': cell_counts[-1] - cell_counts[0] if len(cell_counts) >= 2 else 0,
+                'percent_change': ((cell_counts[-1] - cell_counts[0]) / cell_counts[0] * 100) if cell_counts and cell_counts[0] > 0 else 0
+            },
+            'biomass_trend': {
+                'initial': biomass_values[0] if biomass_values else 0,
+                'final': biomass_values[-1] if biomass_values else 0,
+                'change': biomass_values[-1] - biomass_values[0] if len(biomass_values) >= 2 else 0,
+                'percent_change': ((biomass_values[-1] - biomass_values[0]) / biomass_values[0] * 100) if biomass_values and biomass_values[0] > 0 else 0
+            }
         }
         
-        analysis_progress[analysis_id] = {
-            'status': 'failed',
-            'current_step': f'Error: {error_message}',
-            'progress': 0
+        return time_series
+        
+    except Exception as e:
+        print(f"Error generating time series summary: {e}")
+        return None
+
+def generate_professional_summary(results):
+    """Generate comprehensive summary for professional analysis - FIXED VERSION"""
+    try:
+        successful_results = [r for r in results if r.get('success', False)]
+        
+        if not successful_results:
+            return {
+                'total_cells_detected': 0,
+                'total_green_cells': 0,
+                'total_biomass': 0,
+                'average_quality': 0,
+                'analysis_success_rate': 0
+            }
+        
+        # FIXED: Aggregate metrics across all images properly
+        total_cells = 0
+        total_green_cells = 0
+        total_biomass = 0
+        all_areas = []
+        
+        for result in successful_results:
+            # FIXED: Handle different summary key names
+            summary = result.get('summary', {})
+            
+            # Get cell count
+            cell_count = (summary.get('total_cells_detected', 0) or 
+                         summary.get('total_cells', 0) or 
+                         len(result.get('cells', [])))
+            total_cells += cell_count
+            
+            # Get green cell count
+            green_count = (summary.get('total_green_cells', 0) or
+                          summary.get('green_cells', 0))
+            if green_count == 0 and result.get('cells'):
+                # Fallback: count from actual cell data
+                green_count = sum(1 for cell in result['cells'] 
+                                if cell.get('is_green_cell', False))
+            total_green_cells += green_count
+            
+            # Get biomass
+            biomass = (summary.get('total_biomass', 0) or
+                      summary.get('biomass', 0))
+            if biomass == 0 and result.get('cells'):
+                # Fallback: sum from actual cell data
+                biomass = sum(cell.get('biomass_estimate_ug', 0) or 0 
+                            for cell in result['cells'])
+            total_biomass += biomass
+            
+            # Collect areas for average calculation
+            if result.get('cells'):
+                for cell in result['cells']:
+                    area = (cell.get('area_microns_sq', 0) or 
+                           cell.get('area_microns', 0) or 0)
+                    if area > 0:
+                        all_areas.append(area)
+        
+        # Calculate average area
+        average_cell_area = sum(all_areas) / len(all_areas) if all_areas else 0
+        
+        # Quality metrics
+        quality_scores = [r.get('quality', {}).get('overall_quality', 0) for r in successful_results]
+        average_quality = sum(quality_scores) / len(quality_scores) if quality_scores else 0
+        
+        success_rate = len(successful_results) / len(results) if results else 0
+        
+        summary = {
+            'total_images_analyzed': len(results),
+            'successful_analyses': len(successful_results),
+            'analysis_success_rate': success_rate,
+            'total_cells_detected': total_cells,
+            'total_green_cells': total_green_cells,
+            'total_biomass': total_biomass,
+            'average_cell_area': average_cell_area,
+            'average_quality': average_quality,
+            'quality_distribution': {
+                'excellent': sum(1 for q in quality_scores if q > 0.85),
+                'good': sum(1 for q in quality_scores if 0.7 < q <= 0.85),
+                'acceptable': sum(1 for q in quality_scores if 0.5 < q <= 0.7),
+                'needs_improvement': sum(1 for q in quality_scores if q <= 0.5)
+            }
+        }
+        
+        print(f"📈 FINAL SUMMARY: {total_cells} cells, {total_green_cells} green, {total_biomass:.3f} μg")
+        return summary
+        
+    except Exception as e:
+        print(f"❌ Error generating professional summary: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'error': str(e),
+            'total_cells_detected': 0,
+            'total_green_cells': 0,
+            'total_biomass': 0
         }
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("BIOIMAGIN Web Server v2.0 - Core")
-    print("=" * 50)
+    print("=" * 60)
+    print("PROFESSIONAL BIOIMAGIN Web Server v2.0")
+    print("=" * 60)
+    print("🧬 Professional Bioinformatics Pipeline")
+    print("🔬 CellPose + SimpleITK Integration")
+    print("📊 Advanced Quality Assessment")
+    print("=" * 60)
     print("Starting Flask server...")
     print("Core features enabled:")
     print("✓ Cell detection and counting")
