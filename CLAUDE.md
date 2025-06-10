@@ -44,26 +44,49 @@ BIOIMAGIN OPTIMIZED is a streamlined, high-performance bioimage analysis system 
 
 ### Installation and Setup
 ```bash
-# Install dependencies
+# Install dependencies from requirements.txt
+pip install -r requirements.txt
+
+# Essential dependencies (if installing manually)
 pip install opencv-python numpy matplotlib pandas scikit-learn flask flask-cors
 
-# Install optional but recommended packages
-pip install cellpose scikit-image
+# Optional but recommended packages for advanced features
+pip install cellpose>=3.0.0 torch torchvision SimpleITK
 
-# Quick start with optimized launcher (recommended)
-python run_optimized.py
+# Initialize system check
+python -c "from bioimaging import WolffiaAnalyzer; print('System initialized successfully')"
 
-# Alternative: Direct web server launch
+# Start web interface
 python web_integration.py
 ```
 
 ### Running Analysis
 ```bash
-# Start optimized system (checks dependencies automatically)
-python run_optimized.py
+# Start web server (main entry point)
+python web_integration.py
 
 # Access web interface at http://localhost:5000
 # Features: Upload images, analyze with/without tophat, train AI model
+
+# Direct command-line analysis (for testing)
+python -c "
+from bioimaging import WolffiaAnalyzer
+analyzer = WolffiaAnalyzer()
+result = analyzer.analyze_image('path/to/image.jpg')
+print(f'Detected {result[\"total_cells\"]} cells')
+"
+```
+
+### Tophat AI Model Training
+```bash
+# Train tophat model from existing annotations
+python tophat_trainer.py
+
+# Check available training sessions
+ls -la tophat_training/
+
+# View annotation files
+ls -la annotations/
 ```
 
 ### System Testing
@@ -98,18 +121,18 @@ print('Features: Multi-method segmentation, CellPose integration, biomass estima
 "
 
 # Test web server health
+curl http://localhost:5000/api/health
+
+# Test analysis on sample image (if available)
 python -c "
-import requests
-import time
-import subprocess
-subprocess.Popen(['python', 'web_integration.py'])
-time.sleep(3)
-response = requests.get('http://localhost:5000/api/health_check')
-if response.status_code == 200:
-    data = response.json()
-    print(f'✅ Web server status: {data[\"status\"]}')
+from bioimaging import WolffiaAnalyzer
+import os
+analyzer = WolffiaAnalyzer()
+if os.path.exists('images/test_wolffia_cells.png'):
+    result = analyzer.analyze_image('images/test_wolffia_cells.png')
+    print(f'✅ Analysis test: {result[\"total_cells\"]} cells detected')
 else:
-    print('❌ Web server failed to start')
+    print('⚠️ No test image found at images/test_wolffia_cells.png')
 "
 ```
 
@@ -118,16 +141,17 @@ else:
 ### Code Organization
 - **Main Pipeline**: `WolffiaAnalyzer` class in bioimaging.py (primary analysis engine)
 - **Web Integration**: web_integration.py with Flask API and background processing
+- **Tophat Training**: tophat_trainer.py for AI model training from annotations
 - **API Endpoints**: All endpoints prefixed with `/api/` in web_integration.py  
 - **File Structure**:
   - `uploads/`: Temporary uploaded images
-  - `results/`: Individual analysis results (CSV format)
+  - `results/`: Individual analysis results (JSON/CSV format)
   - `wolffia_results/`: Time series and comprehensive analysis outputs
-  - `training_data/`: ML training data in JSON format
-  - `learning_system/`: AI learning system data and model performance tracking
-  - `models/`: CellPose pre-trained models (.pla files)
-  - `annotations/`: Manual annotations for training
+  - `models/`: Pre-trained models (CellPose .pla files, tophat_model.pkl)
+  - `annotations/`: Manual annotations for training (PNG images + JSON data)
+  - `tophat_training/`: Training session data in JSON format
   - `imagepy/`: Documentation and notes on different analysis methods
+  - `images/`: Test images and organized sample datasets
 
 ### Key Classes and Methods
 
@@ -147,11 +171,11 @@ else:
 - `get_analysis_status()`: Real-time status and results retrieval
 - `export_results()`: CSV/JSON export functionality
 
-**Tophat AI Training (bioimaging.py)**:
-- `start_tophat_training()`: Initialize training session with multiple images
-- `save_user_annotations()`: Store user corrections for model training
-- `train_tophat_model()`: Train Random Forest classifier from annotations
-- `collect_training_data()`: Prepare features and labels from user feedback
+**Tophat AI Training**:
+- **bioimaging.py**: Core training methods integrated into WolffiaAnalyzer
+- **tophat_trainer.py**: Standalone script for batch training from existing annotations
+- Key methods: `start_tophat_training()`, `save_user_annotations()`, `train_tophat_model()`
+- Training pipeline: Load annotations → Extract features → Train Random Forest → Save model
 
 ### File Paths and Structure
 - Analysis results: `/results/`
@@ -226,9 +250,10 @@ else:
 
 ### Quick Debugging
 ```bash
-# Check system status with optimized launcher
-python run_optimized.py
-# This automatically checks dependencies and starts the system
+# Start web server and check health
+python web_integration.py &
+sleep 3
+curl http://localhost:5000/api/health
 
 # Test analysis pipeline directly
 python -c "
@@ -238,8 +263,19 @@ print('✅ Optimized analyzer ready')
 print(f'Tophat model: {\"Available\" if analyzer.tophat_model else \"Not trained\"}')
 "
 
-# Check web server health
-curl http://localhost:5000/api/health
+# Check dependency availability
+python -c "
+import sys
+try:
+    import torch; print('✅ PyTorch available')
+except: print('⚠️ PyTorch not available')
+try:
+    import cellpose; print('✅ CellPose available') 
+except: print('⚠️ CellPose not available')
+try:
+    from bioimaging import WolffiaAnalyzer; print('✅ Core analyzer available')
+except Exception as e: print(f'❌ Core analyzer failed: {e}')
+"
 ```
 
 ### Tophat Model Management
@@ -265,3 +301,22 @@ ls -la annotations/
 - **Training sessions**: `tophat_training/session_<timestamp>.json`
 - **User annotations**: `annotations/<session>_<image>_annotation.json`
 - **Uploaded files**: `uploads/` (temporary)
+
+### Development and Testing
+```bash
+# Code formatting (if black is available)
+black bioimaging.py web_integration.py tophat_trainer.py
+
+# Code linting (if flake8 is available)  
+flake8 bioimaging.py web_integration.py --max-line-length=100
+
+# Run basic functionality tests
+python -m pytest tests/ 2>/dev/null || echo "No pytest tests configured"
+
+# Manual testing of core components
+python -c "
+from bioimaging import WolffiaAnalyzer
+analyzer = WolffiaAnalyzer()
+print('Core system test passed')
+"
+```

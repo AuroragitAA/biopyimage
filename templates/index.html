@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BIOIMAGIN Focused - Professional Wolffia Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
         * {
             margin: 0;
@@ -13,7 +14,6 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -424,6 +424,23 @@
             .export-buttons {
                 flex-direction: column;
             }
+        }
+
+                /* Essential overrides only - main styles come from external CSS */
+        .file-input { display: none; }
+        .hidden { display: none !important; }
+        
+        /* Essential styling for pipeline functionality */
+        .pipeline-container { margin: 20px 0; }
+        .pipeline-content.expanded { max-height: 3000px !important; }
+        
+        /* Essential responsive overrides */
+        @media (max-width: 768px) {
+            .container { margin: 10px; }
+            .options { grid-template-columns: 1fr; }
+            .metrics-grid { grid-template-columns: 1fr; }
+            .visualization-grid { grid-template-columns: 1fr; }
+            .export-buttons { flex-direction: column; }
         }
     </style>
 </head>
@@ -947,7 +964,10 @@
             const resultsContainer = document.getElementById('resultsContainer');
             
             const resultItem = document.createElement('div');
-            resultItem.className = 'result-item';
+            // Add enhanced class based on detection method
+            const detectionMethod = result.detection_results?.detection_method || '';
+            const enhancedClass = detectionMethod.includes('AI') || detectionMethod.includes('watershed') || detectionMethod.includes('shape') ? 'analysis-improved' : 'analysis-success';
+            resultItem.className = `result-item ${enhancedClass}`;
             
             // Extract data
             const detection = result.detection_results || {};
@@ -958,22 +978,38 @@
             const temporal = result.temporal_analysis;
             const visualizations = result.visualizations || {};
             const legend = visualizations.detection_legend || {};
+            const pipelineSteps = visualizations.pipeline_steps || {};
+            
+            // Determine detection method class for styling
+            let methodClass = 'method-classical-slic';
+            if (detection.detection_method) {
+                if (detection.detection_method.includes('CellDetection AI')) {
+                    methodClass = 'method-celldetection-ai';
+                } else if (detection.detection_method.includes('watershed')) {
+                    methodClass = 'method-advanced-watershed';
+                } else if (detection.detection_method.includes('shape')) {
+                    methodClass = 'method-shape-based';
+                }
+            }
             
             resultItem.innerHTML = `
                 <div class="result-header">
                     <div class="result-title">📄 ${filename}</div>
-                    <div class="detection-method ${detection.detection_method && detection.detection_method.includes('AI') ? 'method-ai' : 'method-classical'}">
-                        ${detection.detection_method || 'Unknown Method'}
+                    <div class="detection-method-enhanced ${methodClass}">
+                        ${detection.detection_method || 'Classical Detection'}
                     </div>
                 </div>
 
-                <!-- Detection Legend (moved outside image) -->
+                <!-- ENHANCED EXPANDABLE PROCESSING PIPELINE VISUALIZATION -->
+                ${createPipelineVisualization(pipelineSteps, detection.detection_method)}
+
+                <!-- Detection Legend -->
                 ${legend.total_cells ? `
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #007bff;">
                     <h4 style="color: #2c3e50; margin-bottom: 15px;">🔍 Detection Summary & Color Legend</h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
                         <div>
-                            <strong>Detection Results:</strong><br>
+                            <strong>Enhanced Detection Results:</strong><br>
                             • Total Cells: ${legend.total_cells}<br>
                             • Total Biomass: ${legend.metrics?.total_biomass_mg?.toFixed(3) || '0.000'} mg<br>
                             • Avg Cell Area: ${legend.metrics?.average_cell_area?.toFixed(1) || '0.0'} pixels²<br>
@@ -1062,12 +1098,112 @@
             
             resultsContainer.appendChild(resultItem);
             
-            // Load visualizations (excluding health dashboard)
-            loadVisualizations(analysisId, result.visualizations);
+            // Load visualizations (excluding pipeline - handled separately)
+            loadVisualizations(analysisId, visualizations);
+            
+            // Setup pipeline interactions
+            setupPipelineInteractions(analysisId);
             
             resultItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
+        function createPipelineVisualization(pipelineSteps, detectionMethod) {
+            if (!pipelineSteps || !pipelineSteps.pipeline_overview) {
+                return `
+                <div class="pipeline-container">
+                    <div class="pipeline-header">
+                        <h4>🔬 Processing Pipeline</h4>
+                        <span style="color: #ffc107;">⚠️ Pipeline visualization not available</span>
+                    </div>
+                </div>
+                `;
+            }
+            
+            const stepDescriptions = pipelineSteps.step_descriptions || {};
+            const individualSteps = pipelineSteps.individual_steps || {};
+            const stepCount = pipelineSteps.step_count || 0;
+            
+            // Define pipeline steps with status
+            const pipelineDefinition = [
+                { key: 'original', name: 'Original Image', status: 'success', icon: '📸' },
+                { key: 'gray', name: 'Grayscale', status: 'success', icon: '⚫' },
+                { key: 'denoised', name: 'Denoising', status: 'success', icon: '🧹' },
+                { key: 'li_foreground', name: 'Li Thresholding', status: 'success', icon: '🎯' },
+                { key: 'plate_removed', name: 'Plate Removal', status: 'success', icon: '🗑️' },
+                { key: 'multi_otsu', name: 'Multi-Otsu', status: 'success', icon: '🔧' },
+                { key: 'combined', name: 'Mask Fusion', status: 'success', icon: '🔀' },
+                { key: 'opened', name: 'Morphological', status: 'success', icon: '🔄' },
+                { key: 'final', name: 'Final Segmentation', status: 'success', icon: '✅' },
+                { key: 'detection_result', name: 'Cell Detection', status: detectionMethod?.includes('AI') ? 'success' : 'warning', icon: '🧬' }
+            ];
+            
+            const uniqueId = `pipeline-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            return `
+            <div class="pipeline-container" id="${uniqueId}">
+                <div class="pipeline-header" onclick="togglePipeline(this)">
+                    <h4>
+                        <span class="step-indicator success"></span>
+                        🔬 Enhanced Detection Pipeline
+                        <span style="font-size: 0.8em; font-weight: normal; margin-left: 10px;">
+                            (${stepCount} processing steps completed)
+                        </span>
+                    </h4>
+                    <span class="pipeline-toggle">▼</span>
+                </div>
+                <div class="pipeline-content">
+                    <!-- Steps Summary -->
+                    <div class="pipeline-steps-summary">
+                        ${pipelineDefinition.map(step => `
+                            <div class="processing-step ${individualSteps[step.key] ? 'active' : 'inactive'}" 
+                                onclick="showStepDetail('${step.key}', '${step.name}', '${stepDescriptions[step.key] || 'Processing step'}')">
+                                <span class="step-indicator ${step.status}"></span>
+                                ${step.icon} ${step.name}
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <!-- Pipeline Overview -->
+                    <div class="pipeline-overview">
+                        <h5>📊 Complete Processing Pipeline</h5>
+                        <p>Click the image below to see the full step-by-step processing pipeline:</p>
+                        <img src="data:image/png;base64,${pipelineSteps.pipeline_overview}" 
+                            alt="Complete Processing Pipeline"
+                            onclick="openStepModal('Complete Processing Pipeline', 'data:image/png;base64,${pipelineSteps.pipeline_overview}', 'Full step-by-step processing pipeline showing each stage of the analysis')">
+                    </div>
+                    
+                    <!-- Individual Steps -->
+                    ${Object.keys(individualSteps).length > 0 ? `
+                    <div class="individual-steps">
+                        <h5>🔍 Individual Processing Steps</h5>
+                        <p>Click any step below to see detailed results and statistics:</p>
+                        <div class="steps-grid">
+                            ${pipelineDefinition.filter(step => individualSteps[step.key]).map(step => `
+                                <div class="step-item" onclick="openStepModal('${step.name}', 'data:image/png;base64,${individualSteps[step.key]}', '${stepDescriptions[step.key] || 'Processing step details'}')">
+                                    <img src="data:image/png;base64,${individualSteps[step.key]}" alt="${step.name}">
+                                    <div class="step-item-info">
+                                        <div class="step-item-title">${step.icon} ${step.name}</div>
+                                        <div class="step-item-description">${stepDescriptions[step.key]?.substring(0, 80) || 'Click to view details'}...</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <!-- Modal for detailed step view -->
+            <div id="stepModal" class="step-modal">
+                <div class="step-modal-content">
+                    <span class="step-modal-close" onclick="closeStepModal()">&times;</span>
+                    <h3 id="stepModalTitle"></h3>
+                    <p id="stepModalDescription"></p>
+                    <img id="stepModalImage" src="" alt="">
+                </div>
+            </div>
+            `;
+        }
         function displayBatchResults(batchResult) {
             const resultsContainer = document.getElementById('resultsContainer');
             
@@ -1143,35 +1279,154 @@
         }
 
         function loadVisualizations(analysisId, visualizations) {
-            if (!visualizations) return;
-            
             const vizContainer = document.getElementById(`viz-${analysisId}`);
             if (!vizContainer) return;
             
-            // Define visualization priorities and titles (excluding health_dashboard)
             const vizConfig = {
                 'detection_overview': 'Cell Detection Overview',
-                'size_histogram': 'Size Distribution',
                 'biomass_chart': 'Biomass Analysis',
+                'size_histogram': 'Size Distribution', 
                 'color_analysis': 'Color Analysis',
                 'temporal_analysis': 'Temporal Changes'
             };
             
             Object.entries(vizConfig).forEach(([key, title]) => {
-                if (visualizations[key]) {
+                if (visualizations[key] && key !== 'pipeline_steps') {  // Exclude pipeline_steps (handled separately)
                     const vizItem = document.createElement('div');
                     vizItem.className = 'visualization-item';
-                    vizItem.innerHTML = `
-                        <h4>${title}</h4>
-                        <img src="data:image/png;base64,${visualizations[key]}" 
-                             alt="${title}"
-                             loading="lazy">
-                    `;
-                    vizContainer.appendChild(vizItem);
+                    
+                    // Handle different visualization data formats
+                    let imageSrc = '';
+                    if (typeof visualizations[key] === 'string') {
+                        imageSrc = `data:image/png;base64,${visualizations[key]}`;
+                    } else if (visualizations[key] && visualizations[key].image) {
+                        imageSrc = `data:image/png;base64,${visualizations[key].image}`;
+                    }
+                    
+                    if (imageSrc) {
+                        vizItem.innerHTML = `
+                            <h4>${title}</h4>
+                            <img src="${imageSrc}" 
+                                alt="${title}"
+                                loading="lazy">
+                        `;
+                        vizContainer.appendChild(vizItem);
+                    }
                 }
             });
         }
 
+
+
+        function togglePipeline(header) {
+            const container = header.parentElement;
+            const content = container.querySelector('.pipeline-content');
+            const toggle = header.querySelector('.pipeline-toggle');
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                toggle.classList.remove('expanded');
+            } else {
+                content.classList.add('expanded');
+                toggle.classList.add('expanded');
+            }
+        }
+
+        function showStepDetail(stepKey, stepName, description) {
+            console.log(`Showing details for ${stepName}: ${description}`);
+            
+            // Highlight the step with animation
+            const stepElement = event.target;
+            const originalTransform = stepElement.style.transform;
+            stepElement.style.transform = 'scale(1.05)';
+            stepElement.style.boxShadow = '0 4px 15px rgba(0,123,255,0.3)';
+            
+            setTimeout(() => {
+                stepElement.style.transform = originalTransform;
+                stepElement.style.boxShadow = '';
+            }, 300);
+        }
+
+        function openStepModal(title, imageSrc, description) {
+            const modal = document.getElementById('stepModal');
+            const modalTitle = document.getElementById('stepModalTitle');
+            const modalDescription = document.getElementById('stepModalDescription');
+            const modalImage = document.getElementById('stepModalImage');
+            
+            modalTitle.textContent = title;
+            modalDescription.textContent = description;
+            modalImage.src = imageSrc;
+            modalImage.alt = title;
+            
+            modal.style.display = 'block';
+            
+            // Close modal when clicking outside
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    closeStepModal();
+                }
+            }
+        }
+
+        function closeStepModal() {
+            const modal = document.getElementById('stepModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        function setupPipelineInteractions(analysisId) {
+            // Add keyboard support for modal
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    closeStepModal();
+                }
+            });
+        }
+
+        // Auto-expand first pipeline when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                const firstPipeline = document.querySelector('.pipeline-header');
+                if (firstPipeline) {
+                    const content = firstPipeline.parentElement.querySelector('.pipeline-content');
+                    if (content && !content.classList.contains('expanded')) {
+                        togglePipeline(firstPipeline);
+                    }
+                }
+            }, 1000);
+        });
+
+        // Prevent body scroll when modal is open
+        function openStepModal(title, imageSrc, description) {
+            const modal = document.getElementById('stepModal');
+            const modalTitle = document.getElementById('stepModalTitle');
+            const modalDescription = document.getElementById('stepModalDescription');
+            const modalImage = document.getElementById('stepModalImage');
+            
+            modalTitle.textContent = title;
+            modalDescription.textContent = description;
+            modalImage.src = imageSrc;
+            modalImage.alt = title;
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            
+            // Close modal when clicking outside
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    closeStepModal();
+                }
+            }
+        }
+
+        function closeStepModal() {
+            const modal = document.getElementById('stepModal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto'; // Restore scrolling
+            }
+        }
         // Tophat Training Functions
         let currentTrainingSession = null;
         let drawingState = {};

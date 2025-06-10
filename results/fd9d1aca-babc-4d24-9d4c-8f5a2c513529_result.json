@@ -1,0 +1,49 @@
+{
+  "success": false,
+  "error": "estimate_sigma() got an unexpected keyword argument 'multichannel'",
+  "timestamp": "2025-06-10T14:46:17.862794",
+  "detection_results": {
+    "cells_detected": 0
+  },
+  "quantitative_analysis": {
+    "cell_count": 0,
+    "total_area": 0,
+    "total_area_microns": 0,
+    "avg_area": 0,
+    "avg_area_microns": 0,
+    "std_area": 0,
+    "size_distribution": {
+      "small": 0,
+      "medium": 0,
+      "large": 0,
+      "optimal": 0
+    },
+    "biomass_analysis": {
+      "total_biomass_mg": 0,
+      "avg_biomass_mg": 0,
+      "total_chlorophyll_mg": 0
+    },
+    "color_analysis": {
+      "green_cell_percentage": 0,
+      "avg_green_intensity": 0,
+      "chlorophyll_distribution": {
+        "high": 0,
+        "medium": 0,
+        "low": 0
+      }
+    },
+    "health_assessment": {
+      "overall_health": "unknown",
+      "health_score": 0,
+      "health_distribution": {
+        "excellent": 0,
+        "good": 0,
+        "moderate": 0,
+        "poor": 0
+      }
+    },
+    "avg_intensity": 0,
+    "avg_green_intensity": 0
+  },
+  "visualizations": null
+}

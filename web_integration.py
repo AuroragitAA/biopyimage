@@ -113,7 +113,8 @@ def upload_files():
         })
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Upload error: {str(e)}")
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 @app.route('/api/celldetection/status')
 def celldetection_status():
@@ -125,6 +126,7 @@ def celldetection_status():
             'status': status
         })
     except Exception as e:
+        print(f"❌ CellDetection status error: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e),
@@ -138,7 +140,7 @@ def celldetection_status():
 
 @app.route('/api/analyze/<file_id>', methods=['POST'])
 def analyze_image(file_id):
-    """Analyze a specific image"""
+    """Analyze a specific image with enhanced error handling"""
     try:
         request_data = request.get_json() or {}
         files_data = request_data.get('files', [])
@@ -169,14 +171,17 @@ def analyze_image(file_id):
             try:
                 analysis_results[file_id] = {'status': 'processing', 'progress': 0}
                 
-                print(f"🔬 Starting FOCUSED analysis for: {file_info.get('filename', 'Unknown')}")
+                print(f"🔬 Starting OPTIMIZED analysis for: {file_info.get('filename', 'Unknown')}")
                 print(f"📝 Options: celldetection={use_celldetection}, tophat={use_tophat}")
                 
                 file_path = file_info.get('path')
                 if not file_path or not os.path.exists(file_path):
                     raise FileNotFoundError(f"File not found: {file_path}")
                 
-                # Run focused analysis
+                # Update progress
+                analysis_results[file_id]['progress'] = 25
+                
+                # Run optimized analysis
                 result = analyzer.analyze_image(
                     file_path, 
                     use_celldetection=use_celldetection,
@@ -184,9 +189,13 @@ def analyze_image(file_id):
                     image_timestamp=file_info.get('timestamp')
                 )
                 
-                print(f"📊 Analysis result: {result.get('success', False)}")
+                # Update progress
+                analysis_results[file_id]['progress'] = 90
                 
-                # Save results
+                print(f"📊 Analysis result success: {result.get('success', False)}")
+                print(f"📊 Cells detected: {result.get('detection_results', {}).get('cells_detected', 0)}")
+                
+                # Save results with error handling
                 result_file = Path('results') / f"{file_id}_result.json"
                 
                 try:
@@ -203,15 +212,19 @@ def analyze_image(file_id):
                 }
                 
             except Exception as e:
-                print(f"❌ Analysis error: {e}")
+                print(f"❌ Analysis error for {file_id}: {e}")
+                import traceback
+                traceback.print_exc()
+                
                 analysis_results[file_id] = {
                     'status': 'error',
                     'progress': 0,
-                    'error': str(e)
+                    'error': str(e),
+                    'details': traceback.format_exc()
                 }
         
         # Start analysis thread
-        thread = threading.Thread(target=run_analysis)
+        thread = threading.Thread(target=run_analysis, daemon=True)
         thread.start()
         
         return jsonify({
@@ -221,11 +234,12 @@ def analyze_image(file_id):
         })
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Analysis setup error: {str(e)}")
+        return jsonify({'error': f'Analysis failed to start: {str(e)}'}), 500
 
 @app.route('/api/analyze_batch', methods=['POST'])
 def analyze_batch():
-    """Analyze multiple images with temporal analysis support"""
+    """Analyze multiple images with enhanced temporal analysis support"""
     try:
         request_data = request.get_json() or {}
         files_data = request_data.get('files', [])
@@ -242,7 +256,7 @@ def analyze_batch():
             try:
                 analysis_results[batch_id] = {'status': 'processing', 'progress': 0, 'results': []}
                 
-                print(f"🔬 Starting BATCH analysis for {len(files_data)} files")
+                print(f"🔬 Starting OPTIMIZED BATCH analysis for {len(files_data)} files")
                 print(f"📝 Options: celldetection={use_celldetection}, temporal={enable_temporal}")
                 
                 # Prepare file paths
@@ -253,31 +267,51 @@ def analyze_batch():
                     file_id = file_data.get('id')
                     if file_id in uploaded_files_store:
                         file_info = uploaded_files_store[file_id]
-                        file_paths.append(file_info['path'])
-                        file_infos.append(file_info)
+                        if os.path.exists(file_info['path']):
+                            file_paths.append(file_info['path'])
+                            file_infos.append(file_info)
                 
                 if not file_paths:
                     raise ValueError("No valid file paths found")
                 
+                # Update progress
+                analysis_results[batch_id]['progress'] = 10
+                
                 # Run analysis
                 if enable_temporal and len(file_paths) > 1:
+                    print("🕐 Running temporal analysis...")
                     # Use temporal analysis for multiple images
                     results = analyze_multiple_images(file_paths, use_celldetection=use_celldetection)
                 else:
+                    print("📊 Running individual analysis...")
                     # Individual analysis for each image
                     results = []
                     for i, file_path in enumerate(file_paths):
-                        timestamp = file_infos[i].get('timestamp') if enable_temporal else None
-                        result = analyzer.analyze_image(
-                            file_path,
-                            use_celldetection=use_celldetection,
-                            image_timestamp=timestamp
-                        )
-                        results.append(result)
-                        
-                        # Update progress
-                        progress = int(((i + 1) / len(file_paths)) * 100)
-                        analysis_results[batch_id]['progress'] = progress
+                        try:
+                            timestamp = file_infos[i].get('timestamp') if enable_temporal else None
+                            result = analyzer.analyze_image(
+                                file_path,
+                                use_celldetection=use_celldetection,
+                                image_timestamp=timestamp
+                            )
+                            results.append(result)
+                            
+                            # Update progress
+                            progress = 10 + int(((i + 1) / len(file_paths)) * 80)
+                            analysis_results[batch_id]['progress'] = progress
+                            
+                        except Exception as individual_error:
+                            print(f"⚠️ Individual analysis failed for {file_path}: {individual_error}")
+                            # Create error result for this image
+                            error_result = {
+                                'success': False,
+                                'error': str(individual_error),
+                                'filename': Path(file_path).name
+                            }
+                            results.append(error_result)
+                
+                # Update progress
+                analysis_results[batch_id]['progress'] = 95
                 
                 # Save batch results
                 batch_result_file = Path('results') / f"batch_{batch_id}_results.json"
@@ -306,14 +340,18 @@ def analyze_batch():
                 
             except Exception as e:
                 print(f"❌ Batch analysis error: {e}")
+                import traceback
+                traceback.print_exc()
+                
                 analysis_results[batch_id] = {
                     'status': 'error',
                     'progress': 0,
-                    'error': str(e)
+                    'error': str(e),
+                    'details': traceback.format_exc()
                 }
         
         # Start batch analysis thread
-        thread = threading.Thread(target=run_batch_analysis)
+        thread = threading.Thread(target=run_batch_analysis, daemon=True)
         thread.start()
         
         return jsonify({
@@ -324,26 +362,33 @@ def analyze_batch():
         })
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Batch analysis setup error: {str(e)}")
+        return jsonify({'error': f'Batch analysis failed to start: {str(e)}'}), 500
 
 def create_batch_summary(results):
-    """Create summary statistics for batch analysis"""
+    """Create summary statistics for batch analysis with error handling"""
     try:
         if not results:
-            return {}
+            return {'error': 'No results to summarize'}
         
         successful_results = [r for r in results if r.get('success', False)]
+        failed_results = [r for r in results if not r.get('success', False)]
         
         if not successful_results:
-            return {'total_files': len(results), 'successful_analyses': 0}
+            return {
+                'total_files': len(results),
+                'successful_analyses': 0,
+                'failed_analyses': len(failed_results),
+                'error_summary': [r.get('error', 'Unknown error') for r in failed_results[:5]]  # First 5 errors
+            }
         
         # Aggregate statistics
         total_cells = sum(r.get('detection_results', {}).get('cells_detected', 0) for r in successful_results)
         total_biomass = sum(r.get('quantitative_analysis', {}).get('biomass_analysis', {}).get('total_biomass_mg', 0) for r in successful_results)
-        avg_green_percentage = np.mean([r.get('quantitative_analysis', {}).get('color_analysis', {}).get('green_cell_percentage', 0) for r in successful_results])
+        avg_green_percentage = np.mean([r.get('quantitative_analysis', {}).get('color_analysis', {}).get('green_cell_percentage', 0) for r in successful_results]) if successful_results else 0
         
         # Health distribution aggregate
-        health_categories = {'excellent': 0, 'good': 0, 'moderate': 0, 'poor': 0}
+        health_categories = {'excellent': 0, 'good': 0, 'moderate': 0, 'poor': 0, 'critical': 0}
         for result in successful_results:
             health_dist = result.get('quantitative_analysis', {}).get('health_assessment', {}).get('health_distribution', {})
             for category in health_categories:
@@ -367,23 +412,26 @@ def create_batch_summary(results):
         return {
             'total_files': len(results),
             'successful_analyses': len(successful_results),
-            'failed_analyses': len(results) - len(successful_results),
+            'failed_analyses': len(failed_results),
+            'success_rate': (len(successful_results) / len(results)) * 100,
             'aggregate_statistics': {
                 'total_cells_detected': total_cells,
                 'total_biomass_mg': total_biomass,
                 'average_green_cell_percentage': avg_green_percentage,
-                'health_distribution_aggregate': health_categories
+                'health_distribution_aggregate': health_categories,
+                'avg_cells_per_image': total_cells / len(successful_results) if successful_results else 0
             },
-            'temporal_analysis_summary': temporal_summary
+            'temporal_analysis_summary': temporal_summary,
+            'error_summary': [r.get('error', 'Unknown error') for r in failed_results[:3]] if failed_results else None
         }
         
     except Exception as e:
         print(f"❌ Batch summary creation failed: {e}")
-        return {'error': str(e)}
+        return {'error': f'Summary creation failed: {str(e)}'}
 
 @app.route('/api/status/<analysis_id>')
 def get_analysis_status(analysis_id):
-    """Get analysis status and results"""
+    """Get analysis status and results with enhanced error reporting"""
     try:
         if analysis_id not in analysis_results:
             return jsonify({'error': 'Analysis not found'}), 404
@@ -400,22 +448,26 @@ def get_analysis_status(analysis_id):
             response['result'] = analysis['result']
         elif analysis['status'] == 'error':
             response['error'] = analysis['error']
+            # Include detailed error info for debugging (truncated for security)
+            if 'details' in analysis:
+                response['error_details'] = analysis['details'][:500]  # Limit size
         
         return jsonify(response)
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Status check error: {str(e)}")
+        return jsonify({'error': f'Status check failed: {str(e)}'}), 500
 
 @app.route('/api/export/<analysis_id>/<format>')
 def export_results(analysis_id, format):
-    """Export analysis results in various formats"""
+    """Export analysis results in various formats with error handling"""
     try:
         if analysis_id not in analysis_results:
             return jsonify({'error': 'Analysis not found'}), 404
         
         analysis = analysis_results[analysis_id]
         if analysis['status'] != 'completed':
-            return jsonify({'error': 'Analysis not completed'}), 400
+            return jsonify({'error': f'Analysis not completed (status: {analysis["status"]})'}), 400
         
         result = analysis['result']
         
@@ -430,27 +482,27 @@ def export_results(analysis_id, format):
         elif format == 'csv':
             # Export comprehensive CSV
             output_file = export_comprehensive_csv(result, analysis_id)
-            if output_file:
+            if output_file and os.path.exists(output_file):
                 return send_file(output_file, 
                                as_attachment=True, 
                                download_name=f"wolffia_analysis_{analysis_id}.csv")
             else:
-                return jsonify({'error': 'No data to export'}), 400
+                return jsonify({'error': 'No data to export or CSV generation failed'}), 400
         
         elif format == 'excel':
             # Export comprehensive Excel file
             output_file = export_comprehensive_excel(result, analysis_id)
-            if output_file:
+            if output_file and os.path.exists(output_file):
                 return send_file(output_file, 
                                as_attachment=True, 
                                download_name=f"wolffia_analysis_{analysis_id}.xlsx")
             else:
-                return jsonify({'error': 'No data to export'}), 400
+                return jsonify({'error': 'Excel export failed'}), 400
         
         elif format == 'report':
             # Export detailed report
             output_file = export_detailed_report(result, analysis_id)
-            if output_file:
+            if output_file and os.path.exists(output_file):
                 return send_file(output_file, 
                                as_attachment=True, 
                                download_name=f"wolffia_report_{analysis_id}.zip")
@@ -458,13 +510,14 @@ def export_results(analysis_id, format):
                 return jsonify({'error': 'Report generation failed'}), 400
         
         else:
-            return jsonify({'error': 'Unsupported format'}), 400
+            return jsonify({'error': f'Unsupported format: {format}'}), 400
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Export error: {str(e)}")
+        return jsonify({'error': f'Export failed: {str(e)}'}), 500
 
 def export_comprehensive_csv(result, analysis_id):
-    """Export comprehensive CSV with all analysis data"""
+    """Export comprehensive CSV with enhanced error handling"""
     try:
         # Check if it's a single result or batch result
         if 'batch_summary' in result:
@@ -477,7 +530,8 @@ def export_comprehensive_csv(result, analysis_id):
                     cells_data = individual_result.get('detection_results', {}).get('cells_data', [])
                     for cell in cells_data:
                         cell_row = create_cell_csv_row(cell, i + 1)
-                        all_cells_data.append(cell_row)
+                        if cell_row:  # Only add if row creation succeeded
+                            all_cells_data.append(cell_row)
             
             if all_cells_data:
                 df = pd.DataFrame(all_cells_data)
@@ -492,12 +546,14 @@ def export_comprehensive_csv(result, analysis_id):
                 csv_data = []
                 for cell in cells_data:
                     cell_row = create_cell_csv_row(cell)
-                    csv_data.append(cell_row)
+                    if cell_row:  # Only add if row creation succeeded
+                        csv_data.append(cell_row)
                 
-                df = pd.DataFrame(csv_data)
-                output_file = f"results/{analysis_id}_cells.csv"
-                df.to_csv(output_file, index=False)
-                return output_file
+                if csv_data:
+                    df = pd.DataFrame(csv_data)
+                    output_file = f"results/{analysis_id}_cells.csv"
+                    df.to_csv(output_file, index=False)
+                    return output_file
         
         return None
         
@@ -506,20 +562,30 @@ def export_comprehensive_csv(result, analysis_id):
         return None
 
 def create_cell_csv_row(cell, image_number=1):
-    """Create CSV row for a single cell with comprehensive data"""
+    """Create CSV row for a single cell with comprehensive data and error handling"""
     try:
+        # Get center coordinates safely
+        center = cell.get('center', [0, 0])
+        if isinstance(center, (list, tuple)) and len(center) >= 2:
+            center_x, center_y = center[0], center[1]
+        else:
+            center_x, center_y = 0, 0
+        
         row = {
             'Image_Number': image_number,
             'Cell_ID': cell.get('id', ''),
             'Area_Pixels': cell.get('area', 0),
+            'Area_Microns': cell.get('area_microns', 0),
             'Intensity': cell.get('intensity', 0),
             'Green_Intensity': cell.get('green_intensity', cell.get('intensity', 0)),
-            'Center_X': cell.get('center', [0, 0])[0],
-            'Center_Y': cell.get('center', [0, 0])[1],
+            'Center_X': center_x,
+            'Center_Y': center_y,
             'Detection_Method': cell.get('method', 'unknown'),
             'Confidence': cell.get('confidence', 0),
             'Perimeter': cell.get('perimeter', 0),
-            'Circularity': cell.get('circularity', 0)
+            'Circularity': cell.get('circularity', 0),
+            'Eccentricity': cell.get('eccentricity', 0),
+            'Solidity': cell.get('solidity', 0)
         }
         
         # Add biomass data if available
@@ -538,18 +604,19 @@ def create_cell_csv_row(cell, image_number=1):
         
     except Exception as e:
         print(f"❌ Cell CSV row creation failed: {e}")
-        return {}
+        return None
 
 def export_comprehensive_excel(result, analysis_id):
-    """Export comprehensive Excel file with multiple sheets"""
+    """Export comprehensive Excel file with multiple sheets and error handling"""
     try:
         output_file = f"results/{analysis_id}_comprehensive.xlsx"
         
         with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
             # Sheet 1: Summary
             summary_data = create_summary_sheet_data(result)
-            summary_df = pd.DataFrame(summary_data)
-            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                summary_df.to_excel(writer, sheet_name='Summary', index=False)
             
             # Sheet 2: Cell Data
             if 'batch_summary' in result:
@@ -562,7 +629,8 @@ def export_comprehensive_excel(result, analysis_id):
                         cells_data = individual_result.get('detection_results', {}).get('cells_data', [])
                         for cell in cells_data:
                             cell_row = create_cell_csv_row(cell, i + 1)
-                            all_cells_data.append(cell_row)
+                            if cell_row:
+                                all_cells_data.append(cell_row)
                 
                 if all_cells_data:
                     cells_df = pd.DataFrame(all_cells_data)
@@ -571,9 +639,15 @@ def export_comprehensive_excel(result, analysis_id):
                 # Single result
                 cells_data = result.get('detection_results', {}).get('cells_data', [])
                 if cells_data:
-                    csv_data = [create_cell_csv_row(cell) for cell in cells_data]
-                    cells_df = pd.DataFrame(csv_data)
-                    cells_df.to_excel(writer, sheet_name='Cell_Data', index=False)
+                    csv_data = []
+                    for cell in cells_data:
+                        cell_row = create_cell_csv_row(cell)
+                        if cell_row:
+                            csv_data.append(cell_row)
+                    
+                    if csv_data:
+                        cells_df = pd.DataFrame(csv_data)
+                        cells_df.to_excel(writer, sheet_name='Cell_Data', index=False)
             
             # Sheet 3: Biomass Analysis
             biomass_data = create_biomass_sheet_data(result)
@@ -581,14 +655,14 @@ def export_comprehensive_excel(result, analysis_id):
                 biomass_df = pd.DataFrame(biomass_data)
                 biomass_df.to_excel(writer, sheet_name='Biomass_Analysis', index=False)
         
-        return output_file
+        return output_file if os.path.exists(output_file) else None
         
     except Exception as e:
         print(f"❌ Excel export failed: {e}")
         return None
 
 def create_summary_sheet_data(result):
-    """Create summary sheet data for Excel export"""
+    """Create summary sheet data for Excel export with error handling"""
     try:
         if 'batch_summary' in result:
             batch_summary = result['batch_summary']
@@ -602,6 +676,9 @@ def create_summary_sheet_data(result):
                 'Parameter': 'Successful Analyses', 
                 'Value': batch_summary.get('successful_analyses', 0)
             }, {
+                'Parameter': 'Success Rate (%)',
+                'Value': batch_summary.get('success_rate', 0)
+            }, {
                 'Parameter': 'Total Cells Detected',
                 'Value': batch_summary.get('aggregate_statistics', {}).get('total_cells_detected', 0)
             }, {
@@ -610,9 +687,14 @@ def create_summary_sheet_data(result):
             }]
         else:
             quantitative = result.get('quantitative_analysis', {})
+            detection = result.get('detection_results', {})
+            
             return [{
                 'Parameter': 'Analysis Type',
                 'Value': 'Single Image Analysis'
+            }, {
+                'Parameter': 'Detection Method',
+                'Value': detection.get('detection_method', 'Unknown')
             }, {
                 'Parameter': 'Cells Detected',
                 'Value': quantitative.get('cell_count', 0)
@@ -632,7 +714,7 @@ def create_summary_sheet_data(result):
         return []
 
 def create_biomass_sheet_data(result):
-    """Create biomass analysis sheet data"""
+    """Create biomass analysis sheet data with error handling"""
     try:
         biomass_rows = []
         
@@ -672,6 +754,11 @@ def export_detailed_report(result, analysis_id):
             csv_file = export_comprehensive_csv(result, analysis_id)
             if csv_file and os.path.exists(csv_file):
                 zip_file.write(csv_file, f"{analysis_id}_cells.csv")
+                # Clean up temporary CSV
+                try:
+                    os.remove(csv_file)
+                except:
+                    pass
             
             # Add visualizations (if available)
             visualizations = result.get('visualizations', {})
@@ -688,14 +775,14 @@ def export_detailed_report(result, analysis_id):
             summary_text = create_text_summary(result)
             zip_file.writestr(f"{analysis_id}_summary.txt", summary_text)
         
-        return output_file
+        return output_file if os.path.exists(output_file) else None
         
     except Exception as e:
         print(f"❌ Detailed report export failed: {e}")
         return None
 
 def create_text_summary(result):
-    """Create text summary of analysis results"""
+    """Create text summary of analysis results with error handling"""
     try:
         summary = "BIOIMAGIN Wolffia Analysis Report\n"
         summary += "=" * 40 + "\n\n"
@@ -711,11 +798,21 @@ def create_text_summary(result):
             summary += "-" * 25 + "\n"
             summary += f"Total Files Analyzed: {batch_summary.get('total_files', 0)}\n"
             summary += f"Successful Analyses: {batch_summary.get('successful_analyses', 0)}\n"
+            summary += f"Success Rate: {batch_summary.get('success_rate', 0):.1f}%\n"
             
             aggregate_stats = batch_summary.get('aggregate_statistics', {})
             summary += f"Total Cells Detected: {aggregate_stats.get('total_cells_detected', 0)}\n"
             summary += f"Total Biomass: {aggregate_stats.get('total_biomass_mg', 0):.3f} mg\n"
             summary += f"Average Green Cell %: {aggregate_stats.get('average_green_cell_percentage', 0):.1f}%\n\n"
+            
+            # Error summary if any
+            errors = batch_summary.get('error_summary')
+            if errors:
+                summary += "ERRORS ENCOUNTERED:\n"
+                summary += "-" * 18 + "\n"
+                for i, error in enumerate(errors, 1):
+                    summary += f"{i}. {error}\n"
+                summary += "\n"
         else:
             # Single analysis summary
             detection_results = result.get('detection_results', {})
@@ -743,61 +840,95 @@ def create_text_summary(result):
             summary += f"Health Score: {health.get('health_score', 0):.2f}/1.0\n\n"
         
         summary += "Report generated by BIOIMAGIN Wolffia Analysis System\n"
+        summary += f"System Version: Optimized Detection Engine\n"
         return summary
         
     except Exception as e:
         print(f"❌ Text summary creation failed: {e}")
-        return "Summary generation failed."
+        return f"Summary generation failed: {str(e)}"
 
 @app.route('/api/health')
 def health_check():
-    """System health check"""
-    return jsonify({
-        'status': 'healthy',
-        'version': 'focused_optimized',
-        'analyzer': 'WolffiaAnalyzer',
-        'features': [
-            'focused_detection',
-            'biomass_quantification',
-            'temporal_analysis',
-            'professional_visualization',
-            'comprehensive_export'
-        ],
-        'timestamp': datetime.now().isoformat()
-    })
+    """System health check with enhanced status"""
+    try:
+        # Check analyzer status
+        analyzer_status = "healthy"
+        try:
+            test_result = analyzer.get_celldetection_status()
+            celldetection_available = test_result.get('available', False)
+        except:
+            analyzer_status = "degraded"
+            celldetection_available = False
+        
+        return jsonify({
+            'status': analyzer_status,
+            'version': 'optimized_focused_v2',
+            'analyzer': 'WolffiaAnalyzer_Enhanced',
+            'features': [
+                'advanced_background_removal',
+                'multi_otsu_thresholding',
+                'watershed_segmentation',
+                'shape_based_detection',
+                'enhanced_edge_filtering',
+                'biomass_quantification',
+                'temporal_analysis',
+                'comprehensive_export'
+            ],
+            'ai_status': {
+                'celldetection_available': celldetection_available,
+                'tophat_model_available': analyzer.tophat_model is not None
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 @app.route('/api/set_parameters', methods=['POST'])
 def set_parameters():
-    """Set analysis parameters"""
+    """Set analysis parameters with validation"""
     try:
         params = request.json
-        if 'pixel_to_micron_ratio' in params:
-            analyzer.pixel_to_micron_ratio = params['pixel_to_micron_ratio']
-        if 'chlorophyll_threshold' in params:
-            analyzer.chlorophyll_threshold = params['chlorophyll_threshold']
         
-        return jsonify({'success': True, 'message': 'Parameters updated'})
+        if 'pixel_to_micron_ratio' in params:
+            ratio = float(params['pixel_to_micron_ratio'])
+            if 0.1 <= ratio <= 10.0:  # Reasonable range
+                analyzer.pixel_to_micron_ratio = ratio
+            else:
+                return jsonify({'error': 'Pixel to micron ratio must be between 0.1 and 10.0'}), 400
+        
+        if 'chlorophyll_threshold' in params:
+            threshold = float(params['chlorophyll_threshold'])
+            if 0.0 <= threshold <= 1.0:  # Normalized range
+                analyzer.chlorophyll_threshold = threshold
+            else:
+                return jsonify({'error': 'Chlorophyll threshold must be between 0.0 and 1.0'}), 400
+        
+        return jsonify({'success': True, 'message': 'Parameters updated successfully'})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Parameter update failed: {str(e)}'}), 500
 
 @app.route('/api/get_parameters')
 def get_parameters():
     """Get current analysis parameters"""
-    return jsonify({
-        'pixel_to_micron_ratio': analyzer.pixel_to_micron_ratio,
-        'chlorophyll_threshold': analyzer.chlorophyll_threshold,
-        'wolffia_params': analyzer.wolffia_params,
-        'biomass_params': analyzer.biomass_params
-    })
-    
-    
-    
-    
-# TOPHAT TRAINING ENDPOINTS
+    try:
+        return jsonify({
+            'pixel_to_micron_ratio': analyzer.pixel_to_micron_ratio,
+            'chlorophyll_threshold': analyzer.chlorophyll_threshold,
+            'wolffia_params': analyzer.wolffia_params,
+            'biomass_params': analyzer.biomass_params
+        })
+    except Exception as e:
+        return jsonify({'error': f'Parameter retrieval failed: {str(e)}'}), 500
+
+# TOPHAT TRAINING ENDPOINTS (Enhanced)
 
 @app.route('/api/tophat/start_training', methods=['POST'])
 def start_tophat_training():
-    """Start tophat training session"""
+    """Start tophat training session with enhanced error handling"""
     try:
         print("🎯 Tophat training endpoint called")
         request_data = request.get_json() or {}
@@ -836,11 +967,13 @@ def start_tophat_training():
     
     except Exception as e:
         print(f"❌ Training start error: {e}")
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Training failed to start: {str(e)}'}), 500
 
 @app.route('/api/tophat/save_annotations', methods=['POST'])
 def save_tophat_annotations():
-    """Save user drawing annotations for training"""
+    """Save user drawing annotations for training with enhanced validation"""
     try:
         data = request.json
         session_id = data.get('session_id')
@@ -850,7 +983,13 @@ def save_tophat_annotations():
         annotated_image = data.get('annotated_image', '')
         
         if not all([session_id, image_filename]):
-            return jsonify({'error': 'Missing required fields'}), 400
+            return jsonify({'error': 'Missing required fields (session_id, image_filename)'}), 400
+        
+        # Validate annotations structure
+        valid_annotation_types = ['correct', 'false_positive', 'missed']
+        for ann_type in annotations:
+            if ann_type not in valid_annotation_types:
+                return jsonify({'error': f'Invalid annotation type: {ann_type}'}), 400
         
         # Save drawing annotations with image data
         annotation = analyzer.save_drawing_annotations(
@@ -865,44 +1004,75 @@ def save_tophat_annotations():
     
     except Exception as e:
         print(f"❌ Save annotations error: {e}")
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to save annotations: {str(e)}'}), 500
 
 @app.route('/api/tophat/train_model', methods=['POST'])
 def train_tophat_model():
-    """Train the tophat AI model"""
+    """Train the tophat AI model with enhanced validation"""
     try:
         session_id = request.json.get('session_id')
         if not session_id:
             return jsonify({'error': 'Session ID required'}), 400
+        
+        # Check if session exists
+        if session_id not in training_sessions:
+            return jsonify({'error': 'Training session not found'}), 404
         
         # Train model
         success = analyzer.train_tophat_model(session_id)
         
         return jsonify({
             'success': success,
-            'message': 'Model trained successfully' if success else 'Training failed'
+            'message': 'Model trained successfully' if success else 'Training failed - check logs for details'
         })
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Model training error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Model training failed: {str(e)}'}), 500
 
 @app.route('/api/tophat/model_status')
 def tophat_model_status():
-    """Check if tophat model is available"""
-    return jsonify({
-        'model_available': analyzer.tophat_model is not None,
-        'model_trained': analyzer.tophat_model is not None
-    })
+    """Check if tophat model is available with enhanced status"""
+    try:
+        status = analyzer.get_tophat_status()
+        return jsonify({
+            'success': True,
+            'model_available': status['model_available'],
+            'model_trained': status['model_trained'],
+            'training_sessions_active': len(training_sessions)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'model_available': False,
+            'model_trained': False
+        })
 
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': 'File too large. Maximum size is 100MB.'}), 413
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({'error': 'Internal server error. Please try again.'}), 500
 
 if __name__ == '__main__':
-    print("🚀 Starting BIOIMAGIN Focused Web Server...")
-    print("✅ Wolffia Analyzer loaded with optimized features:")
-    print("   • Focused cell detection (AI + classical fallback)")
-    print("   • Comprehensive biomass quantification")
-    print("   • Temporal analysis for time-series data")
-    print("   • Professional visualizations")
-    print("   • Multi-format export capabilities")
+    print("🚀 Starting BIOIMAGIN Enhanced Web Server...")
+    print("✅ Wolffia Analyzer loaded with OPTIMIZED features:")
+    print("   • Advanced background/plate removal (Li thresholding)")
+    print("   • Multi-Otsu thresholding for better segmentation")
+    print("   • Enhanced watershed with distance transform")
+    print("   • Shape-based detection using shape index")
+    print("   • SLIC superpixel segmentation fallback")
+    print("   • Intelligent edge filtering")
+    print("   • Enhanced validation with multiple criteria")
+    print("   • Comprehensive error handling and reporting")
+    print("   • Professional visualizations and export")
     print("🌐 Server running at http://localhost:5000")
     
     app.run(

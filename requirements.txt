@@ -43,3 +43,4 @@ SimpleITK>=2.2.0
 # Development and testing
 requests>=2.31.0
 
+PyWavelets
