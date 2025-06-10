@@ -1,0 +1,12 @@
+{
+  "session_id": "20250610_014320",
+  "image_filename": "c849d1ee-5f6c-4a4d-a570-041bacb77ff5_2505-2.jfif",
+  "image_index": 7,
+  "annotations": {
+    "correct": [],
+    "false_positive": [],
+    "missed": []
+  },
+  "timestamp": "2025-06-10T01:51:20.654980",
+  "annotation_type": "drawing"
+}

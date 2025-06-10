@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-06-10T02:01:02.104537",
+  "session_id": "20250610_014320",
+  "samples_count": 20,
+  "train_accuracy": 1.0,
+  "test_accuracy": 1.0,
+  "feature_names": [
+    "Image Index",
+    "Filename Length",
+    "Correct Count",
+    "False Positive Count",
+    "Missed Count",
+    "Precision Proxy",
+    "Sample Variation",
+    "Image Mean",
+    "Image Std",
+    "Image Brightness"
+  ],
+  "feature_importance": [
+    0.021442809042809048,
+    0.003827664399092972,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.2244109668109668,
+    0.27658201058201065,
+    0.2011362090290662,
+    0.27260034013605444
+  ]
+}
