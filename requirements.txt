@@ -1,6 +1,10 @@
-# Core dependencies for BIOIMAGIN Wolffia Analysis System
+# BIOIMAGIN Enhanced Wolffia Analysis System - Dependencies
+# Version 3.0 - Enhanced CNN with Realistic Synthetic Data
 
-# Image processing
+# Core Dependencies (Required)
+# ===========================
+
+# Image processing and computer vision
 opencv-python>=4.8.0
 scikit-image>=0.21.0
 Pillow>=10.0.0
@@ -16,31 +20,86 @@ scikit-learn>=1.3.0
 # Visualization
 matplotlib>=3.7.0
 
-# Web framework
+# Web framework and API
 Flask>=3.0.0
 Flask-CORS>=4.0.0
 Werkzeug>=3.0.0
 
 # Additional utilities
 python-dateutil>=2.8.0
-
-# Professional bioimage analysis dependencies
-# CellPose for advanced cell segmentation
-cellpose>=3.0.0
-cellpose-planer>=0.1.0
-
-# PyTorch for GPU acceleration (CPU version by default)
-torch>=1.12.0
-torchvision>=0.13.0
-
-# SimpleITK for medical image processing
-SimpleITK>=2.2.0
-
-# GPU acceleration (optional - uncomment for CUDA support)
-# torch>=1.12.0+cu117
-# torchvision>=0.13.0+cu117
-
-# Development and testing
 requests>=2.31.0
 
-PyWavelets
+# Optional Dependencies (Recommended)
+# ==================================
+
+# Deep Learning Framework - Enables Enhanced CNN features
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# For GPU support:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# Advanced Cell Segmentation - Enables CellPose integration
+# cellpose>=3.0.0
+
+# Medical Image Processing - Additional processing capabilities
+# SimpleITK>=2.2.0
+
+# System Monitoring - Memory usage tracking
+# psutil>=5.9.0
+
+# Enhanced Development Dependencies (Optional)
+# ===========================================
+
+# Code formatting and linting
+# black>=23.0.0
+# flake8>=6.0.0
+
+# Testing framework
+# pytest>=7.0.0
+# pytest-cov>=4.0.0
+
+# Documentation generation
+# sphinx>=7.0.0
+# sphinx-rtd-theme>=1.3.0
+
+# Installation Instructions
+# ========================
+# 
+# Basic installation (core features):
+#   pip install -r requirements.txt
+# 
+# Enhanced CNN features (recommended):
+#   pip install torch torchvision
+# 
+# CellPose integration:
+#   pip install cellpose>=3.0.0
+# 
+# Complete installation:
+#   pip install -r requirements.txt torch torchvision cellpose>=3.0.0
+# 
+# GPU support (NVIDIA CUDA):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# 
+# Development setup:
+#   pip install -r requirements.txt black flake8 pytest
+
+# Feature Matrix
+# ==============
+# 
+# Core Features (always available):
+# - Watershed segmentation
+# - Basic CNN (if model exists)
+# - Tophat ML training
+# - Web interface
+# - Basic analysis pipeline
+# 
+# Enhanced Features (require optional dependencies):
+# - Enhanced CNN training (requires PyTorch)
+# - Realistic synthetic data generation (requires PyTorch)
+# - CellPose integration (requires cellpose)
+# - GPU acceleration (requires CUDA-enabled PyTorch)
+# 
+# System Requirements:
+# - Python 3.8+
+# - 8GB RAM (16GB recommended for training)
+# - 2GB storage space
+# - Optional: CUDA-compatible GPU for acceleration

@@ -42,7 +42,9 @@
       "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"models.*load\" bioimaging.py)",
       "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"load\" bioimaging.py)",
       "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 3 -B 3 \"np\\.zeros|np\\.ones|np\\.empty\" bioimaging.py)",
-      "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 20 \"except.*Exception\" bioimaging.py)"
+      "Bash(/home/aun/.npm-global/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 20 \"except.*Exception\" bioimaging.py)",
+      "Bash(mkdir:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

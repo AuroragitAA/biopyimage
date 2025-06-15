@@ -764,22 +764,16 @@
                     const checkbox = document.getElementById('useWolffiaCNN');
                     
                     if (data.ai_status && data.ai_status.wolffia_cnn_available) {
-                        statusDiv.innerHTML = 'Wolffia CNN model is ready for enhanced detection';
+                        statusDiv.innerHTML = '✅ Wolffia CNN model is ready';
                         statusDiv.className = 'status-indicator status-success';
                         checkbox.disabled = false;
+                        checkbox.checked = true;  // Enable by default if available
                     } else {
-                        statusDiv.innerHTML = '⚠️ Wolffia CNN model not trained yet. Run: python train_wolffia_cnn.py';
+                        statusDiv.innerHTML = '⚠️ Wolffia CNN not trained yet';
                         statusDiv.className = 'status-indicator status-warning';
                         checkbox.disabled = true;
                         checkbox.checked = false;
                     }
-                    statusDiv.style.display = 'block';
-                })
-                .catch(error => {
-                    console.error('Error checking Wolffia CNN status:', error);
-                    const statusDiv = document.getElementById('wolffiaCNNStatus');
-                    statusDiv.innerHTML = '❌ Could not check CNN model status';
-                    statusDiv.className = 'status-indicator status-error';
                     statusDiv.style.display = 'block';
                 });
 
@@ -1114,118 +1108,95 @@
 
             poll();
         }
-
-       // ✅ Unified and Corrected displayResults function
-function displayResults(analysisId, filename, result) {
+        
+ function displayResults(analysisId, filename, result) {
     const resultsContainer = document.getElementById('resultsContainer');
     const resultItem = document.createElement('div');
     resultItem.className = 'result-item analysis-success';
 
-    const detectionMethod = result?.detection_results?.detection_method || 'Unknown Detection';
-    const pipelineSteps = result?.visualizations?.pipeline_steps || {};
-    const methodResults = result.method_results || {};
-    const hasMethodResults = Object.keys(methodResults).length > 0;
-
-    // Always show header + pipeline ON TOP
-    const headerHTML = `
+    const header = `
         <div class="result-header">
             <div class="result-title">📄 ${filename}</div>
-            <div class="detection-method">${detectionMethod}</div>
+            <div class="detection-method">
+                ${result?.detection_results?.detection_method || 'Unknown Detection'}
+            </div>
         </div>
     `;
-    const pipelineHTML = createPipelineVisualization(pipelineSteps, detectionMethod);
 
-    // Start with pipeline shown first
-    resultItem.innerHTML = headerHTML + pipelineHTML;
+    const pipelineSteps = result?.visualizations?.pipeline_steps || {};
+    const pipeline = createPipelineVisualization(pipelineSteps, result?.detection_results?.detection_method);
 
-    // ⚠️ Append method results or fallback legacy metrics
-    if (hasMethodResults) {
-        resultItem.innerHTML += renderMethodTabs(analysisId, methodResults, result.best_method);
+    const hasMultiMethod = !!result?.method_results && Object.keys(result.method_results).length > 0;
+
+    let content = '';
+    if (hasMultiMethod) {
+        content = renderMethodPanels(analysisId, result);
     } else {
-        resultItem.innerHTML += renderLegacyMetrics(analysisId, result);
+        content = renderLegacyPanel(analysisId, result);
     }
 
-    // Add shared visualizations container
-    const vizContainer = document.createElement('div');
-    vizContainer.className = 'visualization-grid';
-    vizContainer.id = `viz-${analysisId}`;
-    resultItem.appendChild(vizContainer);
-
+    resultItem.innerHTML = header + pipeline + content;
     resultsContainer.appendChild(resultItem);
 
-    loadVisualizations(analysisId, result.visualizations || {});
+    loadVisualizations(analysisId, result?.visualizations || {});
     setupPipelineInteractions(analysisId);
     resultItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function renderMethodTabs(analysisId, methods, bestKey) {
-    let tabs = '', panels = '';
-    const methodKeys = Object.keys(methods);
-    methodKeys.forEach((key, i) => {
-        const m = methods[key];
-        const isActive = i === 0 ? 'active' : '';
-        const isBest = key === bestKey ? '⭐' : '';
+function renderMethodPanels(analysisId, result) {
+    const methods = result.method_results || {};
+    const best = result.best_method || Object.keys(methods)[0];
 
-        tabs += `
-            <button class="method-tab ${isActive}" onclick="switchMethodTab('${analysisId}', '${key}', this)">
-                ${m.method_name} ${isBest}<br><small>${m.cells_detected} cells</small>
+    const tabs = [];
+    const panels = [];
+
+    Object.entries(methods).forEach(([key, data], i) => {
+        const active = i === 0 ? 'active' : '';
+        tabs.push(`
+            <button class="method-tab ${active}" onclick="switchMethodTab('${analysisId}', '${key}', this)">
+                ${data.method_name} ${key === best ? '⭐' : ''}
+                <br><small>${data.cells_detected} cells</small>
             </button>
-        `;
-
-        panels += `
-            <div class="method-panel ${isActive}" id="${analysisId}-panel-${key}">
-                <div class="method-result-header">
-                    <div class="method-result-title">${m.method_name}</div>
-                    <div style="color:#666">${m.cells_detected} cells detected</div>
-                </div>
+        `);
+        panels.push(`
+            <div class="method-panel ${active}" id="${analysisId}-panel-${key}">
+                <div class="method-result-header">${data.method_name}</div>
                 <div class="method-result-stats">
-                    <div class="method-stat"><div class="method-stat-value">${m.cells_detected}</div><div class="method-stat-label">Cells</div></div>
-                    <div class="method-stat"><div class="method-stat-value">${m.total_area.toFixed(1)}</div><div class="method-stat-label">Total Area</div></div>
-                    <div class="method-stat"><div class="method-stat-value">${m.average_area.toFixed(1)}</div><div class="method-stat-label">Avg Area</div></div>
+                    <div><strong>${data.cells_detected}</strong> Cells</div>
+                    <div><strong>${data.total_area.toFixed(1)}</strong> Total Area</div>
+                    <div><strong>${data.average_area.toFixed(1)}</strong> Avg Area</div>
                 </div>
-                ${m.visualization_b64 ? `<img src="data:image/png;base64,${m.visualization_b64}" class="method-visualization"/>` : `<div style='text-align:center;'>No visualization</div>`}
-                <div style="text-align:center;margin-top:15px">
-                    <button class="btn" onclick="exportMethodResults('${analysisId}', '${key}', 'csv')">📊 Export CSV</button>
-                </div>
+                ${data.visualization_b64 ? `
+                    <img src="data:image/png;base64,${data.visualization_b64}" class="method-visualization">
+                ` : '<i>No visualization available</i>'}
             </div>
-        `;
+        `);
     });
 
     return `
         <div class="method-panels-container">
-            <div class="method-tabs">${tabs}</div>
-            ${panels}
-            <div style="background:#f8f9fa;padding:15px;margin-top:15px;border-radius:10px">
-                <strong>Best Method:</strong> ${methods[bestKey]?.method_name || 'N/A'}
+            <div class="method-tabs">${tabs.join('')}</div>
+            ${panels.join('')}
+            <div class="summary-box">
+                <p><strong>Best:</strong> ${methods[best].method_name} (${methods[best].cells_detected} cells)</p>
             </div>
         </div>
     `;
 }
 
-function renderLegacyMetrics(analysisId, result) {
+function renderLegacyPanel(analysisId, result) {
     const d = result.detection_results || {};
     const q = result.quantitative_analysis || {};
-    const b = q.biomass_analysis || {};
-    const c = q.color_analysis || {};
-    const h = q.health_assessment || {};
-    const t = result.temporal_analysis || {};
-    const visual = result.visualizations || {};
-    const legend = visual.detection_legend || {};
+    const vizId = `viz-${analysisId}`;
 
     return `
-        <div class="metrics-grid">
-            <div class="metric-card"><div class="metric-value">${d.cells_detected || 0}</div><div class="metric-label">Cells</div></div>
-            <div class="metric-card biomass-card"><div class="metric-value">${b.total_biomass_mg?.toFixed(3) || '0.000'}</div><div class="metric-label">Biomass</div></div>
-            <div class="metric-card"><div class="metric-value">${c.green_cell_percentage?.toFixed(1) || '0.0'}%</div><div class="metric-label">Green Cells</div></div>
-            <div class="metric-card"><div class="metric-value">${q.average_cell_area?.toFixed(1) || '0.0'}</div><div class="metric-label">Avg Area</div></div>
+        <div class="legacy-summary">
+            <div><strong>Cells:</strong> ${d.cells_detected}</div>
+            <div><strong>Biomass:</strong> ${q.biomass_analysis?.total_biomass_mg?.toFixed(3) || 0} mg</div>
+            <div><strong>Avg Area:</strong> ${q.average_cell_area?.toFixed(1) || 0}</div>
+            <div><strong>Green:</strong> ${q.color_analysis?.green_cell_percentage?.toFixed(1) || 0}%</div>
         </div>
-        ${h.overall_health ? `<div style="text-align:center;margin:20px 0;"><span class="health-indicator health-${h.overall_health}">Health: ${h.overall_health.toUpperCase()}</span> <span style="margin-left:10px">Score: ${h.health_score?.toFixed(2) || '0.00'}/1.0</span></div>` : ''}
-        ${t?.time_points > 1 ? `
-        <div style="background:#fff3e0;padding:15px;margin:20px 0;border-radius:8px">
-            <h4>⏱️ Temporal Analysis</h4>
-            <p>Time Points: ${t.time_points}</p>
-            <p>Trend: ${t.temporal_trend?.replace('_',' ').toUpperCase() || 'Unknown'}</p>
-        </div>` : ''}
+        <div class="visualization-grid" id="${vizId}"></div>
     `;
 }
 
@@ -1295,14 +1266,7 @@ function renderLegacyMetrics(analysisId, result) {
                 `;
             });
             
-            resultItem.innerHTML = `
-                <div class="result-header">
-                    <div class="result-title">📄 ${filename}</div>
-                    <div style="color: #007bff; font-weight: bold;">
-                    Multi-Method Analysis (${Object.keys(methodResults).length} methods)
-                    </div>
-                </div>
-                
+            const contentHTML = `
                 <div class="method-panels-container">
                     <div style="text-align: center; padding: 20px; background: #e3f2fd; font-weight: bold; color: #1976d2;">
                         🔬 Analysis Methods - Click tabs to compare results
@@ -1312,7 +1276,7 @@ function renderLegacyMetrics(analysisId, result) {
                     </div>
                     ${panelsHtml}
                 </div>
-                
+
                 <!-- Overall Summary -->
                 <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
                     <h4>📊 Best Result Summary</h4>
@@ -1321,6 +1285,9 @@ function renderLegacyMetrics(analysisId, result) {
                     <p><strong>Methods Used:</strong> ${Object.values(methodResults).map(m => m.method_name).join(', ')}</p>
                 </div>
             `;
+
+            resultItem.innerHTML += contentHTML;
+
         }
         
         function displayLegacyResults(resultItem, analysisId, filename, result) {
@@ -1330,8 +1297,12 @@ function renderLegacyMetrics(analysisId, result) {
             const biomass = quantitative.biomass_analysis || {};
             const color = quantitative.color_analysis || {};
             const health = quantitative.health_assessment || {};
+            const temporal = result.temporal_analysis;
             const visualizations = result.visualizations || {};
+            const legend = visualizations.detection_legend || {};
+            const pipelineSteps = visualizations.pipeline_steps || {};
             
+
             // Determine detection method class for styling
             let methodClass = 'method-classical-slic';
             if (detection.detection_method) {
@@ -1356,7 +1327,6 @@ function renderLegacyMetrics(analysisId, result) {
                 ${createMethodPanels(result)}
                 
                 <!-- ENHANCED EXPANDABLE PROCESSING PIPELINE VISUALIZATION -->
-                ${createPipelineVisualization(pipelineSteps, detection.detection_method)}
 
                 <!-- Detection Legend -->
                 ${legend.total_cells ? `
@@ -1742,6 +1712,7 @@ function renderLegacyMetrics(analysisId, result) {
             if (!vizContainer) return;
             
             const vizConfig = {
+                'detection_overview': 'Cell Detection Overview',
                 'biomass_chart': 'Biomass Analysis',
                 'size_histogram': 'Size Distribution', 
                 'color_analysis': 'Color Analysis',
@@ -2160,7 +2131,7 @@ function renderLegacyMetrics(analysisId, result) {
             const ctx = canvas.getContext('2d');
             const loadingIndicator = document.getElementById(`canvas-loading-${imageIndex}`);
             
-            // Initialize drawing state first
+            // Initialize drawing state
             drawingState[imageIndex] = {
                 isDrawing: false,
                 mode: 'correct',
@@ -2168,7 +2139,6 @@ function renderLegacyMetrics(analysisId, result) {
                 lastY: 0,
                 currentPath: []
             };
-
             
             annotations[imageIndex] = {
                 correct: [],
@@ -2176,25 +2146,25 @@ function renderLegacyMetrics(analysisId, result) {
                 missed: []
             };
             
-            // Set default drawing mode to correct
+            // Set default mode
             setTimeout(() => setDrawingMode(imageIndex, 'correct'), 100);
             
-            // Create an image element to load the detection result
+            // Create image element
             const img = new Image();
+            
             img.onload = function() {
-                // Hide loading indicator
                 if (loadingIndicator) {
                     loadingIndicator.style.display = 'none';
                 }
                 
-                // Set canvas size to match image (with max constraints)
+                // Set canvas size
                 const maxWidth = 800;
                 const maxHeight = 600;
                 
                 let canvasWidth = img.width;
                 let canvasHeight = img.height;
                 
-                // Scale down if too large
+                // Scale if needed
                 if (canvasWidth > maxWidth) {
                     const scale = maxWidth / canvasWidth;
                     canvasWidth = maxWidth;
@@ -2210,19 +2180,18 @@ function renderLegacyMetrics(analysisId, result) {
                 canvas.width = canvasWidth;
                 canvas.height = canvasHeight;
                 
-                // Draw the detection result image
+                // Draw image
                 ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
                 
-                console.log(`✅ Loaded training image ${imageIndex + 1} onto canvas (${canvasWidth}x${canvasHeight})`);
+                console.log(`✅ Loaded training image ${imageIndex + 1}`);
             };
             
             img.onerror = function() {
                 console.error(`❌ Failed to load training image ${imageIndex + 1}`);
                 
-                // Hide loading indicator and show error
                 if (loadingIndicator) {
                     loadingIndicator.innerHTML = `
-                        <div style="color: #dc3545; font-size: 16px;">❌ Image loading failed</div>
+                        <div style="color: #dc3545;">❌ Image loading failed</div>
                         <div style="font-size: 14px; color: #666; margin-top: 10px;">You can still draw annotations</div>
                     `;
                     setTimeout(() => {
@@ -2230,7 +2199,7 @@ function renderLegacyMetrics(analysisId, result) {
                     }, 3000);
                 }
                 
-                // Fallback to placeholder
+                // Create fallback canvas
                 canvas.width = 600;
                 canvas.height = 400;
                 ctx.fillStyle = '#f0f0f0';
@@ -2238,48 +2207,22 @@ function renderLegacyMetrics(analysisId, result) {
                 ctx.fillStyle = '#333';
                 ctx.font = '16px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText('Original image unavailable', canvas.width/2, canvas.height/2 - 10);
-                ctx.fillText('Draw annotations here', canvas.width/2, canvas.height/2 + 10);
+                ctx.fillText('Draw annotations here', canvas.width/2, canvas.height/2);
             };
             
-            // FIXED: For tophat training, load the original uploaded image for annotation
-            console.log(`📸 Loading original image for tophat training ${imageIndex + 1}...`);
-            console.log('Available imageData:', imageData);
-            
-            // Handle tophat training data structure - FIXED
-            let filename = null;
-            
-            // First try the upload_filename (for tophat training)
-            if (imageData.upload_filename) {
-                filename = imageData.upload_filename;
-                console.log(`🎯 Using upload_filename: ${filename}`);
-            } else if (imageData.path) {
-                // Fallback to extracting from path
-                if (imageData.path.includes('uploads/')) {
-                    filename = imageData.path.split('/').pop();
-                } else {
-                    // If path doesn't include uploads/, it might be a full path - extract filename
-                    filename = imageData.path.split(/[/\\]/).pop();
-                }
-                console.log(`🔄 Extracted filename from path: ${filename}`);
-            }
-            
-            if (filename) {
-                console.log(`🔗 Loading from uploads: /uploads/${filename}`);
-                img.src = `/uploads/${filename}`;
-            } else if (imageData.image_data && imageData.image_data.visualizations && imageData.image_data.visualizations.detection_overview) {
-                // Fallback: use detection visualization if original not available
-                console.log(`🔄 Fallback to detection visualization for image ${imageIndex + 1}...`);
+            // FIXED: Proper image source handling
+            if (imageData.image_data && imageData.image_data.visualizations && imageData.image_data.visualizations.detection_overview) {
+                // Use detection visualization
                 img.src = `data:image/png;base64,${imageData.image_data.visualizations.detection_overview}`;
+            } else if (imageData.path) {
+                // Use original image path - FIXED path handling
+                const filename = imageData.path.split('/').pop();
+                img.src = `/uploads/${filename}`;
             } else {
-                // Last resort: show placeholder and log error
-                console.warn(`⚠️ No image source available for image ${imageIndex + 1}`);
-                console.warn('imageData structure:', imageData);
-                console.warn('Expected: imageData.path or imageData.image_data.visualizations.detection_overview');
+                // Trigger error handler
                 img.onerror();
             }
         }
-
         // Touch support for mobile devices
         function handleTouch(event, imageIndex, phase) {
             event.preventDefault(); // Prevent scrolling
@@ -2511,25 +2454,18 @@ function renderLegacyMetrics(analysisId, result) {
         function exportResults(analysisId, format) {
             window.open(`/api/export/${analysisId}/${format}`, '_blank');
         }
-        
-        function switchMethodTab(analysisId, methodKey, clickedTab) {
-            // Hide all panels for this analysis
-            const allPanels = document.querySelectorAll(`[id^="${analysisId}-panel-"]`);
-            allPanels.forEach(panel => panel.classList.remove('active'));
-            
-            // Remove active class from all tabs in this container
-            const tabContainer = clickedTab.parentElement;
-            const allTabs = tabContainer.querySelectorAll('.method-tab');
-            allTabs.forEach(tab => tab.classList.remove('active'));
-            
-            // Show selected panel and activate tab
-            const targetPanel = document.getElementById(`${analysisId}-panel-${methodKey}`);
-            if (targetPanel) {
-                targetPanel.classList.add('active');
-            }
-            clickedTab.classList.add('active');
+                
+        function switchMethodTab(analysisId, key, el) {
+            const tabs = el.parentElement.querySelectorAll('.method-tab');
+            const panels = document.querySelectorAll(`#${analysisId}-panel-*`);
+
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+
+            el.classList.add('active');
+            document.getElementById(`${analysisId}-panel-${key}`).classList.add('active');
         }
-        
+
         function exportMethodResults(analysisId, methodKey, format) {
             // For now, export the general results - could be enhanced to export specific method data
             window.open(`/api/export/${analysisId}/${format}`, '_blank');
