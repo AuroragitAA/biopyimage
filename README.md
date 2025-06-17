@@ -34,40 +34,6 @@ BIOIMAGIN is a cutting-edge bioimage analysis system specifically designed for *
 
 ---
 
-## 🚀 New in Version 3.0 (Optimized)
-
-### Color-Aware Detection System
-- **Color Preservation**: No premature grayscale conversion - maintains green information
-- **Green-Enhanced Processing**: Multi-color space analysis (BGR, HSV, LAB)
-- **Color-Aware Watershed**: Uses green channel enhancement for better segmentation
-- **Green Content Analysis**: Accurate green percentage measurement from actual color data
-
-### Enhanced CNN with Background Rejection
-- **Multi-Output Architecture**: Handles both single and multi-output model formats
-- **10-Criteria Validation**: Advanced filtering to reject background false positives
-- **Wolffia-Specific Parameters**: Optimized for small, round, green cells
-- **Smart Thresholding**: Multi-level confidence thresholds with intelligent expansion
-
-### Enhanced Tophat Training
-- **Color-Aware Training**: Uses same color-enhanced methods as analysis
-- **Detection Result Visualization**: Shows actual detected cells for annotation
-- **TIFF Support**: Full support for TIFF files with browser-compatible display
-- **Intelligent Fallback**: Uses tophat → watershed progression for training baseline
-
-### Smart Detection Pipeline
-```
-Color Image → Green Analysis → Color-Aware Detection Methods → Results
-     ↓              ↓                    ↓                      ↓
-   Preserved    Accurate %         Green-Optimized        Better Accuracy
-```
-
-### Debug and Visualization Tools
-- **CNN Debug Analysis**: Comprehensive visualization of detection process
-- **Performance Metrics**: Detailed statistics and confidence analysis
-- **Training Visualization**: Real-time feedback during tophat training
-- **TIFF Conversion**: Automatic TIFF-to-PNG conversion for browser display
-
----
 
 ## 📋 System Requirements
 
@@ -88,7 +54,7 @@ Color Image → Green Analysis → Color-Aware Detection Methods → Results
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 ```
 
@@ -432,7 +398,7 @@ If you use BIOIMAGIN OPTIMIZED in your research, please cite:
   author={BIOIMAGIN Development Team},
   version={3.0-Optimized},
   year={2025},
-  url={https://github.com/your-org/bioimagin},
+  url={https://github.com/AuroragitAA/bioimagin},
   note={Part of BinAqua project at BTU Cottbus-Senftenberg}
 }
 ```
@@ -449,7 +415,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Getting Help
 - **Documentation**: Check `docs/` directory for comprehensive guides
-- **Issues**: [GitHub Issues](https://github.com/your-org/bioimagin/issues)
+- **Issues**: [GitHub Issues](https://github.com/AuroragitAA/bioimagin/issues)
 - **Questions**: Create a discussion or issue
 
 ### Common Solutions
