@@ -122,7 +122,7 @@ Enterprise-grade system with:
 ### Basic Installation
 ```bash
 # Clone repository
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 
 # Install core dependencies
@@ -176,8 +176,8 @@ pip install gunicorn supervisor redis prometheus-client
 4. **Check troubleshooting sections** for common issues
 
 ### Support Channels
-- **GitHub Issues**: [Report bugs and request features](https://github.com/your-org/bioimagin/issues)
-- **Discussions**: [Ask questions and share experiences](https://github.com/your-org/bioimagin/discussions)
+- **GitHub Issues**: [Report bugs and request features](https://github.com/AuroragitAA/bioimagin/issues)
+- **Discussions**: [Ask questions and share experiences](https://github.com/AuroragitAA/bioimagin/discussions)
 - **Documentation**: [Comprehensive guides](COMPREHENSIVE_GUIDE.md)
 - **Email**: [Direct support for critical issues](mailto:support@bioimagin.org)
 

@@ -21,7 +21,7 @@
 
 #### Step 1: Clone Repository
 ```bash
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 ```
 
@@ -65,7 +65,7 @@ For developers who want to get started immediately:
 
 ```bash
 # Clone and install in one command
-git clone https://github.com/your-org/bioimagin.git && cd bioimagin && pip install -r requirements.txt
+git clone https://github.com/AuroragitAA/bioimagin.git && cd bioimagin && pip install -r requirements.txt
 
 # Quick verification
 python web_integration.py
@@ -93,7 +93,7 @@ docker run -p 5000:5000 -v $(pwd)/uploads:/app/uploads -v $(pwd)/results:/app/re
 #### Installation
 ```cmd
 # Open Command Prompt or PowerShell as Administrator
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 pip install -r requirements.txt
 
@@ -120,7 +120,7 @@ brew install python@3.11 git
 #### Installation
 ```bash
 # Clone repository
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 
 # Create virtual environment
@@ -151,7 +151,7 @@ sudo apt install libgl1-mesa-glx libglib2.0-0 libsm6 libxrender1 libxext6 libfon
 #### Installation
 ```bash
 # Clone repository
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 
 # Create virtual environment
@@ -355,7 +355,7 @@ For contributors and advanced users:
 
 ```bash
 # Clone with development branch
-git clone -b develop https://github.com/your-org/bioimagin.git
+git clone -b develop https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 
 # Install in development mode

@@ -22,7 +22,7 @@ sudo usermod -aG sudo bioimagin
 sudo su - bioimagin
 
 # 3. Clone repository
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 
 # 4. Create production environment
@@ -407,7 +407,7 @@ sudo apt install -y docker.io docker-compose
 sudo usermod -aG docker ubuntu
 
 # Clone and deploy
-git clone https://github.com/your-org/bioimagin.git
+git clone https://github.com/AuroragitAA/bioimagin.git
 cd bioimagin
 cp .env.example .env
 # Edit .env with production values
