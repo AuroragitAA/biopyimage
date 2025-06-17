@@ -15,12 +15,21 @@
 </div>
 
 ---
+<p align="center">
+  <img src="static/BTULogoStandardversiondeutschCMYK.jpg" alt="BTU Logo" width="200"/>
+</p>
 
 ## 🔬 Overview
 
 BIOIMAGIN is a cutting-edge bioimage analysis system specifically designed for **Wolffia arrhiza** (the world's smallest flowering plant) cell detection and analysis. The system combines color-aware detection methods, enhanced neural networks, and intelligent training pipelines to achieve superior precision and accuracy.
 
-**Project Context**: Part of "BinAqua: Klimafreundliche Herstellung vollwertiger veganer Proteinpulver durch die Co-Kultivierung von Mikroalgen und Wasserlinsen" at BTU Cottbus-Senftenberg.
+
+### 🌱 Project Background
+
+**BinAqua**: Climate-friendly production of complete vegan protein powders through the co-cultivation of microalgae and duckweed
+
+The project is conducted in collaboration with **BTU Cottbus-Senftenberg**, Institute of Biotechnology, Department of Molecular Cell Biology. Its goal is to develop a sustainable and nutritionally complete meat alternative that, for the first time, combines a **plant-based protein source (duckweed)** and a **microbial protein source (cyanobacteria)**. Both organisms provide a high protein content with all essential amino acids, along with important nutrients such as starch, B vitamins, omega-3 fatty acids, and bioavailable iron. Advanced cultivation techniques and minimal processing steps aim to produce a nutrient-rich product while reducing undesirable coloration. The project is funded by the **European Union** and the **State of Brandenburg**.
+
 
 ### ✨ Key Features
 
