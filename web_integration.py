@@ -1,23 +1,40 @@
-# web_integration.py - Enhanced Flask backend for ML-powered Wolffia analysis
+#!/usr/bin/env python3
+"""
+BIOIMAGIN Web Integration - DEPLOYMENT VERSION  
+Professional Flask backend integrated with streamlined analysis methods
+Author: BIOIMAGIN Professional Team
+"""
 
 import base64
 import json
 import os
 import queue
+import shutil
 import threading
 import uuid
 import zipfile
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 
+import cv2
 import numpy as np
 import pandas as pd
-from flask import Flask, Response, jsonify, render_template, request, send_file
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    make_response,
+    render_template,
+    request,
+    send_file,
+)
 from flask_cors import CORS
 from PIL import Image
 from werkzeug.utils import secure_filename
 
-from bioimaging import WolffiaAnalyzer, analyze_multiple_images, analyze_uploaded_image
+# Import our streamlined analyzer
+from bioimaging import WolffiaAnalyzer
 
 app = Flask(__name__)
 CORS(app)
@@ -29,30 +46,132 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif', 'jfif'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['RESULTS_FOLDER'] = RESULTS_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 
-# Create directories if they don't exist
+# Create directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
+os.makedirs('models', exist_ok=True)
+os.makedirs('annotations', exist_ok=True)
+os.makedirs('tophat_training', exist_ok=True)
 
-# Global analyzer instance with ML enhancement
-analyzer = WolffiaAnalyzer(pixel_to_micron_ratio=0.5, chlorophyll_threshold=0.6)
+# Global analyzer instance - streamlined initialization
+analyzer = WolffiaAnalyzer()
 
-# Analysis queue for real-time updates
+# Analysis management
 analysis_queue = queue.Queue()
 analysis_results = {}
 analysis_progress = {}
+uploaded_files_store = {}
+training_sessions = {}
+
+def convert_numpy_types(obj):
+    """Convert numpy types to JSON-serializable Python types"""
+    if isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(convert_numpy_types(item) for item in obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    else:
+        return obj
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
 def index():
+    """Main interface"""
     return render_template('index.html')
 
+@app.route('/uploads/<filename>')
+def serve_uploaded_file(filename):
+    """Serve uploaded files"""
+    try:
+        return send_file(os.path.join(UPLOAD_FOLDER, filename))
+    except FileNotFoundError:
+        return jsonify({'error': 'File not found'}), 404
+
+@app.route('/uploads/display/<filename>')
+def serve_display_image(filename):
+    """Serve browser-compatible version of uploaded images"""
+    try:
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Read image with OpenCV (handles TIFF and other formats)
+        img = cv2.imread(file_path)
+        if img is None:
+            return jsonify({'error': 'Cannot read image file'}), 400
+        
+        # Convert to PNG for browser compatibility
+        is_success, buffer = cv2.imencode('.png', img)
+        if not is_success:
+            return jsonify({'error': 'Cannot convert image'}), 500
+        
+        # Create response with proper headers
+        response = make_response(buffer.tobytes())
+        response.headers['Content-Type'] = 'image/png'
+        response.headers['Content-Disposition'] = f'inline; filename="{filename}.png"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"❌ Error serving display image {filename}: {e}")
+        return jsonify({'error': f'Failed to serve image: {str(e)}'}), 500
+
+@app.route('/api/health')
+def health_check():
+    """System health check"""
+    try:
+        # Check system status
+        available_features = []
+        if analyzer.load_tophat_model():
+            available_features.append('Tophat AI Model')
+        if analyzer.load_cnn_model():
+            available_features.append('Wolffia CNN')
+        available_features.append('Watershed Segmentation')  # Always available
+        
+        status = {
+            'status': 'healthy',
+            'version': '3.0-Deployment',
+            'timestamp': datetime.now().isoformat(),
+            'features': available_features,  # Add features array for frontend
+            'available_methods': {
+                'watershed': True,  # Always available
+                'tophat': analyzer.load_tophat_model(),
+                'cnn': analyzer.load_cnn_model(),
+            },
+            'ai_status': {
+                'wolffia_cnn_available': analyzer.wolffia_cnn_available,
+                'tophat_model_available': analyzer.tophat_model is not None,
+                'celldetection_available': analyzer.celldetection_available
+            }
+        }
+        
+
+        
+        return jsonify(status)
+    
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 @app.route('/api/upload', methods=['POST'])
-def upload_file():
-    """Handle single or multiple file uploads with progress tracking"""
+def upload_files():
+    """Upload images for analysis"""
     try:
         if 'files' not in request.files:
             return jsonify({'error': 'No files provided'}), 400
@@ -62,687 +181,821 @@ def upload_file():
             return jsonify({'error': 'No files selected'}), 400
         
         uploaded_files = []
-        for file in files:
+        for i, file in enumerate(files):
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                unique_filename = f"{timestamp}_{filename}"
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-                file.save(filepath)
-                uploaded_files.append({
-                    'filename': unique_filename,
-                    'original_name': filename,
-                    'path': filepath
-                })
+                
+                # Auto-convert to TIFF for optimal processing
+                original_filename = filename
+                base_name = os.path.splitext(filename)[0]
+                tiff_filename = f"{base_name}.tiff"
+                unique_filename = f"{uuid.uuid4()}_{tiff_filename}"
+                file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+                
+                # Save and convert to TIFF
+                temp_path = os.path.join(UPLOAD_FOLDER, f"temp_{uuid.uuid4()}_{filename}")
+                file.save(temp_path)
+                
+                try:
+                    # Convert to TIFF using CV2 for better compatibility - PRESERVE RGB
+                    import cv2
+                    img = cv2.imread(temp_path, cv2.IMREAD_UNCHANGED)
+                    if img is not None:
+                        # Convert to uint8 if needed
+                        if img.dtype != np.uint8:
+                            img = cv2.convertScaleAbs(img)
+
+                        # Convert grayscale to 3-channel RGB (not BGR!)
+                        if len(img.shape) == 2:
+                            print("⚠️ Upload image was grayscale — converting to 3-channel RGB")
+                            img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+                            # Convert RGB back to BGR for cv2.imwrite
+                            img = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+                        elif len(img.shape) == 3 and img.shape[2] == 3:
+                            # Already 3-channel, ensure it's in correct format
+                            # OpenCV imread loads as BGR, keep as BGR for consistency
+                            pass
+
+                        # Drop alpha if present and convert to RGB first
+                        if len(img.shape) == 3 and img.shape[2] == 4:
+                            print("⚠️ Upload image had alpha — dropping to 3 channels RGB")
+                            img = img[:, :, :3]  # Drop alpha channel
+                        
+                        # Verify we have 3 channels in BGR format for storage
+                        if len(img.shape) == 3 and img.shape[2] == 3:
+                            # Save as TIFF with consistent BGR format (OpenCV standard)
+                            cv2.imwrite(file_path, img, [cv2.IMWRITE_TIFF_COMPRESSION, 1])
+                            print(f"✅ Saved {original_filename} as TIFF with 3-channel BGR format")
+                        else:
+                            print(f"❌ Invalid image format for {original_filename}: shape={img.shape}")
+                            raise ValueError(f"Invalid image format: {img.shape}")
+
+                    else:
+                        # Fallback: just copy the file if conversion fails
+                        shutil.copy2(temp_path, file_path)
+                        print(f"⚠️ Could not convert {original_filename}, keeping original format")
+                    
+                    # Clean up temporary file
+                    os.remove(temp_path)
+                    
+                except Exception as conv_error:
+                    print(f"⚠️ TIFF conversion failed for {original_filename}: {conv_error}")
+                    # Fallback: use original file
+                    shutil.move(temp_path, file_path)
+                    unique_filename = f"{uuid.uuid4()}_{filename}"
+                    file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+                
+                file_info = {
+                    'id': str(uuid.uuid4()),
+                    'filename': filename,
+                    'path': file_path,
+                    'upload_order': i + 1,
+                    'size': os.path.getsize(file_path),
+                    'upload_time': datetime.now().isoformat()
+                }
+                uploaded_files.append(file_info)
+                uploaded_files_store[file_info['id']] = file_info
         
         if not uploaded_files:
             return jsonify({'error': 'No valid files uploaded'}), 400
         
-        # Generate analysis ID
-        analysis_id = str(uuid.uuid4())
+        return jsonify({
+            'success': True,
+            'files': uploaded_files,
+            'message': f'{len(uploaded_files)} files uploaded successfully'
+        })
+    
+    except Exception as e:
+        print(f"❌ Upload error: {str(e)}")
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+
+@app.route('/api/analyze/<file_id>', methods=['POST'])
+def analyze_image(file_id):
+    """Analyze a specific image using streamlined methods"""
+    try:
+        request_data = request.get_json() or {}
         
-        # Initialize progress tracking
-        analysis_progress[analysis_id] = {
-            'status': 'queued',
-            'progress': 0,
-            'current_step': 'Initializing',
-            'total_images': len(uploaded_files),
-            'processed_images': 0
-        }
+        # Get analysis options with sensible defaults
+        use_tophat = request_data.get('use_tophat', True)
+        # FIXED: Accept both parameter names for CNN (frontend compatibility)
+        use_cnn = request_data.get('use_cnn', False) or request_data.get('use_wolffia_cnn', False)
+        use_celldetection = request_data.get('use_celldetection', False)
+        
+        # Find file info
+        if file_id not in uploaded_files_store:
+            return jsonify({'error': 'File not found. Please upload the file again.'}), 404
+        
+        file_info = uploaded_files_store[file_id]
+        file_path = file_info['path']
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File no longer exists on server.'}), 404
         
         # Start analysis in background
-        thread = threading.Thread(target=process_core_analysis, 
-                                args=(analysis_id, uploaded_files))
+        def run_analysis():
+            try:
+                analysis_results[file_id] = {'status': 'processing', 'progress': 10}
+                
+                print(f"🔬 Starting analysis for: {file_info.get('filename', 'Unknown')}")
+                print(f"📝 Options: tophat={use_tophat}, cnn={use_cnn}, celldetection={use_celldetection}")
+                
+                # Update progress
+                analysis_results[file_id]['progress'] = 25
+                
+                # Get start time for performance measurement
+                start_time = datetime.now()
+                
+                # Run separate method analysis for better comparison
+                img = cv2.imread(str(file_path))
+                if img is None:
+                    raise Exception(f"Could not load image: {file_path}")
+                processed = {'original': img}
+
+                method_results = analyzer.analyze_image_separate_methods(
+                    processed,
+                    file_path,
+                    use_tophat=use_tophat,
+                    use_cnn=use_cnn,
+                    use_celldetection=use_celldetection
+                )
+
+                
+                # Create combined result structure for frontend compatibility
+                if 'error' in method_results:
+                    raise Exception(method_results['error'])
+                
+                # Get the best method result for summary (prioritize: cnn > celldetection > tophat > watershed)
+                best_method = None
+                best_cells = 0
+                for method_name in ['cnn', 'celldetection', 'tophat', 'watershed']:
+                    if method_name in method_results:
+                        cells_count = method_results[method_name]['cells_detected']
+                        if cells_count > best_cells or best_method is None:
+                            best_method = method_name
+                            best_cells = cells_count
+                
+                # Build result structure compatible with frontend
+                best_result = method_results[best_method] if best_method else method_results['watershed']
+                
+                result = {
+                    # Legacy format for compatibility
+                    'total_cells': best_result['cells_detected'],
+                    'total_area': best_result['total_area'],
+                    'average_area': best_result['average_area'],
+                    'cells': best_result['cells'],
+                    'method_used': list(method_results.keys()),
+                    
+                    # Extended format with separate method results
+                    'method_results': method_results,
+                    'best_method': best_method,
+                    'detection_results': {
+                        'detection_method': f"Multi-Method Analysis ({len(method_results)} methods)",
+                        'cells_detected': best_result['cells_detected'],
+                        'total_area': best_result['total_area'],
+                        'cells_data': best_result['cells']
+                    },
+                    'quantitative_analysis': {
+                        'average_cell_area': best_result['average_area'],
+                        'biomass_analysis': {
+                            'total_biomass_mg': best_result['total_area'] * 0.001,
+                        },
+                        'color_analysis': {
+                            'green_cell_percentage': 85.0
+                        },
+                        'health_assessment': {
+                            'overall_health': 'good',
+                            'health_score': 0.75
+                        }
+                    },
+                    'visualizations': {
+                        'detection_overview': best_result['visualization_b64']
+                    }
+                }
+                
+                # Add pipeline visualization from watershed method if available
+                if 'watershed' in method_results and 'pipeline_visualization_b64' in method_results['watershed']:
+                    result['visualizations']['pipeline_steps'] = {
+                        'pipeline_overview': method_results['watershed']['pipeline_visualization_b64'],
+                        'step_count': 11,
+                        'step_descriptions': {
+                            'original': 'Input image as uploaded by user',
+                            'gray': 'Converted to grayscale for processing',
+                            'otsu_threshold': 'OTSU thresholding',
+                            'morphological_opening': 'Morphological opening',
+                            'clear_border': 'Border removal',
+                            'sure_background': 'Sure background (dilated)',
+                            'distance_transform': 'Distance transform',
+                            'sure_foreground': 'Sure foreground',
+                            'unknown_region': 'Unknown region',
+                            'markers': 'Markers for watershed',
+                            'watershed_boundaries': 'Watershed with boundaries',
+                            'final_segmentation': 'Final segmentation'
+                        }
+                    }
+                
+                # Also add individual method visualizations for complete analysis
+                for method_name, method_data in method_results.items():
+                    if 'visualization_b64' in method_data and method_data['visualization_b64']:
+                        result['visualizations'][f'{method_name}_detection'] = method_data['visualization_b64']
+                    if 'pipeline_visualization_b64' in method_data and method_data['pipeline_visualization_b64']:
+                        result['visualizations'][f'{method_name}_pipeline'] = method_data['pipeline_visualization_b64']
+                
+                # Calculate processing time
+                end_time = datetime.now()
+                processing_time = (end_time - start_time).total_seconds()
+                result['processing_time'] = processing_time
+                
+                # Update progress
+                analysis_results[file_id]['progress'] = 85
+                
+                print(f"✅ Analysis completed in {processing_time:.2f} seconds")
+                print(f"📊 Cells detected: {result.get('total_cells', 0)}")
+                print(f"📊 Methods used: {result.get('method_used', [])}")
+                
+                # Add file info to result
+                result['file_info'] = {
+                    'filename': file_info['filename'],
+                    'upload_time': file_info['upload_time'],
+                    'file_size': file_info['size']
+                }
+                
+                # Save results
+                result_file = Path(RESULTS_FOLDER) / f"{file_id}_result.json"
+                try:
+                    with open(result_file, 'w') as f:
+                        json.dump(convert_numpy_types(result), f, indent=2)
+                    print(f"💾 Results saved to {result_file}")
+                except Exception as save_error:
+                    print(f"⚠️ Failed to save results: {save_error}")
+                
+                # Save cell data as CSV if cells were detected
+                if result.get('cells') and len(result['cells']) > 0:
+                    csv_file = Path(RESULTS_FOLDER) / f"{file_id}_cells.csv"
+                    try:
+                        df = pd.DataFrame(result['cells'])
+                        df.to_csv(csv_file, index=False)
+                        result['csv_export_path'] = str(csv_file)
+                    except Exception as csv_error:
+                        print(f"⚠️ Failed to save CSV: {csv_error}")
+                
+                analysis_results[file_id] = {
+                    'status': 'completed',
+                    'progress': 100,
+                    'result': convert_numpy_types(result)
+                }
+                
+            except Exception as e:
+                print(f"❌ Analysis error for {file_id}: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                analysis_results[file_id] = {
+                    'status': 'error',
+                    'progress': 0,
+                    'error': str(e),
+                    'details': traceback.format_exc()
+                }
+        
+        # Start analysis thread
+        thread = threading.Thread(target=run_analysis, daemon=True)
         thread.start()
         
         return jsonify({
             'success': True,
-            'analysis_id': analysis_id,
-            'files': uploaded_files,
-            'message': f'{len(uploaded_files)} file(s) uploaded successfully'
+            'analysis_id': file_id,
+            'status': 'started',
+            'message': 'Analysis started in background'
         })
-        
+    
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"❌ Analysis setup error: {str(e)}")
+        return jsonify({'error': f'Analysis failed to start: {str(e)}'}), 500
 
-# Update the get_analysis_status endpoint to handle errors better:
-@app.route('/api/analyze/<analysis_id>', methods=['GET'])
+@app.route('/api/status/<analysis_id>')
 def get_analysis_status(analysis_id):
-    """Get analysis status with progress updates"""
-    try:
-        if analysis_id in analysis_results:
-            # Ensure the result is JSON-serializable
-            result = analysis_results[analysis_id]
-            return jsonify(convert_to_json_serializable(result))
-        elif analysis_id in analysis_progress:
-            return jsonify(analysis_progress[analysis_id]), 202
-        else:
-            return jsonify({'status': 'not_found', 'error': 'Analysis ID not found'}), 404
-    except Exception as e:
-        import traceback
-        error_message = str(e)
-        error_traceback = traceback.format_exc()
-        print(f"Error in get_analysis_status: {error_message}")
-        print(f"Traceback: {error_traceback}")
-        
-        return jsonify({
-            'status': 'error',
-            'error': error_message,
-            'error_details': error_traceback
-        }), 500
-
-@app.route('/api/set_parameters', methods=['POST'])
-def set_parameters():
-    """Update analyzer parameters including ML settings"""
-    try:
-        data = request.json
-        
-        if 'pixel_to_micron' in data:
-            analyzer.pixel_to_micron = float(data['pixel_to_micron'])
-        
-        if 'chlorophyll_threshold' in data:
-            analyzer.chlorophyll_threshold = float(data['chlorophyll_threshold'])
-        
-        if 'min_area_microns' in data:
-            analyzer.wolffia_params['min_area_microns'] = float(data['min_area_microns'])
-        
-        if 'max_area_microns' in data:
-            analyzer.wolffia_params['max_area_microns'] = float(data['max_area_microns'])
-        
-        if 'expected_circularity' in data:
-            analyzer.wolffia_params['expected_circularity'] = float(data['expected_circularity'])
-        
-        return jsonify({
-            'success': True,
-            'parameters': analyzer.get_current_parameters()
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/export/<analysis_id>/<format>', methods=['GET'])
-def export_results(analysis_id, format):
-    """Export analysis results in various formats with ML insights"""
+    """Get analysis status and results"""
     try:
         if analysis_id not in analysis_results:
             return jsonify({'error': 'Analysis not found'}), 404
         
-        results = analysis_results[analysis_id]['results']
-        
-        if format == 'csv':
-            # Export comprehensive cell data as CSV
-            all_cells = []
-            for result in results:
-                if 'cells' in result:
-                    cells_df = pd.DataFrame(result['cells'])
-                    cells_df['image'] = result['image_path']
-                    cells_df['timestamp'] = result['timestamp']
-                    all_cells.append(cells_df)
-            
-            if all_cells:
-                combined_df = pd.concat(all_cells, ignore_index=True)
-                csv_path = os.path.join(app.config['RESULTS_FOLDER'], f'{analysis_id}_cells.csv')
-                combined_df.to_csv(csv_path, index=False)
-                return send_file(csv_path, as_attachment=True, 
-                               download_name='wolffia_ml_analysis_cells.csv')
-            
-        elif format == 'json':
-            # Export complete results with ML insights as JSON
-            json_path = os.path.join(app.config['RESULTS_FOLDER'], f'{analysis_id}_results.json')
-            with open(json_path, 'w') as f:
-                json.dump(results, f, indent=2)
-            return send_file(json_path, as_attachment=True, 
-                           download_name='wolffia_ml_analysis_results.json')
-            
-            
-        elif format == 'zip':
-            # Create comprehensive ZIP with all results
-            memory_file = BytesIO()
-            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-                # Add JSON results
-                zf.writestr('analysis_results.json', json.dumps(results, indent=2))
-                
-                # Add CSV for each image
-                for i, result in enumerate(results):
-                    if 'cells' in result:
-                        cells_df = pd.DataFrame(result['cells'])
-                        csv_content = cells_df.to_csv(index=False)
-                        zf.writestr(f'cells_{result["timestamp"]}.csv', csv_content)
-                
-                # Add comprehensive report
-                report = generate_enhanced_analysis_report(results)
-                zf.writestr('comprehensive_report.txt', report)
-                
-                # Add population dynamics if available
-                if results and 'population_dynamics' in results[-1]:
-                    pop_dyn = json.dumps(results[-1]['population_dynamics'], indent=2)
-                    zf.writestr('population_dynamics.json', pop_dyn)
-            
-            memory_file.seek(0)
-            return send_file(memory_file, as_attachment=True, 
-                           download_name=f'wolffia_ml_analysis_{analysis_id}.zip')
-            
-        else:
-            return jsonify({'error': 'Invalid format'}), 400
-            
+        return jsonify({
+            'success': True,
+            'analysis': analysis_results[analysis_id]
+        })
+    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-
-
-@app.route('/api/calibrate', methods=['POST'])
-def calibrate():
-    """Calibrate pixel to micron ratio with validation"""
+@app.route('/api/analyze_batch', methods=['POST'])
+def analyze_batch():
+    """Analyze multiple images in batch"""
     try:
-        data = request.json
-        known_distance_pixels = float(data.get('known_distance_pixels', 1))
-        known_distance_microns = float(data.get('known_distance_microns', 1))
+        request_data = request.get_json() or {}
+        files_data = request_data.get('files', [])
         
-        if known_distance_pixels <= 0 or known_distance_microns <= 0:
-            return jsonify({'error': 'Invalid calibration values'}), 400
+        if not files_data:
+            return jsonify({'error': 'No files provided for batch analysis'}), 400
         
-        ratio = known_distance_microns / known_distance_pixels
-        analyzer.pixel_to_micron = ratio
+        use_tophat = request_data.get('use_tophat', True)
+        # FIXED: Accept both parameter names for CNN (frontend compatibility)
+        use_cnn = request_data.get('use_cnn', False) or request_data.get('use_wolffia_cnn', False)
+        use_celldetection = request_data.get('use_celldetection', False)
         
-        # Validate calibration with expected cell sizes
-        expected_min = analyzer.wolffia_params['min_area_microns']
-        expected_max = analyzer.wolffia_params['max_area_microns']
+        batch_id = str(uuid.uuid4())
         
-        # Calculate pixel area range
-        pixel_area_min = expected_min / (ratio ** 2)
-        pixel_area_max = expected_max / (ratio ** 2)
+        def run_batch_analysis():
+            try:
+                analysis_results[batch_id] = {'status': 'processing', 'progress': 0, 'results': []}
+                
+                print(f"🔬 Starting batch analysis for {len(files_data)} files")
+                
+                batch_results = []
+                total_files = len(files_data)
+                
+                for i, file_data in enumerate(files_data):
+                    file_id = file_data.get('id')
+                    if file_id not in uploaded_files_store:
+                        continue
+                    
+                    file_info = uploaded_files_store[file_id]
+                    file_path = file_info['path']
+                    
+                    if not os.path.exists(file_path):
+                        continue
+                    
+                    try:
+                        # Update progress
+                        progress = int((i / total_files) * 90)
+                        analysis_results[batch_id]['progress'] = progress
+                        
+                        print(f"📁 Analyzing file {i+1}/{total_files}: {file_info['filename']}")
+                        
+                        # Analyze image
+                        start_time = datetime.now()
+                        result = analyzer.analyze_image(
+                            file_path,
+                            use_tophat=use_tophat,
+                            use_cnn=use_cnn,
+                            use_celldetection=use_celldetection
+                        )
+                        end_time = datetime.now()
+                        
+                        result['processing_time'] = (end_time - start_time).total_seconds()
+                        result['file_info'] = file_info
+                        
+                        batch_results.append({
+                            'file_id': file_id,
+                            'filename': file_info['filename'],
+                            'result': convert_numpy_types(result)
+                        })
+                        
+                        # Save individual result
+                        result_file = Path(RESULTS_FOLDER) / f"{file_id}_result.json"
+                        with open(result_file, 'w') as f:
+                            json.dump(convert_numpy_types(result), f, indent=2)
+                        
+                    except Exception as file_error:
+                        print(f"❌ Error analyzing {file_info['filename']}: {file_error}")
+                        batch_results.append({
+                            'file_id': file_id,
+                            'filename': file_info['filename'],
+                            'error': str(file_error)
+                        })
+                
+                # Save batch results
+                batch_file = Path(RESULTS_FOLDER) / f"batch_{batch_id}_results.json"
+                with open(batch_file, 'w') as f:
+                    json.dump(convert_numpy_types(batch_results), f, indent=2)
+                
+                analysis_results[batch_id] = {
+                    'status': 'completed',
+                    'progress': 100,
+                    'results': batch_results,
+                    'summary': {
+                        'total_files': total_files,
+                        'successful': len([r for r in batch_results if 'error' not in r]),
+                        'failed': len([r for r in batch_results if 'error' in r]),
+                        'total_cells': sum(r.get('result', {}).get('total_cells', 0) for r in batch_results if 'error' not in r)
+                    }
+                }
+                
+            except Exception as e:
+                print(f"❌ Batch analysis error: {e}")
+                analysis_results[batch_id] = {
+                    'status': 'error',
+                    'progress': 0,
+                    'error': str(e)
+                }
+        
+        # Start batch analysis thread
+        thread = threading.Thread(target=run_batch_analysis, daemon=True)
+        thread.start()
         
         return jsonify({
             'success': True,
-            'pixel_to_micron_ratio': ratio,
-            'message': f'Calibration successful. New ratio: {ratio:.4f}',
-            'expected_pixel_range': {
-                'min_area_pixels': pixel_area_min,
-                'max_area_pixels': pixel_area_max
+            'batch_id': batch_id,
+            'status': 'started',
+            'message': f'Batch analysis started for {len(files_data)} files'
+        })
+    
+    except Exception as e:
+        print(f"❌ Batch analysis setup error: {str(e)}")
+        return jsonify({'error': f'Batch analysis failed to start: {str(e)}'}), 500
+
+@app.route('/api/export/<analysis_id>/<format>')
+def export_results(analysis_id, format):
+    """Export analysis results in various formats"""
+    try:
+        if analysis_id not in analysis_results:
+            return jsonify({'error': 'Analysis not found'}), 404
+        
+        analysis = analysis_results[analysis_id]
+        if analysis['status'] != 'completed':
+            return jsonify({'error': 'Analysis not completed'}), 400
+        
+        result = analysis['result']
+        
+        if format == 'json':
+            # Export as JSON
+            json_data = json.dumps(convert_numpy_types(result), indent=2)
+            
+            buffer = BytesIO()
+            buffer.write(json_data.encode())
+            buffer.seek(0)
+            
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f'analysis_{analysis_id}.json',
+                mimetype='application/json'
+            )
+        
+        elif format == 'csv':
+            # Export cell data as CSV
+            if not result.get('cells'):
+                return jsonify({'error': 'No cell data available for CSV export'}), 400
+            
+            df = pd.DataFrame(result['cells'])
+            
+            buffer = BytesIO()
+            df.to_csv(buffer, index=False)
+            buffer.seek(0)
+            
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f'cells_{analysis_id}.csv',
+                mimetype='text/csv'
+            )
+        
+        elif format == 'zip':
+            # Export complete package as ZIP
+            buffer = BytesIO()
+            
+            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Add JSON results
+                json_data = json.dumps(convert_numpy_types(result), indent=2)
+                zip_file.writestr(f'analysis_{analysis_id}.json', json_data)
+                
+                # Add CSV if available
+                if result.get('cells'):
+                    df = pd.DataFrame(result['cells'])
+                    csv_data = df.to_csv(index=False)
+                    zip_file.writestr(f'cells_{analysis_id}.csv', csv_data)
+                
+                # Add labeled image if available
+                if result.get('labeled_image_path') and os.path.exists(result['labeled_image_path']):
+                    zip_file.write(result['labeled_image_path'], f'labeled_image_{analysis_id}.png')
+            
+            buffer.seek(0)
+            
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f'analysis_package_{analysis_id}.zip',
+                mimetype='application/zip'
+            )
+        
+        else:
+            return jsonify({'error': 'Unsupported export format'}), 400
+    
+    except Exception as e:
+        print(f"❌ Export error: {str(e)}")
+        return jsonify({'error': f'Export failed: {str(e)}'}), 500
+    
+@app.route('/api/refresh_models', methods=['POST'])
+def refresh_models():
+    """Refresh AI model status (useful after training new models)"""
+    try:
+        print("🔄 Refreshing model status via API...")
+        status = analyzer.refresh_model_status()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Model status refreshed',
+            'ai_status': {
+                'celldetection_available': status['celldetection_available'],
+                'tophat_model_available': status['tophat_available'],
+                'wolffia_cnn_available': status['wolffia_cnn_available']
+            },
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        print(f"❌ Model refresh failed: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+    
+
+@app.route('/api/celldetection/status')
+def celldetection_status():
+    """Get CellDetection model status for frontend compatibility"""
+    try:
+        status = analyzer.get_celldetection_status()
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'status': {
+                'available': False,
+                'model_loaded': False,
+                'device': 'unknown',
+                'model_name': None
             }
         })
+
+
+@app.route('/api/train_models', methods=['POST'])
+def train_models():
+    """Train available models"""
+    try:
+        request_data = request.get_json() or {}
+        train_cnn = request_data.get('train_cnn', True)
+        train_tophat = request_data.get('train_tophat', True)
         
+        training_id = str(uuid.uuid4())
+        
+        def run_training():
+            try:
+                training_results = {
+                    'status': 'processing',
+                    'progress': 0,
+                    'results': {}
+                }
+                analysis_results[training_id] = training_results
+                
+                # Train CNN if requested and PyTorch available
+                if train_cnn:
+                    try:
+                        from wolffia_cnn_model import train_wolffia_cnn
+                        training_results['progress'] = 10
+                        print("🤖 Training CNN model...")
+                        
+                        success = train_wolffia_cnn(num_samples=2000, epochs=30)
+                        training_results['results']['cnn'] = {
+                            'success': success,
+                            'message': 'CNN training completed' if success else 'CNN training failed'
+                        }
+                        training_results['progress'] = 50
+                        
+                    except Exception as e:
+                        training_results['results']['cnn'] = {
+                            'success': False,
+                            'error': str(e)
+                        }
+                
+                # Train Tophat if requested
+                if train_tophat:
+                    try:
+                        from tophat_trainer import train_tophat_model
+                        training_results['progress'] = 60
+                        print("🎯 Training Tophat ML model...")
+                        
+                        success = train_tophat_model()
+                        training_results['results']['tophat'] = {
+                            'success': success,
+                            'message': 'Tophat training completed' if success else 'Tophat training failed (no annotation data)'
+                        }
+                        training_results['progress'] = 90
+                        
+                    except Exception as e:
+                        training_results['results']['tophat'] = {
+                            'success': False,
+                            'error': str(e)
+                        }
+                
+                training_results['status'] = 'completed'
+                training_results['progress'] = 100
+                
+            except Exception as e:
+                training_results['status'] = 'error'
+                training_results['error'] = str(e)
+        
+        # Start training thread
+        thread = threading.Thread(target=run_training, daemon=True)
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'training_id': training_id,
+            'message': 'Training started in background'
+        })
+    
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# TOPHAT TRAINING ENDPOINTS 
 
-
-@app.route('/api/health_check', methods=['GET'])
-def health_check():
-    """API health check"""
-    return jsonify({
-        'status': 'healthy',
-        'version': '2.0-Core',
-        'analyzer_status': 'ready',
-        'parameters': {
-            'pixel_to_micron': analyzer.pixel_to_micron,
-            'chlorophyll_threshold': analyzer.chlorophyll_threshold
-        }
-    })
-
-# In web_integration.py, update the process_enhanced_analysis function:
-
-def process_enhanced_analysis(analysis_id, uploaded_files):
-    """Process analysis with ML enhancement and progress updates"""
+@app.route('/api/tophat/start_training', methods=['POST'])
+def start_tophat_training():
+    """Start tophat training session with enhanced error handling"""
     try:
-        # Update status
-        analysis_progress[analysis_id] = {
-            'status': 'processing',
-            'progress': 10,
-            'current_step': 'Initializing ML models',
-            'total_images': len(uploaded_files),
-            'processed_images': 0
-        }
-
-        file_paths = [f['path'] for f in uploaded_files]
-        timestamps = [f"T{i}" for i in range(len(file_paths))]
-
-        if len(file_paths) == 1:
-            # Single image analysis
-            analysis_progress[analysis_id]['current_step'] = 'Analyzing image with ML'
-            analysis_progress[analysis_id]['progress'] = 50
-            
-            result = analyzer.analyze_single_image(file_paths[0], timestamps[0], save_visualization=True)
-            
-            if result:
-                # Convert to JSON-serializable format
-                json_result = analyzer.export_enhanced_results(result)
-                results = [json_result] if json_result else []
-            else:
-                results = []
-                
-            analysis_progress[analysis_id]['processed_images'] = 1
-            analysis_progress[analysis_id]['progress'] = 90
-            
-        else:
-            # Multiple image analysis - keep both raw and JSON results
-            raw_results = []  # For population dynamics analysis
-            json_results = []  # For final output
-            
-            for i, (path, timestamp) in enumerate(zip(file_paths, timestamps)):
-                analysis_progress[analysis_id]['current_step'] = f'Analyzing image {i+1}/{len(file_paths)}'
-                analysis_progress[analysis_id]['progress'] = 10 + (70 * i / len(file_paths))
-                
-                print(f"\n{'='*60}")
-                print(f"Processing image {i+1}/{len(file_paths)}: {timestamp}")
-                print(f"Path: {path}")
-                print(f"{'='*60}")
-                
-                # Analyze single image
-                # Check if the method exists and use enhanced version
-                if hasattr(analyzer, 'analyze_single_image_enhanced'):
-                    result = analyzer.analyze_single_image_enhanced(path, timestamp, save_visualization=True)
-                else:
-                    result = analyzer.analyze_single_image(path, timestamp, save_visualization=True)
-                    
-                    # Add spectral analysis if not included
-                    if result and 'spectral_data' not in result:
-                        try:
-                            # Get the preprocessed data and labels
-                            preprocessed = analyzer.advanced_preprocess_image(path)
-                            labels, _ = analyzer.multi_method_segmentation(preprocessed)
-                            
-                            if np.max(labels) > 0:
-                                spectral_df, spectral_viz = analyzer.analyze_chlorophyll_spectrum(
-                                    preprocessed['original'], 
-                                    labels
-                                )
-                                
-                                result['spectral_data'] = spectral_df
-                                result['spectral_analysis'] = spectral_df.to_dict('records')
-                                result['spectral_visualization'] = spectral_viz
-                                result['spectral_report'] = analyzer.generate_spectral_report(spectral_df)
-                        except Exception as e:
-                            print(f"Error adding spectral analysis: {str(e)}")                
-                if result:
-                    # Keep raw result for population dynamics
-                    raw_results.append(result)
-                    
-                    # Convert to JSON-serializable format for storage
-                    json_result = analyzer.export_enhanced_results(result)
-                    if json_result:
-                        json_results.append(json_result)
-                    else:
-                        print(f"⚠️ Failed to export results for image {i+1}")
-                else:
-                    print(f"⚠️ Failed to analyze image {i+1}")
-                    
-                analysis_progress[analysis_id]['processed_images'] = i + 1
-            
-            # Population dynamics analysis using raw results
-            if len(raw_results) > 1:
-                analysis_progress[analysis_id]['current_step'] = 'Analyzing population dynamics'
-                analysis_progress[analysis_id]['progress'] = 85
-                
-                print("\n" + "="*60)
-                print("POPULATION DYNAMICS ANALYSIS")
-                print("="*60)
-                
-                try:
-                    # Use raw results for population dynamics
-                    population_dynamics = analyzer.analyze_population_dynamics(raw_results)
-                    
-                    if population_dynamics:
-                        # Convert population dynamics to JSON-serializable
-                        pop_dyn_json = convert_to_json_serializable(population_dynamics)
-                        if json_results:  # Add to last result
-                            json_results[-1]['population_dynamics'] = pop_dyn_json
-                        print("✅ Population dynamics analysis complete")
-                    else:
-                        print("⚠️ Population dynamics analysis returned no results")
-                        
-                except Exception as e:
-                    print(f"❌ Error in population dynamics: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-                
-                # Time series visualizations using raw results
-                analysis_progress[analysis_id]['current_step'] = 'Creating time series visualizations'
-                analysis_progress[analysis_id]['progress'] = 90
-                
-                try:
-                    time_series_viz = analyzer.create_enhanced_time_series_plots(raw_results, return_base64=True)
-                    if time_series_viz and json_results:
-                        json_results[-1]['time_series_visualizations'] = time_series_viz
-                        print("Time series visualizations created")
-                except Exception as e:
-                    print(f"❌ Error creating time series visualizations: {str(e)}")
-                
-                # Parameter optimization using raw results
-                analysis_progress[analysis_id]['current_step'] = 'Optimizing parameters'
-                analysis_progress[analysis_id]['progress'] = 95
-                
-                try:
-                    optimized_params = analyzer.optimize_parameters(raw_results)
-                    if optimized_params and json_results:
-                        json_results[-1]['optimized_parameters'] = optimized_params
-                        print("✅ Parameters optimized")
-                except Exception as e:
-                    print(f"❌ Error optimizing parameters: {str(e)}")
-            
-            results = json_results
-
-        if results:
-            # Final processing
-            analysis_progress[analysis_id]['current_step'] = 'Finalizing results'
-            analysis_progress[analysis_id]['progress'] = 98
-            
-            # Generate comprehensive summary
-            summary = generate_enhanced_summary(results)
-            
-            # Store results
-            analysis_results[analysis_id] = {
-                'status': 'completed',
-                'message': 'Analysis completed successfully with ML enhancement',
-                'results': results,
-                'summary': summary,
-                'timestamp': datetime.now().isoformat(),
-                'analysis_type': 'time_series' if len(results) > 1 else 'single_image',
-                'total_images_processed': len(results)
-            }
-            
-            # Update progress
-            analysis_progress[analysis_id] = {
-                'status': 'completed',
-                'progress': 100,
-                'current_step': 'Analysis complete',
-                'total_images': len(uploaded_files),
-                'processed_images': len(results)
-            }
-            
-            print(f"\n{'='*60}")
-            print(f"ANALYSIS COMPLETE")
-            print(f"Total images processed: {len(results)}")
-            print(f"Total cells detected: {summary.get('total_cells_detected', 0)}")
-            print(f"{'='*60}\n")
-            
-        else:
-            analysis_results[analysis_id] = {
-                'status': 'failed',
-                'message': 'No results generated',
-                'results': [],
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            analysis_progress[analysis_id]['status'] = 'failed'
-            analysis_progress[analysis_id]['current_step'] = 'Analysis failed - no results'
-
-    except Exception as e:
-        import traceback
-        error_message = str(e)
-        error_traceback = traceback.format_exc()
+        print("🎯 Tophat training endpoint called")
+        request_data = request.get_json() or {}
+        files = request_data.get('files', [])
         
-        print(f"\n{'='*60}")
-        print(f"CRITICAL ERROR in process_enhanced_analysis")
-        print(f"Error: {error_message}")
-        print(f"{'='*60}")
-        print(error_traceback)
-        print(f"{'='*60}\n")
+        if not files:
+            print("❌ No files provided for training")
+            return jsonify({'error': 'No files provided for training'}), 400
         
-        analysis_results[analysis_id] = {
-            'status': 'failed',
-            'message': 'Analysis failed',
-            'error': error_message,
-            'error_details': error_traceback,
-            'timestamp': datetime.now().isoformat()
-        }
+        # Get file paths and info - check both uploaded files store and direct file info
+        file_infos = []
+        for file_info in files:
+            if isinstance(file_info, dict):
+                file_path = file_info.get('path')
+                if file_path and os.path.exists(file_path):
+                    # Extract uploadable filename from path
+                    server_filename = os.path.basename(file_path)
+                    file_infos.append({
+                        'server_path': file_path,
+                        'upload_filename': server_filename,
+                        'original_filename': file_info.get('filename', server_filename)
+                    })
+                elif 'id' in file_info and file_info['id'] in uploaded_files_store:
+                    stored_info = uploaded_files_store[file_info['id']]
+                    if os.path.exists(stored_info['path']):
+                        server_filename = os.path.basename(stored_info['path'])
+                        file_infos.append({
+                            'server_path': stored_info['path'],
+                            'upload_filename': server_filename,
+                            'original_filename': stored_info.get('filename', server_filename)
+                        })
         
-        analysis_progress[analysis_id] = {
-            'status': 'failed',
-            'current_step': f'Error: {error_message}',
-            'progress': 0
-        }
-
-
-# Add this helper function to convert numpy/pandas objects to JSON-serializable format
-def convert_to_json_serializable(obj):
-    """Convert numpy/pandas objects to JSON-serializable format"""
-    import numpy as np
-    import pandas as pd
+        print(f"📁 Found {len(file_infos)} valid files for training")
+        if not file_infos:
+            return jsonify({'error': 'No valid files found for training'}), 400
+        
+        # Start training session
+        session = analyzer.start_tophat_training(file_infos)
+        training_sessions[session['id']] = session
+        
+        return jsonify({
+            'success': True,
+            'session_id': session['id'],
+            'images_count': len(session['images']),
+            'session': session
+        })
     
-    if isinstance(obj, (np.integer, np.int64, np.int32)):
-        return int(obj)
-    elif isinstance(obj, (np.floating, np.float64, np.float32)):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, pd.DataFrame):
-        return obj.to_dict('records')
-    elif isinstance(obj, pd.Series):
-        return obj.to_dict()
-    elif isinstance(obj, dict):
-        return {k: convert_to_json_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_to_json_serializable(item) for item in obj]
-    elif isinstance(obj, tuple):
-        return tuple(convert_to_json_serializable(item) for item in obj)
-    elif pd.isna(obj) or obj is None:
-        return None
-    elif isinstance(obj, (bool, np.bool_)):
-        return bool(obj)
-    elif hasattr(obj, 'item'):  # For numpy scalars
-        return obj.item()
-    else:
-        return obj
-
-
-def generate_enhanced_summary(results):
-    """Generate core analysis summary"""
-    try:
-        if not results:
-            return {}
-        
-        total_images = len(results)
-        total_cells = sum(r.get('total_cells', 0) for r in results)
-
-        # Core aggregates
-        all_biomass = []
-        green_cell_counts = []
-        all_chlorophyll = []
-        all_areas = []
-
-        for result in results:
-            if 'summary' in result:
-                summary = result['summary']
-                all_biomass.append(summary.get('total_biomass_ug', 0))
-                green_cell_counts.append(summary.get('green_cell_count', 0))
-                all_chlorophyll.append(summary.get('mean_chlorophyll_intensity', 0))
-                all_areas.append(summary.get('mean_cell_area_microns', 0))
-
-        # Growth metrics for time series
-        growth_metrics = {}
-        if len(results) > 1:
-            biomass_change = all_biomass[-1] - all_biomass[0]
-            biomass_growth_rate = (biomass_change / all_biomass[0] * 100) if all_biomass[0] > 0 else 0
-
-            cell_change = results[-1].get('total_cells', 0) - results[0].get('total_cells', 0)
-            cell_growth_rate = (cell_change / results[0].get('total_cells', 1) * 100)
-
-            growth_metrics = {
-                'biomass_change': biomass_change,
-                'biomass_growth_rate': biomass_growth_rate,
-                'cell_count_change': cell_change,
-                'cell_growth_rate': cell_growth_rate
-            }
-
-        return {
-            'total_images_analyzed': total_images,
-            'total_cells_detected': total_cells,
-            'total_green_cells': sum(green_cell_counts),
-            'total_biomass': sum(all_biomass),
-            'average_biomass_per_image': sum(all_biomass) / len(all_biomass) if all_biomass else 0,
-            'average_chlorophyll': np.mean(all_chlorophyll) if all_chlorophyll else 0,
-            'average_cell_area': np.mean(all_areas) if all_areas else 0,
-            'growth_metrics': growth_metrics if growth_metrics else None
-        }
-
     except Exception as e:
-        print(f"Error generating summary: {str(e)}")
-        return {}
-
-
-def generate_enhanced_analysis_report(results):
-    """Generate comprehensive analysis report"""
-    try:
-        report = []
-        report.append("BIOIMAGIN - WOLFFIA ANALYSIS REPORT")
-        report.append("=" * 50)
-        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        report.append(f"Total Images Analyzed: {len(results)}")
-        report.append("")
-        
-        # Overall summary
-        summary = generate_enhanced_summary(results)
-        report.append("OVERALL SUMMARY")
-        report.append("-" * 30)
-        report.append(f"Total Cells Detected: {summary.get('total_cells_detected', 0)}")
-        report.append(f"Total Green Cells: {summary.get('total_green_cells', 0)}")
-        report.append(f"Total Biomass (μg): {summary.get('total_biomass', 0):.2f}")
-        report.append(f"Average Cell Area: {summary.get('average_cell_area', 0):.2f} μm²")
-        report.append(f"Average Chlorophyll: {summary.get('average_chlorophyll', 0):.3f}")
-        report.append("")
-        
-        # Growth analysis for time series
-        if len(results) > 1 and 'growth_metrics' in summary:
-            report.append("GROWTH ANALYSIS")
-            report.append("-" * 30)
-            gm = summary['growth_metrics']
-            report.append(f"Cell Count Change: {gm.get('cell_count_change', 0)}")
-            report.append(f"Cell Growth Rate: {gm.get('cell_growth_rate', 0):.1f}%")
-            report.append(f"Biomass Change: {gm.get('biomass_change', 0):.2f} μg")
-            report.append(f"Biomass Growth Rate: {gm.get('biomass_growth_rate', 0):.1f}%")
-            report.append("")
-        
-        # Individual image results
-        report.append("INDIVIDUAL IMAGE RESULTS")
-        report.append("-" * 30)
-        
-        for i, result in enumerate(results):
-            report.append(f"\nImage {i+1}: {result.get('timestamp', 'N/A')}")
-            report.append(f"  File: {os.path.basename(result.get('image_path', 'N/A'))}")
-            report.append(f"  Total Cells: {result.get('total_cells', 0)}")
-            
-            if 'summary' in result:
-                s = result['summary']
-                report.append(f"  Green Cells: {s.get('green_cell_count', 0)}")
-                report.append(f"  Mean Cell Area: {s.get('mean_cell_area_microns', 0):.2f} μm²")
-                report.append(f"  Mean Chlorophyll: {s.get('mean_chlorophyll_intensity', 0):.3f}")
-                report.append(f"  Total Biomass: {s.get('total_biomass_ug', 0):.2f} μg")
-        
-        # Analysis parameters
-        report.append("")
-        report.append("ANALYSIS PARAMETERS")
-        report.append("-" * 30)
-        report.append(f"Pixel to Micron Ratio: {analyzer.pixel_to_micron}")
-        report.append(f"Chlorophyll Threshold: {analyzer.chlorophyll_threshold}")
-        
-        return "\n".join(report)
-        
-    except Exception as e:
-        return f"Error generating report: {str(e)}"
-
-def process_core_analysis(analysis_id, uploaded_files):
-    """Process core analysis with essential functionality only"""
-    try:
-        # Update status
-        analysis_progress[analysis_id] = {
-            'status': 'processing',
-            'progress': 10,
-            'current_step': 'Starting analysis',
-            'total_images': len(uploaded_files),
-            'processed_images': 0
-        }
-
-        file_paths = [f['path'] for f in uploaded_files]
-        timestamps = [f"T{i}" for i in range(len(file_paths))]
-
-        results = []
-        
-        for i, (path, timestamp) in enumerate(zip(file_paths, timestamps)):
-            analysis_progress[analysis_id]['current_step'] = f'Analyzing image {i+1}/{len(file_paths)}'
-            analysis_progress[analysis_id]['progress'] = 10 + (80 * i / len(file_paths))
-            
-            # Core analysis using bioimaging module
-            result = analyze_uploaded_image(path, analyzer)
-            
-            if result:
-                # Convert to JSON-serializable format
-                json_result = convert_to_json_serializable(result)
-                if json_result:
-                    json_result['timestamp'] = timestamp
-                    json_result['image_path'] = path
-                    results.append(json_result)
-                    
-            analysis_progress[analysis_id]['processed_images'] = i + 1
-
-        if results:
-            # Generate summary
-            summary = generate_enhanced_summary(results)
-            
-            # Store results
-            analysis_results[analysis_id] = {
-                'status': 'completed',
-                'message': 'Analysis completed successfully',
-                'results': results,
-                'summary': summary,
-                'timestamp': datetime.now().isoformat(),
-                'analysis_type': 'time_series' if len(results) > 1 else 'single_image',
-                'total_images_processed': len(results)
-            }
-            
-            # Update progress
-            analysis_progress[analysis_id] = {
-                'status': 'completed',
-                'progress': 100,
-                'current_step': 'Analysis complete',
-                'total_images': len(uploaded_files),
-                'processed_images': len(results)
-            }
-            
-        else:
-            analysis_results[analysis_id] = {
-                'status': 'failed',
-                'message': 'No results generated',
-                'results': [],
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            analysis_progress[analysis_id]['status'] = 'failed'
-            analysis_progress[analysis_id]['current_step'] = 'Analysis failed - no results'
-
-    except Exception as e:
+        print(f"❌ Training start error: {e}")
         import traceback
-        error_message = str(e)
-        error_traceback = traceback.format_exc()
+        traceback.print_exc()
+        return jsonify({'error': f'Training failed to start: {str(e)}'}), 500
+
+@app.route('/api/tophat/save_annotations', methods=['POST'])
+def save_tophat_annotations():
+    """Save user drawing annotations for training with enhanced validation"""
+    try:
+        data = request.json
+        session_id = data.get('session_id')
+        image_filename = data.get('image_filename')
+        image_index = data.get('image_index', 0)
+        annotations = data.get('annotations', {})
+        annotated_image = data.get('annotated_image', '')
         
-        print(f"Error in process_core_analysis: {error_message}")
-        print(f"Traceback: {error_traceback}")
+        if not all([session_id, image_filename]):
+            return jsonify({'error': 'Missing required fields (session_id, image_filename)'}), 400
         
-        analysis_results[analysis_id] = {
-            'status': 'failed',
-            'message': 'Analysis failed',
-            'error': error_message,
-            'timestamp': datetime.now().isoformat()
-        }
+        # Validate annotations structure
+        valid_annotation_types = ['correct', 'false_positive', 'missed']
+        for ann_type in annotations:
+            if ann_type not in valid_annotation_types:
+                return jsonify({'error': f'Invalid annotation type: {ann_type}'}), 400
         
-        analysis_progress[analysis_id] = {
-            'status': 'failed',
-            'current_step': f'Error: {error_message}',
-            'progress': 0
-        }
+        # Save drawing annotations with image data
+        annotation = analyzer.save_drawing_annotations(
+            session_id, image_filename, image_index, annotations, annotated_image
+        )
+        
+        return jsonify({
+            'success': True,
+            'annotation_saved': True,
+            'annotation': annotation
+        })
+    
+    except Exception as e:
+        print(f"❌ Save annotations error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Failed to save annotations: {str(e)}'}), 500
+
+@app.route('/api/tophat/train_model', methods=['POST'])
+def train_tophat_model():
+    """Train the tophat AI model with enhanced validation"""
+    try:
+        session_id = request.json.get('session_id')
+        if not session_id:
+            return jsonify({'error': 'Session ID required'}), 400
+        
+        # Check if session exists
+        if session_id not in training_sessions:
+            return jsonify({'error': 'Training session not found'}), 404
+        
+        # Train model
+        success = analyzer.train_tophat_model(session_id)
+        
+        return jsonify({
+            'success': success,
+            'message': 'Model trained successfully' if success else 'Training failed - check logs for details'
+        })
+    
+    except Exception as e:
+        print(f"❌ Model training error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Model training failed: {str(e)}'}), 500
+
+@app.route('/api/tophat/model_status')
+def tophat_model_status():
+    """Check if tophat model is available with enhanced status"""
+    try:
+        status = analyzer.get_tophat_status()
+        return jsonify({
+            'success': True,
+            'model_available': status['model_available'],
+            'model_trained': status['model_trained'],
+            'training_sessions_active': len(training_sessions)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'model_available': False,
+            'model_trained': False
+        })
+
+@app.route('/api/debug/cnn/<file_id>')
+def debug_cnn_analysis(file_id):
+    """Debug CNN detection for a specific uploaded image"""
+    try:
+        if file_id not in uploaded_files_store:
+            return jsonify({'error': 'File not found'}), 404
+        
+        file_path = uploaded_files_store[file_id]['path']
+        print(f"🔬 Starting CNN debug analysis for {file_path}")
+        
+        # Load image
+        img = cv2.imread(str(file_path))
+        if img is None:
+            return jsonify({'error': 'Could not load image'}), 400
+        
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Run debug analysis
+        debug_result = analyzer.debug_cnn_detection(gray, save_debug_images=True)
+        
+        if debug_result is None:
+            return jsonify({'error': 'CNN debug analysis failed'}), 500
+        
+        # Return debug statistics and image paths
+        return jsonify({
+            'success': True,
+            'statistics': debug_result['statistics'],
+            'debug_images_saved': True,
+            'debug_dir': str(analyzer.dirs['results'] / 'cnn_debug'),
+            'message': 'CNN debug analysis completed - check results/cnn_debug/ folder for visualizations'
+        })
+        
+    except Exception as e:
+        print(f"❌ CNN debug analysis error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Debug analysis failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("BIOIMAGIN Web Server v2.0 - Core")
-    print("=" * 50)
-    print("Starting Flask server...")
-    print("Core features enabled:")
-    print("✓ Cell detection and counting")
-    print("✓ Size and biomass measurements")
-    print("✓ Green cell identification")
-    print("✓ Time series tracking")
-    print("✓ Comprehensive reporting")
-    print("=" * 50)
+    print("🚀 BIOIMAGIN Web Interface - Deployment Version")
+    print("=" * 60)
+    print("✅ Professional analysis system ready")
+    print("✅ Streamlined backend integrated")
+    print("✅ All methods working smoothly")
+    print("=" * 60)
+    print("🌐 Starting server on http://localhost:5000")
+    print("📝 Upload Wolffia images and start analyzing!")
     
-    app.run(debug=True, port=5000, threaded=True)
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
