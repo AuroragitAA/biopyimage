@@ -1,25 +1,259 @@
-# Core dependencies for BIOIMAGIN Wolffia Analysis System
+# BIOIMAGIN OPTIMIZED - Production Dependencies
+# Version 3.0 - Color-Aware Detection with Enhanced Training
+# Complete Wolffia arrhiza cell analysis system
 
-# Image processing
-opencv-python>=4.8.0
-scikit-image>=0.21.0
-Pillow>=10.0.0
+# ====================================================================
+# CORE DEPENDENCIES (REQUIRED FOR ALL FEATURES)
+# ====================================================================
 
-# Scientific computing
-numpy>=1.24.0
-scipy>=1.11.0
-pandas>=2.0.0
+# Image Processing and Computer Vision
+opencv-python>=4.8.0,<5.0.0          # Core image processing, TIFF support
+scikit-image>=0.21.0,<0.22.0          # Scientific image analysis
+Pillow>=10.0.0,<11.0.0                # Image format support and conversion
 
-# Machine learning
-scikit-learn>=1.3.0
+# Scientific Computing Core
+numpy>=1.24.0,<2.0.0                  # Numerical computing foundation
+scipy>=1.11.0,<2.0.0                  # Scientific algorithms and signal processing
+pandas>=2.0.0,<3.0.0                  # Data manipulation and CSV export
 
-# Visualization
-matplotlib>=3.7.0
+# Machine Learning
+scikit-learn>=1.3.0,<2.0.0            # Random Forest, feature extraction
 
-# Web framework
-Flask>=3.0.0
-Flask-CORS>=4.0.0
-Werkzeug>=3.0.0
+# Visualization and Plotting
+matplotlib>=3.7.0,<4.0.0              # Result visualization and training plots
+seaborn>=0.12.0,<1.0.0                # Enhanced statistical visualizations
 
-# Additional utilities
-python-dateutil>=2.8.0
+# Web Framework and API
+Flask>=3.0.0,<4.0.0                   # Web interface and REST API
+Flask-CORS>=4.0.0,<5.0.0              # Cross-origin resource sharing
+Werkzeug>=3.0.0,<4.0.0                # WSGI utilities and file handling
+gunicorn>=21.0.0,<22.0.0               # Production WSGI server
+
+# File Handling and Utilities
+python-dateutil>=2.8.0                # Date/time utilities
+requests>=2.31.0,<3.0.0               # HTTP requests for external APIs
+pathlib2>=2.3.0; python_version<"3.4" # Path handling backport
+
+# Progress and Logging
+tqdm>=4.65.0                           # Progress bars for training
+colorama>=0.4.6                        # Colored terminal output
+
+# ====================================================================
+# ENHANCED FEATURES (INSTALL SEPARATELY AS NEEDED)
+# ====================================================================
+
+# Deep Learning Framework (HIGHLY RECOMMENDED)
+# Enables: Enhanced CNN, Realistic Data Generation, GPU Acceleration
+# 
+# CPU-only installation:
+#   pip install torch>=2.0.0 torchvision>=0.15.0 --index-url https://download.pytorch.org/whl/cpu
+# 
+# GPU CUDA 11.8 (recommended):
+#   pip install torch>=2.0.0 torchvision>=0.15.0 --index-url https://download.pytorch.org/whl/cu118
+# 
+# GPU CUDA 12.1 (latest):
+#   pip install torch>=2.0.0 torchvision>=0.15.0 --index-url https://download.pytorch.org/whl/cu121
+
+# Professional Cell Segmentation (OPTIONAL)
+# Enables: CellPose integration for baseline comparison
+# 
+# Installation:
+#   pip install cellpose>=3.0.0
+
+# Advanced Medical Imaging (OPTIONAL)
+# Enables: Enhanced TIFF support, advanced preprocessing
+# 
+# Installation:
+#   pip install SimpleITK>=2.2.0
+
+# System Monitoring (RECOMMENDED FOR PRODUCTION)
+# Enables: Memory usage tracking, performance monitoring
+# 
+# Installation:
+#   pip install psutil>=5.9.0
+
+# ====================================================================
+# DEVELOPMENT DEPENDENCIES (FOR CONTRIBUTORS)
+# ====================================================================
+
+# Code Quality and Formatting
+# 
+# Installation:
+#   pip install black>=23.0.0 flake8>=6.0.0 isort>=5.12.0
+
+# Testing Framework
+# 
+# Installation:
+#   pip install pytest>=7.0.0 pytest-cov>=4.0.0 pytest-xdist>=3.0.0
+
+# Documentation Generation
+# 
+# Installation:
+#   pip install sphinx>=7.0.0 sphinx-rtd-theme>=1.3.0 myst-parser>=2.0.0
+
+# Performance Profiling
+# 
+# Installation:
+#   pip install line_profiler>=4.0.0 memory_profiler>=0.61.0
+
+# ====================================================================
+# PRODUCTION DEPLOYMENT DEPENDENCIES
+# ====================================================================
+
+# Production Web Server
+# Already included: gunicorn>=21.0.0
+
+# Process Management (for supervisor/systemd)
+# 
+# Installation:
+#   pip install supervisor>=4.2.0
+
+# Monitoring and Metrics
+# 
+# Installation:
+#   pip install prometheus-client>=0.17.0
+
+# Caching (for production performance)
+# 
+# Installation:
+#   pip install redis>=4.6.0
+
+# ====================================================================
+# INSTALLATION QUICK REFERENCE
+# ====================================================================
+
+# 🚀 QUICK START (Basic Features):
+#   pip install -r requirements.txt
+
+# 🧠 ENHANCED AI FEATURES (Recommended):
+#   pip install -r requirements.txt
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# 🔬 COMPLETE SCIENTIFIC PACKAGE:
+#   pip install -r requirements.txt
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#   pip install cellpose>=3.0.0 SimpleITK>=2.2.0
+
+# 🏭 PRODUCTION DEPLOYMENT:
+#   pip install -r requirements.txt
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#   pip install psutil>=5.9.0 redis>=4.6.0 prometheus-client>=0.17.0
+
+# 👨‍💻 DEVELOPMENT SETUP:
+#   pip install -r requirements.txt
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#   pip install black flake8 pytest sphinx
+
+# ====================================================================
+# FEATURE AVAILABILITY MATRIX
+# ====================================================================
+
+# ✅ ALWAYS AVAILABLE (Core Requirements Only):
+# - Color-aware watershed segmentation
+# - Tophat ML training and inference
+# - Interactive web interface
+# - Multi-format image support (PNG, JPG, TIFF, BMP)
+# - CSV/JSON result export
+# - Real-time progress tracking
+# - Debug visualizations
+
+# 🧠 WITH PYTORCH (torch + torchvision):
+# - Enhanced CNN training and inference
+# - Realistic synthetic data generation
+# - GPU acceleration (CUDA)
+# - Multi-task learning (mask + edge + distance)
+# - Advanced data augmentation
+# - Transfer learning capabilities
+
+# 🔬 WITH CELLPOSE (cellpose>=3.0.0):
+# - Professional cell segmentation baseline
+# - Multi-method comparison
+# - Advanced morphological analysis
+
+# 🏥 WITH SIMPLEITK (SimpleITK>=2.2.0):
+# - Advanced TIFF support
+# - Medical image preprocessing
+# - Enhanced file format compatibility
+
+# 📊 WITH MONITORING (psutil + prometheus-client):
+# - Real-time system monitoring
+# - Performance metrics collection
+# - Memory usage tracking
+# - Production health checks
+
+# ====================================================================
+# SYSTEM REQUIREMENTS
+# ====================================================================
+
+# Minimum Requirements:
+# - Python 3.8+ (3.11+ recommended)
+# - 8GB RAM (16GB recommended)
+# - 2GB storage (10GB for full training datasets)
+# - Windows 10+, macOS 10.15+, or Linux (Ubuntu 18.04+)
+
+# Recommended for Enhanced Performance:
+# - Python 3.11+
+# - 16GB+ RAM (32GB for large-scale training)
+# - SSD storage (faster I/O for image processing)
+# - NVIDIA GPU with CUDA 11.8+ (RTX 3070+ recommended)
+# - Multi-core CPU (Intel i7+ or AMD Ryzen 7+)
+
+# Production Requirements:
+# - 32GB+ RAM
+# - GPU with 8GB+ VRAM
+# - Fast SSD storage (1TB+ recommended)
+# - Dedicated server or cloud instance (AWS c5.2xlarge+)
+
+# ====================================================================
+# TROUBLESHOOTING COMMON INSTALLATION ISSUES
+# ====================================================================
+
+# Issue: "Microsoft Visual C++ 14.0 is required" (Windows)
+# Solution: Install Visual Studio Build Tools or Visual Studio Community
+
+# Issue: "Failed building wheel for [package]"
+# Solution: pip install --upgrade pip setuptools wheel
+
+# Issue: "No module named 'cv2'"
+# Solution: pip uninstall opencv-python && pip install opencv-python==4.8.1.78
+
+# Issue: PyTorch CUDA not working
+# Solution: Verify CUDA version with `nvidia-smi` and install matching PyTorch
+
+# Issue: Memory errors during installation
+# Solution: pip install --no-cache-dir -r requirements.txt
+
+# Issue: Permission denied errors
+# Solution: Use virtual environment or pip install --user
+
+# ====================================================================
+# VERSION COMPATIBILITY
+# ====================================================================
+
+# Python 3.8: Supported (minimum version)
+# Python 3.9: Fully supported
+# Python 3.10: Fully supported  
+# Python 3.11: Recommended (best performance)
+# Python 3.12: Supported (testing)
+
+# Operating Systems:
+# - Windows 10+ (x64): Fully supported
+# - Windows 11 (x64): Fully supported
+# - macOS 10.15+ (Intel): Fully supported
+# - macOS 11+ (Apple Silicon): Supported with conda PyTorch
+# - Ubuntu 18.04+: Fully supported
+# - CentOS 8+: Supported
+# - Debian 10+: Supported
+
+# ====================================================================
+# LICENSE INFORMATION
+# ====================================================================
+
+# BIOIMAGIN OPTIMIZED is released under the MIT License
+# All dependencies maintain their respective licenses
+# PyTorch: BSD-style license
+# OpenCV: Apache 2.0 License
+# Scikit-learn: BSD License
+# Flask: BSD License
+
+# For commercial use, verify license compatibility of all dependencies
