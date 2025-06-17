@@ -651,6 +651,80 @@
                 <div class="results-container" id="resultsContainer"></div>
             </div>
 
+            <!-- Add this section after the main stats-grid div -->
+<div class="enhanced-analysis-section" style="margin: 30px 0;">
+    <h3>🔬 Enhanced Wolffia Analysis</h3>
+    
+    <!-- Biomass Analysis Section -->
+    <div class="biomass-analysis" style="background: linear-gradient(145deg, #E8F5E8, #F1F8E9); padding: 20px; border-radius: 12px; margin: 20px 0;">
+        <h4>⚖️ Biomass Analysis</h4>
+        <div class="biomass-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div class="biomass-metric">
+                <div class="metric-value" style="font-size: 1.8em; font-weight: bold; color: #2E7D32;" id="total-biomass">0.000 mg</div>
+                <div class="metric-label">Total Biomass</div>
+            </div>
+            <div class="biomass-metric">
+                <div class="metric-value" style="font-size: 1.8em; font-weight: bold; color: #2E7D32;" id="avg-biomass">0.000 mg</div>
+                <div class="metric-label">Average per Cell</div>
+            </div>
+            <div class="biomass-metric">
+                <div class="metric-value" style="font-size: 1.8em; font-weight: bold; color: #2E7D32;" id="biomass-density">0.000 mg/mm²</div>
+                <div class="metric-label">Biomass Density</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Color Analysis Section -->
+    <div class="color-analysis" style="background: linear-gradient(145deg, #E3F2FD, #E8F5E8); padding: 20px; border-radius: 12px; margin: 20px 0;">
+        <h4>🟢 Green Content Analysis</h4>
+        <div class="color-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div class="color-metric">
+                <div class="metric-value" style="font-size: 1.8em; font-weight: bold; color: #4CAF50;" id="green-percentage">0.0%</div>
+                <div class="metric-label">Average Green Content</div>
+            </div>
+            <div class="color-metric">
+                <div class="metric-value" style="font-size: 1.8em; font-weight: bold; color: #4CAF50;" id="green-cells-count">0</div>
+                <div class="metric-label">Healthy Green Cells</div>
+            </div>
+            <div class="color-metric">
+                <div class="metric-value" style="font-size: 1.8em; font-weight: bold; color: #4CAF50;" id="chlorophyll-estimate">0.0</div>
+                <div class="metric-label">Chlorophyll Index</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Morphological Analysis Section -->
+    <div class="morphological-analysis" style="background: linear-gradient(145deg, #FFF3E0, #F3E5F5); padding: 20px; border-radius: 12px; margin: 20px 0;">
+        <h4>📏 Morphological Distribution</h4>
+        <div class="size-distribution" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+            <div class="size-category">
+                <div class="metric-value" style="font-size: 1.5em; font-weight: bold; color: #FF9800;" id="small-cells">0</div>
+                <div class="metric-label">Small Cells (<100 μm²)</div>
+            </div>
+            <div class="size-category">
+                <div class="metric-value" style="font-size: 1.5em; font-weight: bold; color: #FF9800;" id="medium-cells">0</div>
+                <div class="metric-label">Medium Cells (100-300 μm²)</div>
+            </div>
+            <div class="size-category">
+                <div class="metric-value" style="font-size: 1.5em; font-weight: bold; color: #FF9800;" id="large-cells">0</div>
+                <div class="metric-label">Large Cells (>300 μm²)</div>
+            </div>
+            <div class="size-category">
+                <div class="metric-value" style="font-size: 1.5em; font-weight: bold; color: #9C27B0;" id="avg-circularity">0.00</div>
+                <div class="metric-label">Average Circularity</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Pipeline Visualization Section -->
+<div class="pipeline-enhanced" style="margin: 30px 0;">
+    <h4>🔄 Simplified Watershed Pipeline (8 Steps)</h4>
+    <div class="pipeline-preview" id="pipeline-preview" style="background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center;">
+        <p style="color: #666; margin: 20px 0;">Pipeline visualization will appear here after analysis</p>
+    </div>
+</div>
+
             <!-- Tophat Training Section -->
             <div class="section" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-left-color: #ffc107;">
                 <h2>🎯 Tophat AI Training</h2>

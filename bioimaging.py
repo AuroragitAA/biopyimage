@@ -24,18 +24,32 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import ndimage
+from scipy import ndimage as ndi
 from skimage import (
     color,
+    data,
     exposure,
     feature,
     filters,
+    graph,
     measure,
     morphology,
     restoration,
     segmentation,
 )
+from skimage.draw import disk
+from skimage.feature import peak_local_max, shape_index
+from skimage.restoration import (
+    denoise_bilateral,
+    denoise_tv_chambolle,
+    denoise_wavelet,
+    estimate_sigma,
+)
 from skimage.segmentation import clear_border, watershed
+from skimage.util import img_as_float, random_noise
 from sklearn.ensemble import RandomForestClassifier
+
+from wolffia_cnn_model import GreenEnhancedPreprocessor
 
 # Suppress warnings for cleaner output
 # Suppress warnings for cleaner output and better performance
@@ -80,7 +94,8 @@ class WolffiaAnalyzer:
         self.min_cell_area = 30
         self.max_cell_area = 500
         self.pixel_to_micron = 0.5
-        
+        self.preprocessor = GreenEnhancedPreprocessor()
+
         # Models loaded on demand - using proper naming
         self._tophat_model = None
         self._cnn_model = None
@@ -648,381 +663,189 @@ class WolffiaAnalyzer:
     #         print(f"⚠️ Failed to create {method_name} visualization: {e}")
     #         return None
 
-    def create_method_visualization(self, original_img, labeled_img, cell_data, method_name):
-        """Create visualization for a specific method with improved visibility and color accuracy"""
-        try:
-            # Create overlay
-            overlay = original_img.copy()
-            
-            # Color the segmented regions
-            colored_labels = color.label2rgb(labeled_img, bg_label=0, alpha=0.3)
-            colored_labels = (colored_labels * 255).astype(np.uint8)
-            
-            # Blend with original
-            result = cv2.addWeighted(overlay, 0.7, colored_labels, 0.3, 0)
-            
-            # Add cell numbers and method title
-            for cell in cell_data:
-                center = tuple(cell['centroid'])
-                cv2.putText(result, str(cell['id']), center, 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
-                cv2.circle(result, center, 2, (255, 255, 0), -1)
-            
-            # Add method title
-            cv2.putText(result, f"{method_name}: {len(cell_data)} cells", 
-                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.putText(result, f"{method_name}: {len(cell_data)} cells", 
-                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1)
-            
-            # Save visualization
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            viz_path = self.dirs['results'] / f"{method_name.lower().replace(' ', '_')}_{timestamp}.png"
-            cv2.imwrite(str(viz_path), result)
 
-            return viz_path
+
+
+    def run_full_pipeline(self, image=None):
+        pipeline = {}
+
+        # Step 1: Load and denoise image
+        if image is None:
+            original = img_as_float(data.coffee()[100:250, 50:300])
+        else:
+            image = np.asarray(image)
+            if image.ndim == 2:
+                image = cv2.cvtColor(image.astype(np.uint8), cv2.COLOR_GRAY2RGB)
+            elif image.shape[2] == 4:
+                image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+            elif image.shape[2] == 3:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            original = img_as_float(image)
+
+        sigma_est = estimate_sigma(original, channel_axis=-1, average_sigmas=True)
+        print(f"Estimated noise σ = {sigma_est:.3f}")
+
+        denoised = denoise_tv_chambolle(original, weight=0.1, channel_axis=-1)
+        pipeline['01_denoised'] = denoised
+
+        # Step 2: Green-enhanced masking
+        rgb_float = denoised
+        b, g, r = rgb_float[:, :, 0], rgb_float[:, :, 1], rgb_float[:, :, 2]
+
+        # Build a green-enhanced image by emphasizing green
+        green_dominance = g - np.maximum(r, b)  # how much more green than other channels
+        green_dominance = np.clip(green_dominance, 0, 1)
+
+        # Create an RGB-like overlay where:
+        # - green-dominant areas retain color
+        # - others go to white
+        green_mask = green_dominance > 0.05
+        green_enhanced = g - np.maximum(r, b)
+        green_enhanced_rgb = np.clip(green_enhanced, 0, 1)
+
+
+        pipeline["02_green_enhanced_rgb"] = green_enhanced_rgb
+
+
+
+        green_mask = green_enhanced_rgb > 0.05 # Threshold can be tuned
+        pipeline['03_green_mask'] = green_mask
+
+
+        # Step 3: Shape Index (standalone)
+        shape_idx = shape_index((green_enhanced_rgb * 255).astype(np.float32))
+        pipeline['shape_index'] = shape_idx
+
+            
+        # Step 5: Watershed using green mask
+        distance = ndi.distance_transform_edt(green_mask)
+        coords = peak_local_max(distance, footprint=np.ones((3, 3)), labels=green_mask)
+        markers = np.zeros_like(distance, dtype=bool)
+        markers[tuple(coords.T)] = True
+        markers, _ = ndi.label(markers)
+        labels = watershed(-distance, markers, mask=green_mask)
+        pipeline['04_watershed'] = labels
+
+        # Step 6: Extract region properties
+        props = measure.regionprops(labels, intensity_image=green_enhanced_rgb)
+        cell_data = []
+        for i, region in enumerate(props, 1):
+            if region.area < 10:
+                continue
+            cell_data.append({
+                'id': i,
+                'area': region.area,
+                'centroid': tuple(map(int, region.centroid)),
+                'circularity': 4 * np.pi * region.area / (region.perimeter**2) if region.perimeter > 0 else 1.0
+            })
+
+        print(f"✅ Extracted {len(cell_data)} valid regions.")
+
+        # Save visualization
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+        images = [
+            (original, "Original"),
+            (denoised, "Denoised"),
+            (green_enhanced_rgb, "Green Enhanced"),
+            (green_mask, "Green Mask"),
+            (shape_idx, "Shape Index"),
+            (labels, "Watershed")
+        ]
+
+        for ax, (img, title) in zip(axes.ravel(), images):
+            cmap = 'nipy_spectral' if title == "Watershed" else 'gray' if img.ndim == 2 else None
+            ax.imshow(img, cmap=cmap)
+            ax.set_title(title)
+            ax.axis('off')
+
+        plt.tight_layout()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fig_path = self.dirs['results'] / f"full_pipeline_{timestamp}.png"
+        plt.savefig(fig_path)
+        plt.close()
+        print(f"📦 Saved pipeline figure: {fig_path}")
+
+        return labels, cell_data, pipeline
+
+
+
+    
+    def professional_watershed_segmentation(self, gray_img, color_img, return_pipeline=False):
+        try:
+            labels, cells, pipeline = self.run_full_pipeline(color_img)
+            return (labels, pipeline) if return_pipeline else labels
+        except Exception as e:
+            print(f"⚠️ Wolffia smart segmentation failed in professional_watershed_segmentation: {e}")
+            import traceback
+            print(traceback.format_exc())
+            empty_result = np.zeros(gray_img.shape[:2], dtype=np.int32)
+            return (empty_result, {}) if return_pipeline else empty_result
+
+
+    def create_method_visualization(self, original_img, labeled_img, cell_data=None, method_name="Segmentation"):
+        try:
+            if labeled_img is None or np.max(labeled_img) == 0:
+                print(f"⚠️ Skipping {method_name} visualization — no valid labels.")
+                return None
+
+            # Ensure RGB input (not grayscale)
+            if original_img.ndim == 2 or original_img.shape[2] == 1:
+                base_img = cv2.cvtColor(original_img, cv2.COLOR_GRAY2BGR)
+            else:
+                base_img = original_img.copy()
+
+            # Ensure base image is float for label2rgb
+            if base_img.dtype != np.float32 and base_img.dtype != np.float64:
+                base_img = base_img.astype(np.float32) / 255.0
+
+            # Use label2rgb
+            overlay = color.label2rgb(labeled_img, image=base_img, bg_label=0, alpha=0.4)
+
+            # Convert to uint8 BGR for saving
+            overlay_bgr = (overlay * 255).astype(np.uint8)
+            overlay_bgr = cv2.cvtColor(overlay_bgr, cv2.COLOR_RGB2BGR)
+
+            # Annotate
+            cv2.putText(overlay_bgr, method_name, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
+                        (0, 0, 0), 3, lineType=cv2.LINE_AA)
+            cv2.putText(overlay_bgr, method_name, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
+                        (255, 255, 255), 2, lineType=cv2.LINE_AA)
+
+            # Save
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            path = self.dirs['results'] / f"{method_name.lower().replace(' ', '_')}_{timestamp}.png"
+            cv2.imwrite(str(path), overlay_bgr)
+            print(f"🖼️ Saved visualization: {path}")
+            return path
 
         except Exception as e:
             print(f"⚠️ Failed to create {method_name} visualization: {e}")
             return None
 
+        
     def create_watershed_pipeline_visualization(self, pipeline_images, cell_data):
-        """
-        Create comprehensive watershed pipeline visualization showing all processing steps
-        Based on python_for_microscopists examples 033 and 035
-        """
         try:
             if not pipeline_images:
-                return None
-            
-            # Create a comprehensive visualization grid
-            fig = plt.figure(figsize=(20, 16))
-            fig.suptitle(f'Watershed Processing Pipeline - {len(cell_data)} Cells Detected', fontsize=16, fontweight='bold')
-            
-            # Define pipeline steps with descriptions
-            pipeline_steps = [
-                ('01_original', 'Original Image'),
-                ('02_otsu_threshold', 'OTSU Thresholding'),
-                ('03_morphological_opening', 'Morphological Opening'),
-                ('04_clear_border', 'Border Removal'),
-                ('05_sure_background', 'Sure Background (Dilated)'),
-                ('06_distance_transform', 'Distance Transform'),
-                ('07_sure_foreground', 'Sure Foreground'),
-                ('08_unknown_region', 'Unknown Region'),
-                ('09_markers', 'Markers for Watershed'),
-                ('10_watershed_boundaries', 'Watershed with Boundaries'),
-                ('11_final_segmentation', 'Final Segmentation')
-            ]
-            
-            # Create subplots in a 3x4 grid
-            for i, (key, title) in enumerate(pipeline_steps):
-                if key in pipeline_images:
-                    plt.subplot(3, 4, i + 1)
-                    
-                    # Display image with appropriate colormap
-                    if key in ['06_distance_transform', '09_markers']:
-                        plt.imshow(pipeline_images[key], cmap='jet')
-                    elif key in ['08_unknown_region']:
-                        plt.imshow(pipeline_images[key], cmap='viridis')
-                    elif key in ['11_final_segmentation']:
-                        # Create colored segmentation for final result
-                        if np.any(pipeline_images[key] > 0):
-                            colored_seg = color.label2rgb(pipeline_images[key], bg_label=0)
-                            plt.imshow(colored_seg)
-                        else:
-                            plt.imshow(pipeline_images[key], cmap='gray')
-                    else:
-                        plt.imshow(pipeline_images[key], cmap='gray')
-                    
-                    plt.title(f'Step {i+1}: {title}', fontsize=10, fontweight='bold')
-                    plt.axis('off')
-            
-            # Add summary statistics in the last subplot
-            plt.subplot(3, 4, 12)
-            plt.text(0.1, 0.9, 'Processing Summary:', fontsize=14, fontweight='bold', transform=plt.gca().transAxes)
-            plt.text(0.1, 0.8, f'Cells Detected: {len(cell_data)}', fontsize=12, transform=plt.gca().transAxes)
-            
-            if cell_data:
-                total_area = sum(cell['area'] for cell in cell_data)
-                avg_area = np.mean([cell['area'] for cell in cell_data])
-                plt.text(0.1, 0.7, f'Total Area: {total_area:.1f} μm²', fontsize=12, transform=plt.gca().transAxes)
-                plt.text(0.1, 0.6, f'Average Area: {avg_area:.1f} μm²', fontsize=12, transform=plt.gca().transAxes)
-                
-                if len(cell_data) > 0:
-                    areas = [cell['area'] for cell in cell_data]
-                    plt.text(0.1, 0.5, f'Min Area: {min(areas):.1f} μm²', fontsize=12, transform=plt.gca().transAxes)
-                    plt.text(0.1, 0.4, f'Max Area: {max(areas):.1f} μm²', fontsize=12, transform=plt.gca().transAxes)
-            
-            plt.text(0.1, 0.2, 'Pipeline Steps:', fontsize=12, fontweight='bold', transform=plt.gca().transAxes)
-            plt.text(0.1, 0.1, '1-4: Preprocessing\n5-8: Region Detection\n9-11: Watershed Segmentation', 
-                    fontsize=10, transform=plt.gca().transAxes)
-            plt.axis('off')
-            
+                raise ValueError("Pipeline images are empty.")
+
+            fig, axes = plt.subplots(1, len(pipeline_images), figsize=(18, 6))
+            for ax, (k, img) in zip(axes, pipeline_images.items()):
+                ax.imshow(img, cmap='nipy_spectral' if img.ndim == 2 else None)
+                ax.set_title(k)
+                ax.axis('off')
+
             plt.tight_layout()
-            
-            # Save pipeline visualization
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            pipeline_path = self.dirs['results'] / f"watershed_pipeline_{timestamp}.png"
-            plt.savefig(pipeline_path, dpi=150, bbox_inches='tight')
+            path = self.dirs['results'] / f"watershed_pipeline_{timestamp}.png"
+            plt.savefig(path)
             plt.close()
-            
-            return pipeline_path
-            
+            return path
         except Exception as e:
-            print(f"⚠️ Failed to create watershed pipeline visualization: {e}")
+            print(f"⚠️ Failed to generate pipeline visualization: {e}")
             return None
-    
-    def professional_watershed_segmentation(self, gray_img, color_img=None, return_pipeline=False):
-        """
-        ENHANCED: Professional Watershed Segmentation using Green-Enhanced Channels
-        Based on python_for_microscopists examples with green enhancement for Wolffia
-        
-        Args:
-            gray_img: Grayscale fallback
-            color_img: BGR color image for green enhancement
-            return_pipeline: Return visualization pipeline
-        """
-        try:
-            # Store pipeline images for visualization
-            pipeline_images = {}
-            
-            # ENHANCED: Step 1: Use green-enhanced grayscale if color image available
-            if color_img is not None:
-                print("🔬 Step 1: Creating green-enhanced grayscale from BGR image")
-                enhanced_gray = self.create_green_enhanced_grayscale(color_img)
-                working_img = enhanced_gray
-                pipeline_images['01_original'] = color_img.copy()
-                pipeline_images['01a_green_enhanced'] = enhanced_gray.copy()
-            else:
-                print("🔬 Step 1: Using grayscale fallback")
-                working_img = gray_img.copy()
-                pipeline_images['01_original'] = gray_img.copy()
-            
-            print("🔬 Step 1: Original image captured")
-            
-            # Step 2: Enhanced preprocessing for small Wolffia cells
-            # Citation: "Noise reduction techniques" from python_for_microscopists
-            # Apply optimized Gaussian blur specifically calibrated for Wolffia size range
-            blurred = cv2.GaussianBlur(working_img, (3, 3), 0.5)  # Reduced sigma for small cells
-            pipeline_images['01b_gaussian_blur'] = blurred.copy()
-            
-            # Additional preprocessing for Wolffia: histogram equalization
-            # Citation: "Contrast enhancement for better segmentation" - microscopist best practice
-            clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
-            enhanced = clahe.apply(blurred)
-            pipeline_images['01c_contrast_enhanced'] = enhanced.copy()
-            print("🔍 Step 2b: Wolffia-optimized contrast enhancement applied")
-            
-            # Step 3: Optimized OTSU thresholding for Wolffia (Citation: python_for_microscopists 033)
-            # "Threshold image to binary using OTSU. All thresholded pixels will be set to 255"
-            # Using enhanced image for better threshold detection
-            ret, thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            
-            # Additional optimization: If threshold is too high for small cells, apply correction
-            if ret > 160:  # Wolffia-specific threshold adjustment
-                print(f"🚪 Adjusting high OTSU threshold ({ret:.1f}) for small Wolffia cells")
-                ret_corrected = int(ret * 0.85)  # Reduce threshold by 15% for small cells
-                _, thresh = cv2.threshold(enhanced, ret_corrected, 255, cv2.THRESH_BINARY)
-                print(f"🔧 Applied corrected threshold: {ret_corrected}")
-            
-            pipeline_images['02_otsu_threshold'] = thresh.copy()
-            print(f"🔬 Step 3: Wolffia-optimized OTSU threshold applied (threshold: {ret:.1f})")
-            
-            # Step 4: Wolffia-specific morphological operations
-            # Citation: "Morphological operations to remove small noise - opening"
-            # Citation: "Optimized kernel sizes for small biological objects" - microscopist examples
-            
-            # Ultra-small kernels specifically for Wolffia (world's smallest flowering plant)
-            kernel_tiny = np.ones((1, 1), np.uint8)    # For minimal noise removal
-            kernel_small = np.ones((2, 2), np.uint8)   # For small gap filling
-            kernel_medium = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))  # Elliptical for cell shapes
-            
-            # Step 4a: Minimal opening to preserve tiny Wolffia cells
-            opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_tiny, iterations=1)
-            pipeline_images['03a_minimal_opening'] = opening.copy()
-            
-            # Step 4b: Light closing to connect fragmented small cells
-            opening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel_small, iterations=1)
-            pipeline_images['03b_gap_filling'] = opening.copy()
-            
-            # Step 4c: Final shape optimization with elliptical kernel
-            opening = cv2.morphologyEx(opening, cv2.MORPH_OPEN, kernel_medium, iterations=1)
-            pipeline_images['03_morphological_opening'] = opening.copy()
-            
-            print("🔬 Step 4: Wolffia-specific morphological pipeline completed")
-            
-            # Step 5: Remove border-touching objects (Citation: python_for_microscopists)
-            # "Remove edge touching grains/cells"
-            opening = clear_border(opening)
-            pipeline_images['04_clear_border'] = opening.copy()
-            print("🔬 Step 3-4: Morphological operations and border clearing completed")
-            
-            # Step 6: Enhanced sure background calculation
-            # Citation: "dilating pixels a few times increases cell boundary to background"
-            sure_bg = cv2.dilate(opening, kernel_medium, iterations=2)  # Reduced iterations for small cells
-            pipeline_images['05_sure_background'] = sure_bg.copy()
-            
-            # Step 7: Enhanced distance transform for small cells
-            # Citation: "Finding sure foreground area using distance transform and thresholding"
-            # "intensities of the points inside the foreground regions are changed to distance"
-            dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 3)  # Smaller mask size for small cells
-            
-            # Normalize for visualization
-            dist_norm = cv2.normalize(dist_transform, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-            pipeline_images['06_distance_transform'] = dist_norm.copy()
-            
-            # Step 8: Adaptive threshold for sure foreground (Wolffia-optimized)
-            # Citation: "Let us threshold the dist transform by 20% its max value"
-            # Citation: "Small object detection requires lower thresholds" - microscopist best practice
-            
-            # Wolffia-specific adaptive thresholding
-            max_distance = dist_transform.max()
-            
-            # FIXED: Multi-level adaptive threshold that prevents full image detection
-            if max_distance < 2.0:  # Very poor separation - likely noise or bad threshold
-                print(f"🚫 Max distance too low ({max_distance:.2f}) - skipping watershed for this image")
-                empty_result = np.zeros_like(gray_img, dtype=np.int32)
-                if return_pipeline:
-                    return empty_result, pipeline_images
-                else:
-                    return empty_result
-            elif max_distance > 8:  # Large Wolffia cells
-                distance_threshold = 0.4 * max_distance
-            elif max_distance > 4:  # Medium Wolffia cells  
-                distance_threshold = 0.3 * max_distance
-            else:  # Small Wolffia cells (2-4 range)
-                distance_threshold = max(0.2 * max_distance, 0.8)  # More conservative minimum
-            
-            ret, sure_fg = cv2.threshold(dist_transform, distance_threshold, 255, 0)
-            pipeline_images['07_sure_foreground'] = sure_fg.copy()
-            
-            print(f"🔬 Step 8: Wolffia-adaptive distance threshold applied")
-            print(f"   Max distance: {max_distance:.2f}, Threshold: {distance_threshold:.2f}")
-            print(f"   Optimization level: {'Large' if max_distance > 8 else 'Medium' if max_distance > 4 else 'Small'} Wolffia cells")
-            
-            # Step 9: Find unknown region
-            # Citation: "Unknown ambiguous region is nothing but background - foreground"
-            sure_fg = np.uint8(sure_fg)
-            unknown = cv2.subtract(sure_bg, sure_fg)
-            pipeline_images['08_unknown_region'] = unknown.copy()
-            
-            # Step 10: Enhanced marker labelling for small cells
-            # Citation: "For sure regions, both foreground and background will be labeled with positive numbers"
-            ret, markers = cv2.connectedComponents(sure_fg)
-            
-            # FIXED: Validate marker count to prevent bad watershed results
-            if ret <= 1:  # No foreground markers (only background)
-                print(f"🚫 No foreground markers found - skipping watershed")
-                empty_result = np.zeros_like(gray_img, dtype=np.int32)
-                if return_pipeline:
-                    return empty_result, pipeline_images
-                else:
-                    return empty_result
-            elif ret > 200:  # Too many tiny regions - likely noise
-                print(f"🚫 Too many markers ({ret}) - likely noise, skipping watershed")
-                empty_result = np.zeros_like(gray_img, dtype=np.int32)
-                if return_pipeline:
-                    return empty_result, pipeline_images
-                else:
-                    return empty_result
-            
-            # Step 11: Add offset to markers (microscopist technique)
-            # Citation: "So let us add 10 to all labels so that sure background is not 0, but 10"
-            # Using smaller offset for better small cell detection
-            markers = markers + 5  # Reduced offset for small cells
-            
-            # Step 12: Mark unknown region as 0
-            # Citation: "Now, mark the region of unknown with zero"
-            markers[unknown == 255] = 0
-            
-            # Visualize markers before watershed
-            markers_viz = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-            pipeline_images['09_markers'] = markers_viz.copy()
-            print(f"🔬 Step 8-9: Markers created ({ret} initial regions)")
-            
-            # Step 13: Apply watershed algorithm
-            # Citation: "Now we are ready for watershed filling"
-            img_for_watershed = cv2.cvtColor(gray_img, cv2.COLOR_GRAY2BGR)
-            markers = cv2.watershed(img_for_watershed, markers)
-            
-            # Step 14: Visualize watershed result with boundaries
-            # Citation: "The boundary region will be marked -1"
-            watershed_result = img_for_watershed.copy()
-            watershed_result[markers == -1] = [0, 255, 255]  # Mark boundaries in yellow
-            pipeline_images['10_watershed_boundaries'] = cv2.cvtColor(watershed_result, cv2.COLOR_BGR2GRAY)
-            
-            # Step 15: Enhanced cleanup for small cells
-            clean_markers = markers.copy()
-            clean_markers[markers == -1] = 0  # Remove boundaries
-            clean_markers[markers <= 5] = 0   # Remove background (adjusted for offset)
-            
-            # Enhanced Wolffia-specific validation and cleanup
-            # Citation: "Size and shape filters for biological objects" - python_for_microscopists
-            regions = measure.regionprops(clean_markers)
-            final_markers = np.zeros_like(clean_markers)
-            valid_label = 1
-            validation_stats = {'total': 0, 'size_valid': 0, 'shape_valid': 0, 'final_valid': 0}
-            
-            for region in regions:
-                validation_stats['total'] += 1
-                area_valid = self.min_cell_area <= region.area <= self.max_cell_area
-                
-                if area_valid:
-                    validation_stats['size_valid'] += 1
-                    
-                    # Wolffia-specific shape validation (more lenient for natural variation)
-                    eccentricity_valid = region.eccentricity < 0.95  # Allow more elongated shapes
-                    solidity_valid = region.solidity > 0.3          # More lenient solidity
-                    extent_valid = region.extent > 0.2              # Reasonable extent
-                    aspect_ratio = region.major_axis_length / max(region.minor_axis_length, 1)
-                    aspect_ratio_valid = aspect_ratio < 4.0         # Not extremely elongated
-                    
-                    shape_valid = eccentricity_valid and solidity_valid and extent_valid and aspect_ratio_valid
-                    
-                    if shape_valid:
-                        validation_stats['shape_valid'] += 1
-                        
-                        # Additional Wolffia validation: circularity and compactness
-                        perimeter = region.perimeter
-                        if perimeter > 0:
-                            circularity = 4 * np.pi * region.area / (perimeter ** 2)
-                            circularity_valid = circularity > 0.2  # Reasonable circularity for Wolffia
-                        else:
-                            circularity_valid = True
-                        
-                        if circularity_valid:
-                            mask = clean_markers == region.label
-                            final_markers[mask] = valid_label
-                            valid_label += 1
-                            validation_stats['final_valid'] += 1
-            
-            print(f"📊 Wolffia validation stats: {validation_stats}")
-            print(f"   Validation efficiency: {validation_stats['final_valid']}/{validation_stats['total']} regions")
-            
-            # Final segmentation visualization
-            pipeline_images['11_final_segmentation'] = final_markers.copy()
-            
-            # Final optimization summary
-            final_cell_count = valid_label - 1
-            efficiency = (validation_stats['final_valid'] / max(validation_stats['total'], 1)) * 100
-            
-            print(f"✅ Wolffia-optimized watershed completed: {final_cell_count} valid cells detected")
-            print(f"🎯 Detection efficiency: {efficiency:.1f}% ({validation_stats['final_valid']}/{validation_stats['total']})")
-            print(f"🌱 Pipeline optimized for Wolffia arrhiza (world's smallest flowering plant)")
-            
-            if return_pipeline:
-                return final_markers, pipeline_images
-            else:
-                return final_markers
-            
-        except Exception as e:
-            print(f"⚠️ Wolffia-optimized watershed segmentation failed: {e}")
-            import traceback
-            print(f"Detailed error: {traceback.format_exc()}")
-            if return_pipeline:
-                return np.zeros_like(gray_img), {}
-            else:
-                return np.zeros_like(gray_img)
-    
+
+
+
     
     def refresh_model_status(self):
         """Refresh the status of all AI models (useful after training new models)"""
