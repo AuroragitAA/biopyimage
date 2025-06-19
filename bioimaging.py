@@ -20,9 +20,14 @@ import cv2
 import matplotlib
 
 matplotlib.use('Agg')
+import io
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib import cm
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from scipy import ndimage
 from scipy import ndimage as ndi
 from skimage import (
@@ -87,16 +92,28 @@ class WolffiaAnalyzer:
     """
     
     def __init__(self):
-        """Initialize with minimal, robust configuration"""
+        """Initialize with enhanced configuration for professional analysis"""
         self.setup_directories()
         
-        # Core parameters optimized for Wolffia
+        # Enhanced parameters for Wolffia analysis
         self.min_cell_area = 30
         self.max_cell_area = 500
         self.pixel_to_micron = 0.5
         self.preprocessor = GreenEnhancedPreprocessor()
-
-        # Models loaded on demand - using proper naming
+        
+        # Enhanced biomass calculation parameters
+        self.wolffia_density = 1.1  # g/cm³ (typical plant cell density)
+        self.cell_thickness_micron = 15  # Average Wolffia cell thickness
+        self.dry_weight_ratio = 0.2  # Dry/wet weight ratio for biomass
+        
+        # Color analysis parameters for wavelength analysis
+        self.green_wavelength_range = (495, 570)  # nm - Green light spectrum
+        self.chlorophyll_peak = 530  # nm - Peak chlorophyll absorption
+        
+        # Time-series tracking storage
+        self.time_series_data = {}
+        
+        # Models loaded on demand
         self._tophat_model = None
         self._cnn_model = None
         self._celldetection_model = None
@@ -108,10 +125,10 @@ class WolffiaAnalyzer:
         # Status properties for frontend compatibility
         self.wolffia_cnn_available = False
         self.celldetection_available = False
-        self.tophat_model = None  # Will be set when model loads
-        self.wolffia_cnn_model = None  # Will be set when model loads
+        self.tophat_model = None
+        self.wolffia_cnn_model = None
         
-        print("✅ WolffiaAnalyzer initialized - Deployment Ready")
+        print("✅ Enhanced WolffiaAnalyzer initialized - Professional Analysis Ready")
     
     def setup_directories(self):
         """Setup required directories"""
@@ -119,11 +136,12 @@ class WolffiaAnalyzer:
             'results': Path('results'),
             'models': Path('models'),
             'uploads': Path('uploads'),
-            'annotations': Path('annotations')
+            'annotations': Path('annotations'),
+            'time_series': Path('results/time_series')  # New for time tracking
         }
         
         for path in self.dirs.values():
-            path.mkdir(exist_ok=True)
+            path.mkdir(parents=True, exist_ok=True)
     
     @property 
     def device(self):
@@ -179,11 +197,13 @@ class WolffiaAnalyzer:
             print(f"❌ Failed to initialize CellDetection model: {e}")
             self._celldetection_model = None
             self.celldetection_available = False
+
+        
     
-    def analyze_image(self, image_path, use_tophat=True, use_cnn=True, use_celldetection=False):
+    def analyze_image(self, image_path, use_tophat=True, use_cnn=True, use_celldetection=False, 
+                     timestamp=None, image_series_id=None):
         """
-        Main analysis method - streamlined and robust
-        Based on proven microscopist patterns
+        Enhanced main analysis method with comprehensive biomass and color analysis
         """
         try:
             # Load and preprocess image
@@ -191,104 +211,1379 @@ class WolffiaAnalyzer:
             if img is None:
                 raise ValueError(f"Could not load image: {image_path}")
             
-            # Preserve color image for all analysis - NO GRAYSCALE CONVERSION
+            # Enhanced color image processing
             color_img = img.copy()
             
-            # Perform green detection analysis on the color image
-            green_percentage = self.analyze_green_content(color_img)
+            # Advanced green content and wavelength analysis
+            color_analysis = self.analyze_enhanced_color_content(color_img)
             
-            # Create enhanced grayscale for methods that need it (fallback only)
+            # Create enhanced grayscale
             enhanced_gray = self.create_green_enhanced_grayscale(color_img)
             
-            # Get results from available methods - USING COLOR IMAGE
+            # Get results from available methods with enhanced patch processing
             results = []
             
-            # Method 1: Enhanced Watershed (now works with color images)
-            watershed_result = self.color_aware_watershed_segmentation(color_img)
-            results.append(('watershed', watershed_result))
+            # Method 1: Enhanced Watershed with patch processing
+            watershed_labels, watershed_pipeline = self.watershed_segmentation(color_img, return_pipeline=True)
+            results.append(('watershed', watershed_labels))
+
             
-            # Method 2: Tophat ML (enhanced to use color information)
+            # Method 2: Enhanced Tophat ML with patches
             if use_tophat and self.load_tophat_model():
-                tophat_result = self.color_aware_tophat_detection(color_img, enhanced_gray)
+                tophat_result = self.enhanced_patch_tophat(color_img, enhanced_gray)
                 results.append(('tophat', tophat_result))
             
-            # Method 3: CNN (enhanced to use RGB input directly)
+            # Method 3: Enhanced CNN with existing patch system
             if use_cnn and TORCH_AVAILABLE and self.load_cnn_model():
-                cnn_result = self.cnn_detection(enhanced_gray, color_img)  # Smart detection chooses RGB vs grayscale
+                cnn_result = self.cnn_detection(enhanced_gray, color_img)
                 results.append(('cnn', cnn_result))
             
-            # Method 4: CellDetection (works great with color)
+            # Method 4: Enhanced CellDetection with patch processing
             if use_celldetection and CELLDETECTION_AVAILABLE:
-                celldetection_result = self.celldetection_detection(color_img)
+                celldetection_result = self.enhanced_patch_celldetection(color_img)
                 results.append(('celldetection', celldetection_result))
             
             # Intelligent fusion of results
             final_result = self.fuse_detection_results(results, color_img.shape[:2])
             
-            # Extract cell properties using proven regionprops approach
-            cell_data = self.extract_cell_properties(final_result, enhanced_gray)
+            # Enhanced cell property extraction with biomass calculations
+            cell_data = self.extract_enhanced_cell_properties(final_result, enhanced_gray, color_img)
             
-            # Create professional visualization
-            vis_path = self.create_professional_visualization(img, final_result, cell_data)
+            # Calculate comprehensive biomass and statistics
+            biomass_analysis = self.calculate_comprehensive_biomass(cell_data, color_img.shape[:2])
             
-            # Get labeled image as base64 for frontend compatibility
-            labeled_image_b64 = None
-            if vis_path.exists():
-                with open(vis_path, 'rb') as f:
-                    import base64
-                    labeled_image_b64 = base64.b64encode(f.read()).decode('utf-8')
+            # Enhanced color wavelength analysis
+            enhanced_color_analysis = self.enhanced_wavelength_analysis(color_img, final_result)
             
-            # Create method detection string
-            detection_method = "Professional Multi-Method Detection"
-            if 'cnn' in [method for method, _ in results]:
-                detection_method = "Wolffia CNN + " + detection_method
-            if 'celldetection' in [method for method, _ in results]:
-                detection_method = "CellDetection AI + " + detection_method
-            if 'tophat' in [method for method, _ in results]:
-                detection_method = "Tophat AI + " + detection_method
+            # Time-series analysis if applicable
+            time_series_analysis = None
+            if timestamp and image_series_id:
+                time_series_analysis = self.update_time_series(
+                    image_series_id, timestamp, cell_data, biomass_analysis, enhanced_color_analysis
+                )
             
-            # Compile results in frontend-compatible format
+            # Create comprehensive visualization
+            # Build visualizations
+            vis_data = self.create_comprehensive_visualization(
+                img, final_result, cell_data, color_analysis, biomass_analysis
+            )
+
+            # ✅ Inject enhanced pipeline steps for watershed if available
+            if isinstance(final_result, np.ndarray) and np.max(final_result) > 0:
+                try:
+                    # Collect intermediate images (example: grayscale, labeled overlay)
+                    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    denoised = cv2.fastNlMeansDenoising(gray_img, h=10)
+                    overlay = color.label2rgb(final_result, image=img, bg_label=0, alpha=0.4)
+
+                    def to_b64(image):
+                        if image.ndim == 2:
+                            image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+                        elif image.shape[2] == 3:
+                            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                        _, buffer = cv2.imencode('.png', image)
+                        return base64.b64encode(buffer).decode('utf-8')
+
+                    vis_data['pipeline_steps'] = {
+                        'step_descriptions': {
+                            'Original': 'Original uploaded image',
+                            'Denoised': 'Denoised image (TV-Chambolle)',
+                            'Green_enhanced': 'Green dominance and contrast enhanced',
+                            'Green_mask': 'Binary mask of green regions',
+                            'Shape_index': 'Topological shape descriptor map',
+                            'Watershed': 'Final segmented watershed result',
+                            'Shape_index_3d': '3D projection of shape index over intensity surface'
+                        },
+                        'individual_steps': {
+                            'Original': to_b64((watershed_pipeline['Original'] * 255).astype(np.uint8)),
+                            'Denoised': to_b64((watershed_pipeline['Denoised'] * 255).astype(np.uint8)),
+                            'Green_enhanced': to_b64((watershed_pipeline['Green_enhanced'] * 255).astype(np.uint8)),
+                            'Green_mask': to_b64((watershed_pipeline['Green_mask'] * 255).astype(np.uint8)),
+                            'Shape_index': to_b64((watershed_pipeline['Shape_index'] * 255).astype(np.uint8)),
+                            'Watershed': to_b64((color.label2rgb(watershed_pipeline['Watershed'], bg_label=0, alpha=0.5) * 255).astype(np.uint8)),
+                            'Shape_index_3d': watershed_pipeline['Shape_index_3d']  # already base64 PNG string
+                        },
+                        'pipeline_overview': to_b64((color.label2rgb(watershed_pipeline['Watershed'], image=color_img, bg_label=0, alpha=0.5) * 255).astype(np.uint8)),
+                        'step_count': 7
+                    }
+
+
+                except Exception as viz_err:
+                    print(f"⚠️ Failed to generate pipeline steps: {viz_err}")
+
+            
+            # Compile enhanced results
             analysis_result = {
-                # Legacy simple format for backward compatibility
+                # Legacy compatibility
                 'total_cells': len(cell_data),
                 'total_area': sum(cell['area'] for cell in cell_data),
                 'average_area': np.mean([cell['area'] for cell in cell_data]) if cell_data else 0,
                 'cells': cell_data,
-                'labeled_image_path': str(vis_path),
+                'labeled_image_path': str(vis_data.get('main_visualization')),
                 'method_used': [method for method, _ in results],
-                'processing_time': 0,  # Will be set by caller
+                'processing_time': 0,
                 
-                # Extended format for frontend visualization
+                # Enhanced analysis results
                 'detection_results': {
-                    'detection_method': detection_method,
+                    'detection_method': f"Enhanced Multi-Method Analysis ({len(results)} methods)",
                     'cells_detected': len(cell_data),
                     'total_area': sum(cell['area'] for cell in cell_data),
                     'cells_data': cell_data
                 },
+                
+                # Comprehensive quantitative analysis
                 'quantitative_analysis': {
-                    'average_cell_area': np.mean([cell['area'] for cell in cell_data]) if cell_data else 0,
-                    'biomass_analysis': {
-                        'total_biomass_mg': sum(cell['area'] for cell in cell_data) * 0.001,  # Simple conversion
-                    },
-                    'color_analysis': {
-                        'green_cell_percentage': green_percentage
-                    },
-                    'health_assessment': {
-                        'overall_health': 'good',
-                        'health_score': 0.75
-                    }
+                    'biomass_analysis': biomass_analysis,
+                    'color_analysis': enhanced_color_analysis,
+                    'morphometric_analysis': self.calculate_morphometric_statistics(cell_data),
+                    'spatial_analysis': self.calculate_spatial_distribution(cell_data, color_img.shape[:2]),
+                    'health_assessment': self.assess_culture_health(cell_data, enhanced_color_analysis)
                 },
-                'visualizations': {
-                    'detection_overview': labeled_image_b64
-                }
+                
+                # Enhanced visualizations
+                'visualizations': vis_data,
+                
+                # Time-series data if available
+                'time_series_analysis': time_series_analysis
             }
             
+            
+            
+        
+            # ✅ Build method_results block for per-method tabbed visualization
+            method_results = {}
+
+            for method_name, label_img in results:
+                if not isinstance(label_img, np.ndarray) or np.max(label_img) == 0:
+                    continue
+
+                try:
+                    # Extract stats per method
+                    method_cells = self.extract_enhanced_cell_properties(label_img, enhanced_gray, color_img)
+                    total_area = sum(cell['area'] for cell in method_cells)
+                    avg_area = np.mean([cell['area'] for cell in method_cells]) if method_cells else 0
+
+                    # Create base64 overlay
+                    rgb_image = cv2.cvtColor(color_img, cv2.COLOR_BGR2RGB) if color_img.shape[2] == 3 else color_img
+                    overlay = color.label2rgb(label_img, image=rgb_image, bg_label=0, alpha=0.5)
+
+                    # Boost contrast artificially if mean intensity is low
+                    if np.mean(rgb_image) < 60:
+                        overlay = np.clip(overlay * 1.5, 0, 1)
+
+                    # Convert to uint8 safely
+                    overlay_uint8 = (overlay * 255).astype(np.uint8)
+                    _, buffer = cv2.imencode('.png', overlay_uint8)
+                    viz_b64 = base64.b64encode(buffer).decode('utf-8')
+
+                    method_results[method_name] = {
+                        'method_name': method_name.capitalize(),
+                        'cells_detected': len(method_cells),
+                        'total_area': total_area,
+                        'average_area': avg_area,
+                        'visualization_b64': viz_b64
+                    }
+
+                except Exception as m_err:
+                    print(f"⚠️ Failed to build method result for {method_name}: {m_err}")
+
+            # Determine best method by highest cell count
+            if method_results:
+                best_method_key = max(method_results, key=lambda k: method_results[k]['cells_detected'])
+                analysis_result['detection_results']['method_results'] = method_results
+                analysis_result['detection_results']['best_method'] = best_method_key
+
+
+
             return analysis_result
             
         except Exception as e:
-            print(f"❌ Analysis failed: {str(e)}")
+            print(f"❌ Enhanced analysis failed: {str(e)}")
             return self.get_error_result(str(e))
     
+    
+    
+    
+    def watershed_segmentation(self, image, return_pipeline=True):
+        """Run green-enhanced watershed and return label image + optional pipeline steps."""
+        pipeline = {}
+
+        # Step 1: Convert input to float RGB
+        image = np.asarray(image)
+        if image.ndim == 2:
+            image = cv2.cvtColor(image.astype(np.uint8), cv2.COLOR_GRAY2RGB)
+        elif image.shape[2] == 4:
+            image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
+        elif image.shape[2] == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        original = img_as_float(image)
+        pipeline["Original"] = original
+
+        # Step 2: Denoising
+        sigma_est = estimate_sigma(original, channel_axis=-1, average_sigmas=True)
+        print(f"Estimated noise σ = {sigma_est:.3f}")
+        denoised = denoise_tv_chambolle(original, weight=0.1, channel_axis=-1)
+        pipeline["Denoised"] = denoised
+
+        # Step 3: Green-Enhanced Detection
+        b, g, r = denoised[:, :, 0], denoised[:, :, 1], denoised[:, :, 2]
+        brightness = r + g + b + 1e-6
+        green_ratio = g / brightness
+        green_dominance = g - np.maximum(r, b)
+        green_confidence = np.clip(green_ratio * green_dominance * 3, 0, 1)
+        green_enhanced_rgb = np.power(green_confidence, 0.2)
+        pipeline["Green_enhanced"] = green_enhanced_rgb
+
+        green_mask = green_enhanced_rgb > 0.02
+        pipeline["Green_mask"] = green_mask
+
+        # Step 4: Shape Index
+        shape_idx = shape_index((green_enhanced_rgb * 255).astype(np.float32))
+        pipeline["Shape_index"] = shape_idx
+
+        # Step 5: Watershed Segmentation
+        distance = ndi.distance_transform_edt(green_mask)
+        coords = peak_local_max(distance, footprint=np.ones((3, 3)), labels=green_mask)
+        markers = np.zeros_like(distance, dtype=bool)
+        markers[tuple(coords.T)] = True
+        markers, _ = ndi.label(markers)
+        labels = watershed(-distance, markers, mask=green_mask)
+        pipeline["Watershed"] = labels
+
+        # Optional visualization outputs
+        if return_pipeline:
+            # Add shape index 3D visualization
+            pipeline["Shape_index_3d"] = self.render_shape_index_3d(original[:, :, 1], shape_idx)
+
+            # Save composite pipeline plot for archive/debug
+            fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+            images = [
+                (original, "Original"),
+                (denoised, "Denoised"),
+                (green_enhanced_rgb, "Green Enhanced"),
+                (green_mask, "Green Mask"),
+                (shape_idx, "Shape Index"),
+                (labels, "Watershed")
+            ]
+            for ax, (img, title) in zip(axes.ravel(), images):
+                cmap = 'nipy_spectral' if "Watershed" in title else 'gray' if img.ndim == 2 else None
+                ax.imshow(img, cmap=cmap)
+                ax.set_title(title)
+                ax.axis('off')
+            plt.tight_layout()
+            fig_path = self.dirs['results'] / f"pipeline_watershed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            plt.savefig(fig_path)
+            plt.close()
+            print(f"📦 Saved pipeline figure: {fig_path}")
+
+            return labels, pipeline
+
+        return labels
+
+
+
+    def render_shape_index_3d(self, image, shape_idx_map, delta=0.05, smooth_sigma=0.5):
+        """
+        Render a 3D visualization of the shape index and return it as a base64 PNG string.
+        """
+        import base64
+        import io
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from matplotlib import cm
+        from scipy.ndimage import gaussian_filter
+
+        # Smooth the shape index for less noise
+        s_smooth = gaussian_filter(shape_idx_map, sigma=smooth_sigma)
+
+        # Extract relevant points
+        point_y, point_x = np.where(np.abs(shape_idx_map - 1) < delta)
+        point_z = image[point_y, point_x]
+
+        point_y_s, point_x_s = np.where(np.abs(s_smooth - 1) < delta)
+        point_z_s = image[point_y_s, point_x_s]
+
+        x, y = np.meshgrid(np.arange(image.shape[1]), np.arange(image.shape[0]))
+
+        # Create the plot
+        fig = plt.figure(figsize=(10, 6))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot_surface(x, y, image, cmap=cm.gray, alpha=0.6, linewidth=0)
+
+        ax.scatter(point_x, point_y, point_z, color='blue', label='|s - 1|<0.05', alpha=0.75, s=10)
+        ax.scatter(point_x_s, point_y_s, point_z_s, color='green', label='|s\' - 1|<0.05', alpha=0.75, s=10)
+
+        ax.set_title("3D Shape Index Detection")
+        ax.legend()
+        ax.axis('off')
+        plt.tight_layout()
+
+        # Convert to base64
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        b64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return b64_img
+
+
+    def enhanced_patch_watershed(self, color_img):
+        """Enhanced watershed with overlapping patch processing"""
+        try:
+            print("🔬 Enhanced Patch-based Watershed Analysis...")
+            
+            # Configuration for patch processing
+            patch_size = 256
+            overlap = 32
+            h, w = color_img.shape[:2]
+            
+            # Initialize result accumulation
+            final_labels = np.zeros((h, w), dtype=np.int32)
+            label_counter = 1
+            
+            # Process overlapping patches
+            for y in range(0, h - patch_size + 1, patch_size - overlap):
+                for x in range(0, w - patch_size + 1, patch_size - overlap):
+                    y_end = min(y + patch_size, h)
+                    x_end = min(x + patch_size, w)
+                    
+                    # Extract patch
+                    patch = color_img[y:y_end, x:x_end]
+                    
+                    # Process patch with watershed
+                    patch_labels = self.color_aware_watershed_segmentation(patch)
+                    
+                    if np.max(patch_labels) > 0:
+                        # Update labels to avoid conflicts
+                        patch_labels[patch_labels > 0] += label_counter - 1
+                        label_counter += np.max(patch_labels)
+                        
+                        # Merge with final result (center region to avoid edge artifacts)
+                        center_y_start = y + overlap//2 if y > 0 else y
+                        center_y_end = y_end - overlap//2 if y_end < h else y_end
+                        center_x_start = x + overlap//2 if x > 0 else x
+                        center_x_end = x_end - overlap//2 if x_end < w else x_end
+                        
+                        patch_center_y_start = overlap//2 if y > 0 else 0
+                        patch_center_y_end = patch_labels.shape[0] - overlap//2 if y_end < h else patch_labels.shape[0]
+                        patch_center_x_start = overlap//2 if x > 0 else 0
+                        patch_center_x_end = patch_labels.shape[1] - overlap//2 if x_end < w else patch_labels.shape[1]
+                        
+                        # Only add new labels where there are none
+                        patch_region = patch_labels[patch_center_y_start:patch_center_y_end, 
+                                                  patch_center_x_start:patch_center_x_end]
+                        final_region = final_labels[center_y_start:center_y_end, 
+                                                   center_x_start:center_x_end]
+                        
+                        # Add patch labels where final is zero
+                        mask = (final_region == 0) & (patch_region > 0)
+                        final_region[mask] = patch_region[mask]
+            
+            print(f"✅ Enhanced Watershed: {np.max(final_labels)} cells detected")
+            return final_labels
+            
+        except Exception as e:
+            print(f"⚠️ Enhanced patch watershed failed: {e}")
+            return self.color_aware_watershed_segmentation(color_img)
+    
+    def enhanced_patch_tophat(self, color_img, enhanced_gray):
+        """Enhanced tophat with optimized patch processing"""
+        try:
+            if self._tophat_model is None:
+                return np.zeros(color_img.shape[:2], dtype=np.int32)
+            
+            print("🎯 Enhanced Patch-based Tophat Analysis...")
+            
+            # Optimized parameters for speed vs accuracy
+            patch_size = 256
+            overlap = 32  # Reduced overlap for speed (was 64)
+            h, w = color_img.shape[:2]
+            
+            # Pre-allocate for better memory performance
+            prediction_map = np.zeros((h, w), dtype=np.float32)
+            count_map = np.zeros((h, w), dtype=np.float32)
+            
+            # Quick green pre-filtering to skip empty patches
+            hsv = cv2.cvtColor(color_img, cv2.COLOR_BGR2HSV)
+            green_mask = cv2.inRange(hsv, np.array([35, 40, 40]), np.array([85, 255, 255]))
+            
+            patches_processed = 0
+            patches_skipped = 0
+            
+            # Optimized patch processing loop
+            for y in range(0, h - patch_size + 1, patch_size - overlap):
+                for x in range(0, w - patch_size + 1, patch_size - overlap):
+                    y_end = min(y + patch_size, h)
+                    x_end = min(x + patch_size, w)
+                    
+                    # Quick green content check - skip if no green
+                    patch_green = green_mask[y:y_end, x:x_end]
+                    green_ratio = np.sum(patch_green > 0) / patch_green.size
+                    
+                    if green_ratio < 0.01:  # Skip patches with <1% green content
+                        patches_skipped += 1
+                        continue
+                    
+                    # Extract patch (avoid unnecessary resize when possible)
+                    patch = color_img[y:y_end, x:x_end]
+                    original_patch_shape = patch.shape[:2]
+                    
+                    # Only resize if absolutely necessary
+                    if original_patch_shape != (patch_size, patch_size):
+                        patch = cv2.resize(patch, (patch_size, patch_size))
+                    
+                    # Fast feature extraction and prediction
+                    try:
+                        features = self.extract_ml_features(patch)
+                        predictions = self._tophat_model.predict_proba(
+                            features.reshape(-1, features.shape[-1])
+                        )
+                        
+                        # Get positive class probabilities
+                        if predictions.shape[1] > 1:
+                            patch_pred = predictions[:, 1].reshape(patch_size, patch_size)
+                        else:
+                            patch_pred = predictions[:, 0].reshape(patch_size, patch_size)
+                        
+                        # Resize back only if needed
+                        if patch_pred.shape != original_patch_shape:
+                            patch_pred = cv2.resize(patch_pred, (x_end - x, y_end - y))
+                        
+                        # Accumulate predictions efficiently
+                        prediction_map[y:y_end, x:x_end] += patch_pred
+                        count_map[y:y_end, x:x_end] += 1
+                        patches_processed += 1
+                        
+                    except Exception as patch_error:
+                        print(f"⚠️ Patch failed at ({x},{y}): {patch_error}")
+                        continue
+            
+            print(f"📊 Processed {patches_processed} patches, skipped {patches_skipped} empty patches")
+            
+            # Avoid division by zero
+            count_map[count_map == 0] = 1
+            averaged_pred = prediction_map / count_map
+            
+            # Optimized thresholding and labeling
+            binary_mask = (averaged_pred > 0.5).astype(np.uint8)
+            
+            # Quick morphological cleanup
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+            
+            # Connected components
+            num_labels, labeled_img = cv2.connectedComponents(binary_mask)
+            
+            # Fast green filtering
+            filtered_labels = self.apply_green_filtering_fast(labeled_img, color_img)
+            
+            print(f"✅ Enhanced Tophat: {np.max(filtered_labels)} cells detected")
+            return filtered_labels
+            
+        except Exception as e:
+            print(f"⚠️ Enhanced patch tophat failed: {e}")
+            return self.tophat_ml_detection(enhanced_gray)
+
+    def apply_green_filtering_fast(self, labeled_img, color_img):
+        """Fast green filtering without complex calculations"""
+        try:
+            if np.max(labeled_img) == 0:
+                return labeled_img
+            
+            # Quick HSV conversion
+            hsv = cv2.cvtColor(color_img, cv2.COLOR_BGR2HSV)
+            green_mask = cv2.inRange(hsv, np.array([35, 40, 40]), np.array([85, 255, 255]))
+            
+            # Fast region filtering
+            filtered_img = np.zeros_like(labeled_img)
+            new_label = 1
+            
+            for region_label in range(1, np.max(labeled_img) + 1):
+                region_mask = labeled_img == region_label
+                
+                # Quick green content check
+                green_pixels = np.sum(green_mask[region_mask] > 0)
+                total_pixels = np.sum(region_mask)
+                
+                if total_pixels > 0 and green_pixels / total_pixels > 0.1:  # >10% green
+                    filtered_img[region_mask] = new_label
+                    new_label += 1
+            
+            return filtered_img
+            
+        except Exception as e:
+            print(f"⚠️ Fast green filtering failed: {e}")
+            return labeled_img
+    
+    def enhanced_patch_celldetection(self, color_img):
+        """Enhanced CellDetection with patch processing (like CNN)"""
+        try:
+            if not CELLDETECTION_AVAILABLE or self.celldetection_model is None:
+                return np.zeros(color_img.shape[:2], dtype=np.int32)
+            
+            print("🧠 Enhanced Patch-based CellDetection Analysis...")
+            
+            # Patch configuration similar to CNN
+            patch_size = 256
+            overlap = 64
+            h, w = color_img.shape[:2]
+            
+            final_labels = np.zeros((h, w), dtype=np.int32)
+            label_counter = 1
+            
+            # Process overlapping patches
+            for y in range(0, h - patch_size + 1, patch_size - overlap):
+                for x in range(0, w - patch_size + 1, patch_size - overlap):
+                    y_end = min(y + patch_size, h)
+                    x_end = min(x + patch_size, w)
+                    
+                    # Extract patch
+                    patch = color_img[y:y_end, x:x_end]
+                    
+                    if patch.shape[:2] != (patch_size, patch_size):
+                        patch = cv2.resize(patch, (patch_size, patch_size))
+                    
+                    # Convert to tensor for CellDetection
+                    x_tensor = cd.to_tensor(patch, transpose=True, device=self.device, dtype=torch.float32)
+                    x_tensor = x_tensor / 255.0
+                    x_tensor = x_tensor.unsqueeze(0)
+                    
+                    # Run CellDetection inference
+                    with torch.no_grad():
+                        outputs = self.celldetection_model(x_tensor)
+                        contours = outputs.get('contours', [])
+                        scores = outputs.get('scores', [])
+                    
+                    # Convert to labels for this patch
+                    if len(contours) > 0 and len(contours[0]) > 0:
+                        patch_labels = self._convert_celldetection_to_labels(
+                            contours[0], 
+                            scores[0] if len(scores) > 0 else None, 
+                            (patch_size, patch_size)
+                        )
+                        
+                        # Resize back if needed
+                        if patch_labels.shape != (y_end - y, x_end - x):
+                            patch_labels = cv2.resize(patch_labels.astype(np.uint8), 
+                                                    (x_end - x, y_end - y), 
+                                                    interpolation=cv2.INTER_NEAREST).astype(np.int32)
+                        
+                        # Update labels and merge (avoid edge artifacts)
+                        if np.max(patch_labels) > 0:
+                            patch_labels[patch_labels > 0] += label_counter - 1
+                            label_counter += np.max(patch_labels)
+                            
+                            # Merge center region to avoid edge artifacts
+                            center_y_start = y + overlap//2 if y > 0 else y
+                            center_y_end = y_end - overlap//2 if y_end < h else y_end
+                            center_x_start = x + overlap//2 if x > 0 else x
+                            center_x_end = x_end - overlap//2 if x_end < w else x_end
+                            
+                            patch_center_y_start = overlap//2 if y > 0 else 0
+                            patch_center_y_end = patch_labels.shape[0] - overlap//2 if y_end < h else patch_labels.shape[0]
+                            patch_center_x_start = overlap//2 if x > 0 else 0
+                            patch_center_x_end = patch_labels.shape[1] - overlap//2 if x_end < w else patch_labels.shape[1]
+                            
+                            patch_region = patch_labels[patch_center_y_start:patch_center_y_end, 
+                                                      patch_center_x_start:patch_center_x_end]
+                            final_region = final_labels[center_y_start:center_y_end, 
+                                                       center_x_start:center_x_end]
+                            
+                            # Add patch labels where final is zero
+                            mask = (final_region == 0) & (patch_region > 0)
+                            final_region[mask] = patch_region[mask]
+            
+            print(f"✅ Enhanced CellDetection: {np.max(final_labels)} cells detected")
+            return final_labels
+            
+        except Exception as e:
+            print(f"⚠️ Enhanced patch CellDetection failed: {e}")
+            return self.celldetection_detection(color_img)
+    
+    def analyze_enhanced_color_content(self, color_img):
+        """Enhanced color analysis with wavelength-specific measurements"""
+        try:
+            # Convert to different color spaces for comprehensive analysis
+            hsv = cv2.cvtColor(color_img, cv2.COLOR_BGR2HSV)
+            lab = cv2.cvtColor(color_img, cv2.COLOR_BGR2LAB)
+            rgb = cv2.cvtColor(color_img, cv2.COLOR_BGR2RGB)
+            
+            # Enhanced green analysis in multiple color spaces
+            b, g, r = cv2.split(color_img)
+            h, s, v = cv2.split(hsv)
+            l_lab, a_lab, b_lab = cv2.split(lab)
+            
+            # Green wavelength analysis (495-570 nm range)
+            green_lower = np.array([35, 40, 40])
+            green_upper = np.array([85, 255, 255])
+            green_mask = cv2.inRange(hsv, green_lower, green_upper)
+            
+            # Chlorophyll-specific analysis (peak at 530nm)
+            chlorophyll_lower = np.array([45, 50, 50])
+            chlorophyll_upper = np.array([75, 255, 255])
+            chlorophyll_mask = cv2.inRange(hsv, chlorophyll_lower, chlorophyll_upper)
+            
+            # Calculate comprehensive color metrics
+            total_pixels = color_img.shape[0] * color_img.shape[1]
+            green_pixels = np.sum(green_mask > 0)
+            chlorophyll_pixels = np.sum(chlorophyll_mask > 0)
+            
+            # Color intensity analysis
+            green_intensity_mean = np.mean(g[green_mask > 0]) if green_pixels > 0 else 0
+            green_intensity_std = np.std(g[green_mask > 0]) if green_pixels > 0 else 0
+            
+            # Advanced color metrics
+            green_saturation_mean = np.mean(s[green_mask > 0]) if green_pixels > 0 else 0
+            green_value_mean = np.mean(v[green_mask > 0]) if green_pixels > 0 else 0
+            
+            # Color uniformity (coefficient of variation)
+            color_uniformity = (green_intensity_std / green_intensity_mean) if green_intensity_mean > 0 else 0
+            
+            return {
+                'green_percentage': (green_pixels / total_pixels) * 100,
+                'chlorophyll_percentage': (chlorophyll_pixels / total_pixels) * 100,
+                'green_intensity': {
+                    'mean': float(green_intensity_mean),
+                    'std': float(green_intensity_std),
+                    'range': [float(np.min(g)), float(np.max(g))]
+                },
+                'green_saturation_mean': float(green_saturation_mean),
+                'green_value_mean': float(green_value_mean),
+                'color_uniformity': float(color_uniformity),
+                'wavelength_analysis': {
+                    'green_range_nm': self.green_wavelength_range,
+                    'chlorophyll_peak_nm': self.chlorophyll_peak,
+                    'estimated_chlorophyll_content': float(chlorophyll_pixels / total_pixels * 100)
+                }
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Enhanced color analysis failed: {e}")
+            return {'green_percentage': 0, 'error': str(e)}
+    
+    def calculate_comprehensive_biomass(self, cell_data, image_shape):
+        """Calculate comprehensive biomass using multiple approaches"""
+        try:
+            if not cell_data:
+                return {'total_biomass_mg': 0, 'error': 'No cells detected'}
+            
+            # Basic calculations
+            total_area_pixels = sum(cell['area'] for cell in cell_data)
+            total_area_um2 = total_area_pixels * (self.pixel_to_micron ** 2)
+            
+            # Volume estimation assuming average cell thickness
+            total_volume_um3 = total_area_um2 * self.cell_thickness_micron
+            total_volume_cm3 = total_volume_um3 * 1e-12  # Convert to cm³
+            
+            # Biomass calculations
+            fresh_weight_mg = total_volume_cm3 * self.wolffia_density * 1000  # Convert to mg
+            dry_weight_mg = fresh_weight_mg * self.dry_weight_ratio
+            
+            # Statistical biomass analysis
+            individual_areas = [cell['area'] * (self.pixel_to_micron ** 2) for cell in cell_data]
+            individual_volumes = [area * self.cell_thickness_micron for area in individual_areas]
+            individual_biomass = [vol * 1e-12 * self.wolffia_density * 1000 for vol in individual_volumes]
+            
+            # Biomass density (cells per unit area)
+            image_area_um2 = image_shape[0] * image_shape[1] * (self.pixel_to_micron ** 2)
+            cell_density = len(cell_data) / (image_area_um2 * 1e-6)  # cells/mm²
+            
+            return {
+                'total_biomass_mg': float(fresh_weight_mg),
+                'dry_biomass_mg': float(dry_weight_mg),
+                'total_area_um2': float(total_area_um2),
+                'total_volume_um3': float(total_volume_um3),
+                'cell_count': len(cell_data),
+                'cell_density_per_mm2': float(cell_density),
+                'average_cell_biomass_mg': float(np.mean(individual_biomass)) if individual_biomass else 0,
+                'biomass_std_mg': float(np.std(individual_biomass)) if individual_biomass else 0,
+                'biomass_range_mg': [float(np.min(individual_biomass)), float(np.max(individual_biomass))] if individual_biomass else [0, 0],
+                'calculation_parameters': {
+                    'cell_density_g_cm3': self.wolffia_density,
+                    'cell_thickness_um': self.cell_thickness_micron,
+                    'dry_weight_ratio': self.dry_weight_ratio,
+                    'pixel_to_micron': self.pixel_to_micron
+                }
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Biomass calculation failed: {e}")
+            return {'total_biomass_mg': 0, 'error': str(e)}
+    
+    def enhanced_wavelength_analysis(self, color_img, labeled_img):
+        """Enhanced wavelength-specific analysis for each detected cell"""
+        try:
+            if np.max(labeled_img) == 0:
+                return {'error': 'No cells for wavelength analysis'}
+            
+            # Convert to different color spaces
+            hsv = cv2.cvtColor(color_img, cv2.COLOR_BGR2HSV)
+            lab = cv2.cvtColor(color_img, cv2.COLOR_BGR2LAB)
+            
+            regions = measure.regionprops(labeled_img, intensity_image=cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY))
+            
+            cell_wavelength_data = []
+            
+            for region in regions:
+                mask = labeled_img == region.label
+                
+                if np.sum(mask) == 0:
+                    continue
+                
+                # Extract color values for this cell
+                h_values = hsv[:, :, 0][mask]
+                s_values = hsv[:, :, 1][mask]
+                v_values = hsv[:, :, 2][mask]
+                
+                # Green content analysis
+                green_hue_mask = (h_values >= 35) & (h_values <= 85)
+                green_percentage = np.sum(green_hue_mask) / len(h_values) * 100
+                
+                # Wavelength estimation from hue (approximation)
+                # Hue 60 ≈ 530nm (peak chlorophyll), scaling accordingly
+                estimated_wavelengths = 480 + (h_values / 179) * 200  # Rough mapping
+                dominant_wavelength = np.mean(estimated_wavelengths[green_hue_mask]) if np.any(green_hue_mask) else 0
+                
+                cell_data = {
+                    'cell_id': region.label,
+                    'green_percentage': float(green_percentage),
+                    'dominant_wavelength_nm': float(dominant_wavelength),
+                    'mean_hue': float(np.mean(h_values)),
+                    'mean_saturation': float(np.mean(s_values)),
+                    'mean_value': float(np.mean(v_values)),
+                    'color_intensity': float(region.mean_intensity),
+                    'chlorophyll_indicator': float(green_percentage * np.mean(s_values) / 255)
+                }
+                cell_wavelength_data.append(cell_data)
+            
+            # Summary statistics
+            if cell_wavelength_data:
+                green_percentages = [cell['green_percentage'] for cell in cell_wavelength_data]
+                wavelengths = [cell['dominant_wavelength_nm'] for cell in cell_wavelength_data if cell['dominant_wavelength_nm'] > 0]
+                chlorophyll_indicators = [cell['chlorophyll_indicator'] for cell in cell_wavelength_data]
+                
+                summary = {
+                    'total_cells_analyzed': len(cell_wavelength_data),
+                    'mean_green_percentage': float(np.mean(green_percentages)),
+                    'std_green_percentage': float(np.std(green_percentages)),
+                    'mean_wavelength_nm': float(np.mean(wavelengths)) if wavelengths else 0,
+                    'std_wavelength_nm': float(np.std(wavelengths)) if wavelengths else 0,
+                    'mean_chlorophyll_indicator': float(np.mean(chlorophyll_indicators)),
+                    'cell_data': cell_wavelength_data
+                }
+            else:
+                summary = {'error': 'No valid cell data for analysis'}
+            
+            return summary
+            
+        except Exception as e:
+            print(f"⚠️ Wavelength analysis failed: {e}")
+            return {'error': str(e)}
+    
+    def calculate_morphometric_statistics(self, cell_data):
+        """Calculate comprehensive morphometric statistics"""
+        try:
+            if not cell_data:
+                return {'error': 'No cell data for morphometric analysis'}
+            
+            areas = [cell['area'] for cell in cell_data]
+            perimeters = [cell['perimeter'] for cell in cell_data]
+            
+            # Calculate additional morphometric parameters
+            circularities = []
+            aspect_ratios = []
+            
+            for cell in cell_data:
+                # Circularity
+                if cell['perimeter'] > 0:
+                    circularity = 4 * np.pi * cell['area'] / (cell['perimeter'] ** 2)
+                    circularities.append(circularity)
+                
+                # Aspect ratio
+                if 'minor_axis_length' in cell and cell['minor_axis_length'] > 0:
+                    aspect_ratio = cell['major_axis_length'] / cell['minor_axis_length']
+                    aspect_ratios.append(aspect_ratio)
+            
+            return {
+                'area_statistics': {
+                    'mean': float(np.mean(areas)),
+                    'std': float(np.std(areas)),
+                    'min': float(np.min(areas)),
+                    'max': float(np.max(areas)),
+                    'median': float(np.median(areas)),
+                    'q25': float(np.percentile(areas, 25)),
+                    'q75': float(np.percentile(areas, 75))
+                },
+                'perimeter_statistics': {
+                    'mean': float(np.mean(perimeters)),
+                    'std': float(np.std(perimeters)),
+                    'min': float(np.min(perimeters)),
+                    'max': float(np.max(perimeters))
+                },
+                'circularity_statistics': {
+                    'mean': float(np.mean(circularities)) if circularities else 0,
+                    'std': float(np.std(circularities)) if circularities else 0
+                },
+                'aspect_ratio_statistics': {
+                    'mean': float(np.mean(aspect_ratios)) if aspect_ratios else 0,
+                    'std': float(np.std(aspect_ratios)) if aspect_ratios else 0
+                },
+                'size_distribution': {
+                    'small_cells': len([a for a in areas if a < np.percentile(areas, 33)]),
+                    'medium_cells': len([a for a in areas if np.percentile(areas, 33) <= a <= np.percentile(areas, 67)]),
+                    'large_cells': len([a for a in areas if a > np.percentile(areas, 67)])
+                }
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Morphometric analysis failed: {e}")
+            return {'error': str(e)}
+    
+    def calculate_spatial_distribution(self, cell_data, image_shape):
+        """Calculate spatial distribution patterns"""
+        try:
+            if len(cell_data) < 2:
+                return {'error': 'Need at least 2 cells for spatial analysis'}
+            
+            centroids = np.array([cell['centroid'] for cell in cell_data])
+            
+            # Calculate distances between all pairs
+            from scipy.spatial.distance import pdist, squareform
+            distances = pdist(centroids)
+            distance_matrix = squareform(distances)
+            
+            # Remove diagonal (distance to self)
+            np.fill_diagonal(distance_matrix, np.inf)
+            nearest_neighbor_distances = np.min(distance_matrix, axis=1) * self.pixel_to_micron
+            
+            # Spatial statistics
+            mean_nn_distance = np.mean(nearest_neighbor_distances)
+            std_nn_distance = np.std(nearest_neighbor_distances)
+            
+            # Clustering analysis
+            image_area = image_shape[0] * image_shape[1] * (self.pixel_to_micron ** 2)
+            expected_distance = 0.5 * np.sqrt(image_area / len(cell_data))  # Expected for random distribution
+            clustering_index = expected_distance / mean_nn_distance  # >1 = clustered, <1 = dispersed
+            
+            # Spatial distribution in image quadrants
+            h, w = image_shape
+            quadrant_counts = {
+                'top_left': len([c for c in centroids if c[1] < w/2 and c[0] < h/2]),
+                'top_right': len([c for c in centroids if c[1] >= w/2 and c[0] < h/2]),
+                'bottom_left': len([c for c in centroids if c[1] < w/2 and c[0] >= h/2]),
+                'bottom_right': len([c for c in centroids if c[1] >= w/2 and c[0] >= h/2])
+            }
+            
+            return {
+                'nearest_neighbor_distance_um': {
+                    'mean': float(mean_nn_distance),
+                    'std': float(std_nn_distance),
+                    'min': float(np.min(nearest_neighbor_distances)),
+                    'max': float(np.max(nearest_neighbor_distances))
+                },
+                'clustering_index': float(clustering_index),
+                'clustering_interpretation': 'clustered' if clustering_index > 1.2 else 'dispersed' if clustering_index < 0.8 else 'random',
+                'quadrant_distribution': quadrant_counts,
+                'cell_density_per_area': len(cell_data) / (image_area * 1e-6)  # cells per mm²
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Spatial analysis failed: {e}")
+            return {'error': str(e)}
+    
+    def assess_culture_health(self, cell_data, color_analysis):
+        """Assess overall culture health based on multiple parameters"""
+        try:
+            if not cell_data:
+                return {'overall_health': 'unknown', 'health_score': 0}
+            
+            health_indicators = []
+            
+            # 1. Cell count indicator (more cells = healthier, up to a point)
+            cell_count = len(cell_data)
+            if cell_count > 50:
+                count_score = 1.0
+            elif cell_count > 20:
+                count_score = 0.8
+            elif cell_count > 10:
+                count_score = 0.6
+            else:
+                count_score = 0.4
+            health_indicators.append(('cell_count', count_score))
+            
+            # 2. Green content indicator (higher green = healthier)
+            green_percentage = color_analysis.get('green_percentage', 0)
+            if green_percentage > 20:
+                green_score = 1.0
+            elif green_percentage > 10:
+                green_score = 0.8
+            elif green_percentage > 5:
+                green_score = 0.6
+            else:
+                green_score = 0.3
+            health_indicators.append(('green_content', green_score))
+            
+            # 3. Size uniformity indicator (consistent sizes = healthier)
+            areas = [cell['area'] for cell in cell_data]
+            cv_area = np.std(areas) / np.mean(areas) if np.mean(areas) > 0 else 1
+            if cv_area < 0.3:
+                uniformity_score = 1.0
+            elif cv_area < 0.5:
+                uniformity_score = 0.8
+            elif cv_area < 0.7:
+                uniformity_score = 0.6
+            else:
+                uniformity_score = 0.4
+            health_indicators.append(('size_uniformity', uniformity_score))
+            
+            # 4. Color intensity indicator
+            color_intensity = color_analysis.get('green_intensity', {}).get('mean', 0)
+            if color_intensity > 120:
+                intensity_score = 1.0
+            elif color_intensity > 80:
+                intensity_score = 0.8
+            elif color_intensity > 50:
+                intensity_score = 0.6
+            else:
+                intensity_score = 0.4
+            health_indicators.append(('color_intensity', intensity_score))
+            
+            # Calculate overall health score
+            overall_score = np.mean([score for _, score in health_indicators])
+            
+            # Determine health category
+            if overall_score > 0.8:
+                health_category = 'excellent'
+            elif overall_score > 0.7:
+                health_category = 'good'
+            elif overall_score > 0.5:
+                health_category = 'fair'
+            else:
+                health_category = 'poor'
+            
+            return {
+                'overall_health': health_category,
+                'health_score': float(overall_score),
+                'health_indicators': dict(health_indicators),
+                'recommendations': self.generate_health_recommendations(health_indicators, color_analysis)
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Health assessment failed: {e}")
+            return {'overall_health': 'unknown', 'health_score': 0, 'error': str(e)}
+    
+    def generate_health_recommendations(self, health_indicators, color_analysis):
+        """Generate specific recommendations based on health assessment"""
+        recommendations = []
+        
+        indicator_dict = dict(health_indicators)
+        
+        if indicator_dict.get('cell_count', 0) < 0.6:
+            recommendations.append("Low cell count detected. Consider optimizing growth conditions or nutrient availability.")
+        
+        if indicator_dict.get('green_content', 0) < 0.6:
+            recommendations.append("Low chlorophyll content. Check lighting conditions and ensure adequate light intensity.")
+        
+        if indicator_dict.get('size_uniformity', 0) < 0.6:
+            recommendations.append("High size variation detected. This may indicate stress or suboptimal growth conditions.")
+        
+        if indicator_dict.get('color_intensity', 0) < 0.6:
+            recommendations.append("Low color intensity suggests possible nutrient deficiency or light stress.")
+        
+        if color_analysis.get('color_uniformity', 0) > 0.5:
+            recommendations.append("High color variation detected. Consider more uniform lighting or culture conditions.")
+        
+        if not recommendations:
+            recommendations.append("Culture appears healthy. Continue current maintenance practices.")
+        
+        return recommendations
+    
+    def update_time_series(self, series_id, timestamp, cell_data, biomass_analysis, color_analysis):
+        """Update time-series tracking for multiple images"""
+        try:
+            if series_id not in self.time_series_data:
+                self.time_series_data[series_id] = {
+                    'created': datetime.now().isoformat(),
+                    'data_points': []
+                }
+            
+            # Create time point data
+            time_point = {
+                'timestamp': timestamp,
+                'cell_count': len(cell_data),
+                'total_biomass_mg': biomass_analysis.get('total_biomass_mg', 0),
+                'green_percentage': color_analysis.get('green_percentage', 0),
+                'mean_cell_area': biomass_analysis.get('total_area_um2', 0) / len(cell_data) if cell_data else 0,
+                'chlorophyll_percentage': color_analysis.get('chlorophyll_percentage', 0)
+            }
+            
+            self.time_series_data[series_id]['data_points'].append(time_point)
+            
+            # Calculate trends if we have multiple points
+            data_points = self.time_series_data[series_id]['data_points']
+            if len(data_points) >= 2:
+                # Sort by timestamp
+                sorted_points = sorted(data_points, key=lambda x: x['timestamp'])
+                
+                # Calculate trends
+                cell_counts = [p['cell_count'] for p in sorted_points]
+                biomass_values = [p['total_biomass_mg'] for p in sorted_points]
+                green_percentages = [p['green_percentage'] for p in sorted_points]
+                
+                trends = {
+                    'cell_count_trend': self.calculate_trend(cell_counts),
+                    'biomass_trend': self.calculate_trend(biomass_values),
+                    'green_content_trend': self.calculate_trend(green_percentages),
+                    'growth_rate': self.calculate_growth_rate(sorted_points)
+                }
+                
+                # Save time series data
+                series_file = self.dirs['time_series'] / f"series_{series_id}.json"
+                with open(series_file, 'w') as f:
+                    json.dump(self.time_series_data[series_id], f, indent=2)
+                
+                return {
+                    'series_id': series_id,
+                    'time_points': len(data_points),
+                    'current_point': time_point,
+                    'trends': trends,
+                    'visualization_data': self.create_time_series_visualization(sorted_points, series_id)
+                }
+            
+            return {
+                'series_id': series_id,
+                'time_points': len(data_points),
+                'current_point': time_point,
+                'message': 'Need at least 2 time points for trend analysis'
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Time series update failed: {e}")
+            return {'error': str(e)}
+    
+    def calculate_trend(self, values):
+        """Calculate trend direction and magnitude"""
+        if len(values) < 2:
+            return 'insufficient_data'
+        
+        # Simple linear trend
+        x = np.arange(len(values))
+        slope = np.polyfit(x, values, 1)[0]
+        
+        if abs(slope) < 0.01:
+            return 'stable'
+        elif slope > 0:
+            return 'increasing'
+        else:
+            return 'decreasing'
+    
+    def calculate_growth_rate(self, sorted_points):
+        """Calculate growth rate based on cell count changes"""
+        if len(sorted_points) < 2:
+            return 0
+        
+        initial_count = sorted_points[0]['cell_count']
+        final_count = sorted_points[-1]['cell_count']
+        
+        if initial_count == 0:
+            return 0
+        
+        growth_rate = (final_count - initial_count) / initial_count * 100
+        return float(growth_rate)
+    
+    def create_time_series_visualization(self, sorted_points, series_id):
+        """Create time series visualization"""
+        try:
+            timestamps = [p['timestamp'] for p in sorted_points]
+            cell_counts = [p['cell_count'] for p in sorted_points]
+            biomass_values = [p['total_biomass_mg'] for p in sorted_points]
+            green_percentages = [p['green_percentage'] for p in sorted_points]
+            
+            fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+            
+            # Cell count over time
+            axes[0, 0].plot(range(len(timestamps)), cell_counts, 'bo-', linewidth=2, markersize=8)
+            axes[0, 0].set_title('Cell Count Over Time', fontsize=14, fontweight='bold')
+            axes[0, 0].set_xlabel('Time Point')
+            axes[0, 0].set_ylabel('Cell Count')
+            axes[0, 0].grid(True, alpha=0.3)
+            
+            # Biomass over time
+            axes[0, 1].plot(range(len(timestamps)), biomass_values, 'go-', linewidth=2, markersize=8)
+            axes[0, 1].set_title('Biomass Over Time', fontsize=14, fontweight='bold')
+            axes[0, 1].set_xlabel('Time Point')
+            axes[0, 1].set_ylabel('Biomass (mg)')
+            axes[0, 1].grid(True, alpha=0.3)
+            
+            # Green content over time
+            axes[1, 0].plot(range(len(timestamps)), green_percentages, 'ro-', linewidth=2, markersize=8)
+            axes[1, 0].set_title('Green Content Over Time', fontsize=14, fontweight='bold')
+            axes[1, 0].set_xlabel('Time Point')
+            axes[1, 0].set_ylabel('Green Content (%)')
+            axes[1, 0].grid(True, alpha=0.3)
+            
+            # Combined normalized trends
+            if len(cell_counts) > 1:
+                norm_cells = np.array(cell_counts) / np.max(cell_counts)
+                norm_biomass = np.array(biomass_values) / np.max(biomass_values) if np.max(biomass_values) > 0 else np.zeros_like(biomass_values)
+                norm_green = np.array(green_percentages) / 100
+                
+                axes[1, 1].plot(range(len(timestamps)), norm_cells, 'b-', label='Cell Count', linewidth=2)
+                axes[1, 1].plot(range(len(timestamps)), norm_biomass, 'g-', label='Biomass', linewidth=2)
+                axes[1, 1].plot(range(len(timestamps)), norm_green, 'r-', label='Green Content', linewidth=2)
+                axes[1, 1].set_title('Normalized Trends', fontsize=14, fontweight='bold')
+                axes[1, 1].set_xlabel('Time Point')
+                axes[1, 1].set_ylabel('Normalized Value')
+                axes[1, 1].legend()
+                axes[1, 1].grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            
+            # Save visualization
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            viz_path = self.dirs['time_series'] / f"time_series_{series_id}_{timestamp}.png"
+            plt.savefig(viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Convert to base64 for web display
+            with open(viz_path, 'rb') as f:
+                viz_b64 = base64.b64encode(f.read()).decode('utf-8')
+            
+            return {
+                'visualization_path': str(viz_path),
+                'visualization_b64': viz_b64
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Time series visualization failed: {e}")
+            return {'error': str(e)}
+    
+    def create_comprehensive_visualization(self, original_img, labeled_img, cell_data, color_analysis, biomass_analysis):
+        """Create comprehensive visualization with histograms and analysis charts"""
+        try:
+            # Create figure with multiple subplots
+            fig = plt.figure(figsize=(20, 16))
+            
+            # Main detection visualization
+            ax1 = plt.subplot(3, 4, (1, 6))  # Spans 2x3 grid
+            if labeled_img is not None and np.max(labeled_img) > 0:
+                overlay = color.label2rgb(labeled_img, image=original_img, bg_label=0, alpha=0.4)
+                ax1.imshow(overlay)
+                
+                # Add cell numbers
+                for cell in cell_data:
+                    center = cell['centroid']
+                    ax1.plot(center[0], center[1], 'yo', markersize=8)
+                    ax1.text(center[0], center[1], str(cell['id']), 
+                            color='yellow', fontsize=8, ha='center', va='center', weight='bold')
+            else:
+                ax1.imshow(cv2.cvtColor(original_img, cv2.COLOR_BGR2RGB))
+            
+            ax1.set_title(f'Cell Detection Results\n{len(cell_data)} Cells Detected', 
+                         fontsize=16, fontweight='bold')
+            ax1.axis('off')
+            
+            # Cell size histogram
+            if cell_data:
+                ax2 = plt.subplot(3, 4, 3)
+                areas = [cell['area'] for cell in cell_data]
+                ax2.hist(areas, bins=min(15, len(areas)), alpha=0.7, color='skyblue', edgecolor='black')
+                ax2.set_title('Cell Size Distribution', fontweight='bold')
+                ax2.set_xlabel('Area (μm²)')
+                ax2.set_ylabel('Count')
+                ax2.grid(True, alpha=0.3)
+            
+            # Green content analysis
+            ax3 = plt.subplot(3, 4, 4)
+            green_data = [color_analysis.get('green_percentage', 0), 
+                         100 - color_analysis.get('green_percentage', 0)]
+            colors = ['green', 'lightgray']
+            labels = ['Green Content', 'Other']
+            wedges, texts, autotexts = ax3.pie(green_data, labels=labels, colors=colors, 
+                                              autopct='%1.1f%%', startangle=90)
+            ax3.set_title('Color Composition', fontweight='bold')
+            
+            # Biomass analysis bar chart
+            ax4 = plt.subplot(3, 4, 7)
+            biomass_categories = ['Fresh Weight', 'Dry Weight']
+            biomass_values = [biomass_analysis.get('total_biomass_mg', 0), 
+                            biomass_analysis.get('dry_biomass_mg', 0)]
+            bars = ax4.bar(biomass_categories, biomass_values, color=['lightgreen', 'brown'], alpha=0.7)
+            ax4.set_title('Biomass Analysis', fontweight='bold')
+            ax4.set_ylabel('Weight (mg)')
+            ax4.grid(True, alpha=0.3)
+            
+            # Add value labels on bars
+            for bar, value in zip(bars, biomass_values):
+                height = bar.get_height()
+                ax4.text(bar.get_x() + bar.get_width()/2., height + height*0.01,
+                        f'{value:.3f}', ha='center', va='bottom', fontweight='bold')
+            
+            # Cell density visualization
+            ax5 = plt.subplot(3, 4, 8)
+            density = biomass_analysis.get('cell_density_per_mm2', 0)
+            ax5.bar(['Cell Density'], [density], color='orange', alpha=0.7)
+            ax5.set_title('Cell Density', fontweight='bold')
+            ax5.set_ylabel('Cells/mm²')
+            ax5.grid(True, alpha=0.3)
+            
+            # Statistics summary
+            ax6 = plt.subplot(3, 4, (9, 10))
+            ax6.axis('off')
+            
+            stats_text = f"""
+QUANTITATIVE ANALYSIS SUMMARY
+
+Cell Count: {len(cell_data)}
+Total Biomass: {biomass_analysis.get('total_biomass_mg', 0):.3f} mg
+Dry Biomass: {biomass_analysis.get('dry_biomass_mg', 0):.3f} mg
+Green Content: {color_analysis.get('green_percentage', 0):.1f}%
+Chlorophyll: {color_analysis.get('chlorophyll_percentage', 0):.1f}%
+
+Average Cell Area: {np.mean([cell['area'] for cell in cell_data]) if cell_data else 0:.1f} μm²
+Cell Density: {density:.1f} cells/mm²
+Total Coverage: {biomass_analysis.get('total_area_um2', 0):.0f} μm²
+
+Color Intensity: {color_analysis.get('green_intensity', {}).get('mean', 0):.1f}
+Color Uniformity: {color_analysis.get('color_uniformity', 0):.2f}
+Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chlorophyll_peak_nm', 530)} nm
+            """
+            
+            ax6.text(0.05, 0.95, stats_text, transform=ax6.transAxes, fontsize=11,
+                    verticalalignment='top', fontfamily='monospace',
+                    bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
+            
+            # Morphometric analysis
+            if cell_data and len(cell_data) > 1:
+                ax7 = plt.subplot(3, 4, 11)
+                # Scatter plot of major vs minor axis
+                major_axes = [cell.get('major_axis_length', 0) for cell in cell_data]
+                minor_axes = [cell.get('minor_axis_length', 0) for cell in cell_data]
+                
+                if any(major_axes) and any(minor_axes):
+                    ax7.scatter(minor_axes, major_axes, alpha=0.6, s=50, c='purple')
+                    ax7.set_xlabel('Minor Axis (μm)')
+                    ax7.set_ylabel('Major Axis (μm)')
+                    ax7.set_title('Cell Shape Analysis', fontweight='bold')
+                    ax7.grid(True, alpha=0.3)
+                else:
+                    ax7.text(0.5, 0.5, 'Shape data\nnot available', 
+                            ha='center', va='center', transform=ax7.transAxes)
+                    ax7.set_title('Cell Shape Analysis', fontweight='bold')
+            
+            # Method comparison (if multiple methods used)
+            ax8 = plt.subplot(3, 4, 12)
+            method_info = "Detection Methods Used:\n"
+            if hasattr(self, '_last_methods_used'):
+                for method in self._last_methods_used:
+                    method_info += f"• {method.capitalize()}\n"
+            else:
+                method_info += "• Multi-method analysis"
+            
+            ax8.text(0.05, 0.95, method_info, transform=ax8.transAxes, fontsize=12,
+                    verticalalignment='top', fontweight='bold',
+                    bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+            ax8.set_title('Analysis Methods', fontweight='bold')
+            ax8.axis('off')
+            
+            plt.tight_layout()
+            
+            # Save comprehensive visualization
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            main_viz_path = self.dirs['results'] / f"comprehensive_analysis_{timestamp}.png"
+            plt.savefig(main_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Create additional histograms
+            histogram_paths = self.create_detailed_histograms(cell_data, color_analysis, biomass_analysis, timestamp)
+            
+            # Convert main visualization to base64
+            with open(main_viz_path, 'rb') as f:
+                main_viz_b64 = base64.b64encode(f.read()).decode('utf-8')
+            
+            return {
+                'main_visualization': main_viz_path,
+                'main_visualization_b64': main_viz_b64,
+                'histogram_paths': histogram_paths,
+                'detection_overview': main_viz_b64  # For compatibility
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Comprehensive visualization failed: {e}")
+            return {'error': str(e)}
+    
+    def create_detailed_histograms(self, cell_data, color_analysis, biomass_analysis, timestamp):
+        """Create detailed histogram visualizations"""
+        try:
+            histogram_paths = {}
+            
+            if not cell_data:
+                return histogram_paths
+            
+            # Area distribution histogram
+            fig, ax = plt.subplots(figsize=(10, 6))
+            areas = [cell['area'] for cell in cell_data]
+            n, bins, patches = ax.hist(areas, bins=min(20, len(areas)), alpha=0.7, 
+                                     color='skyblue', edgecolor='black', linewidth=1.2)
+            
+            # Color code bins by size
+            for i, patch in enumerate(patches):
+                if bins[i] < np.percentile(areas, 33):
+                    patch.set_facecolor('lightgreen')  # Small cells
+                elif bins[i] < np.percentile(areas, 67):
+                    patch.set_facecolor('yellow')  # Medium cells
+                else:
+                    patch.set_facecolor('orange')  # Large cells
+            
+            ax.axvline(np.mean(areas), color='red', linestyle='--', linewidth=2, label=f'Mean: {np.mean(areas):.1f} μm²')
+            ax.axvline(np.median(areas), color='blue', linestyle='--', linewidth=2, label=f'Median: {np.median(areas):.1f} μm²')
+            
+            ax.set_title('Cell Area Distribution', fontsize=16, fontweight='bold')
+            ax.set_xlabel('Cell Area (μm²)', fontsize=12)
+            ax.set_ylabel('Frequency', fontsize=12)
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            area_hist_path = self.dirs['results'] / f"area_histogram_{timestamp}.png"
+            plt.savefig(area_hist_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            histogram_paths['area_distribution'] = str(area_hist_path)
+            
+            # Convert to base64
+            with open(area_hist_path, 'rb') as f:
+                histogram_paths['area_distribution_b64'] = base64.b64encode(f.read()).decode('utf-8')
+            
+            # Intensity distribution histogram
+            if any('mean_intensity' in cell for cell in cell_data):
+                fig, ax = plt.subplots(figsize=(10, 6))
+                intensities = [cell.get('mean_intensity', 0) for cell in cell_data]
+                ax.hist(intensities, bins=min(15, len(intensities)), alpha=0.7, 
+                       color='lightcoral', edgecolor='black', linewidth=1.2)
+                
+                ax.axvline(np.mean(intensities), color='darkred', linestyle='--', 
+                          linewidth=2, label=f'Mean: {np.mean(intensities):.1f}')
+                
+                ax.set_title('Cell Intensity Distribution', fontsize=16, fontweight='bold')
+                ax.set_xlabel('Mean Intensity', fontsize=12)
+                ax.set_ylabel('Frequency', fontsize=12)
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                
+                intensity_hist_path = self.dirs['results'] / f"intensity_histogram_{timestamp}.png"
+                plt.savefig(intensity_hist_path, dpi=300, bbox_inches='tight')
+                plt.close()
+                histogram_paths['intensity_distribution'] = str(intensity_hist_path)
+                
+                with open(intensity_hist_path, 'rb') as f:
+                    histogram_paths['intensity_distribution_b64'] = base64.b64encode(f.read()).decode('utf-8')
+            
+            return histogram_paths
+            
+        except Exception as e:
+            print(f"⚠️ Detailed histogram creation failed: {e}")
+            return {}
+        
+        
     def analyze_green_content(self, color_img):
         """
         Analyze green content in the color image before grayscale conversion
@@ -372,43 +1667,105 @@ class WolffiaAnalyzer:
             gray = cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY)
             return cv2.merge([gray] * 3) if for_cnn else gray
 
-    def color_aware_watershed_segmentation(self, color_img):
-        """
-        Enhanced watershed segmentation that uses color information
-        Specifically optimized for green Wolffia cells
-        """
+
+        
+        
+    def apply_green_filtering(self, labeled_img, color_img):
+        """Apply green content filtering to detected regions"""
         try:
-            # Extract color channels for analysis
-            b, g, r = cv2.split(color_img)
             hsv = cv2.cvtColor(color_img, cv2.COLOR_BGR2HSV)
-            h, s, v = cv2.split(hsv)
+            green_lower = np.array([35, 40, 40])
+            green_upper = np.array([85, 255, 255])
+            green_mask = cv2.inRange(hsv, green_lower, green_upper)
             
-            # Create green-enhanced mask for better segmentation
-            lower_green = np.array([35, 40, 40])
-            upper_green = np.array([85, 255, 255])
-            green_mask = cv2.inRange(hsv, lower_green, upper_green)
+            filtered_img = np.zeros_like(labeled_img)
+            regions = measure.regionprops(labeled_img)
+            new_label = 1
             
-            # Use the green channel as primary source for Wolffia cells
-            # But enhance it with color information
-            enhanced_channel = g.copy().astype(np.float32)
+            for region in regions:
+                mask = labeled_img == region.label
+                green_pixels = np.sum(green_mask[mask] > 0)
+                total_pixels = np.sum(mask)
+                
+                if total_pixels > 0:
+                    green_ratio = green_pixels / total_pixels
+                    if green_ratio > 0.1 and self.min_cell_area <= region.area <= self.max_cell_area:
+                        filtered_img[mask] = new_label
+                        new_label += 1
             
-            # Boost green regions in the enhanced channel
-            enhanced_channel[green_mask > 0] = enhanced_channel[green_mask > 0] * 1.3
-            enhanced_channel = np.clip(enhanced_channel, 0, 255).astype(np.uint8)
-            
-            # Apply CLAHE for local contrast enhancement
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            enhanced_channel = clahe.apply(enhanced_channel)
-            
-            # Now use the existing watershed segmentation on the enhanced channel
-            return self.professional_watershed_segmentation(enhanced_channel, color_img)
+            return filtered_img
             
         except Exception as e:
-            print(f"⚠️ Color-aware watershed failed, using fallback: {e}")
-            # Fallback to grayscale watershed
-            gray = cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY)
-            return self.professional_watershed_segmentation(gray, color_img)
+            print(f"⚠️ Green filtering failed: {e}")
+            return labeled_img
+    
+    def extract_enhanced_cell_properties(self, labeled_img, gray_img, color_img):
+        """Enhanced cell property extraction with color and morphometric analysis"""
+        if labeled_img.dtype != np.int32:
+            labeled_img = labeled_img.astype(np.int32)
+        
+        regions = measure.regionprops(labeled_img, intensity_image=gray_img)
+        
+        # Get color information
+        hsv = cv2.cvtColor(color_img, cv2.COLOR_BGR2HSV)
+        b, g, r = cv2.split(color_img)
+        
+        cells = []
+        for i, region in enumerate(regions, 1):
+            if region.area >= self.min_cell_area:
+                # Basic properties
+                cell_data = {
+                    'id': i,
+                    'area': region.area * (self.pixel_to_micron ** 2),
+                    'perimeter': region.perimeter * self.pixel_to_micron,
+                    'centroid': [int(region.centroid[1]), int(region.centroid[0])],
+                    'major_axis_length': region.major_axis_length * self.pixel_to_micron,
+                    'minor_axis_length': region.minor_axis_length * self.pixel_to_micron,
+                    'eccentricity': region.eccentricity,
+                    'mean_intensity': region.mean_intensity,
+                    'max_intensity': region.max_intensity,
+                    'min_intensity': region.min_intensity
+                }
+                
+                # Enhanced color properties
+                mask = labeled_img == region.label
+                if np.any(mask):
+                    # Green content for this cell
+                    cell_green = np.mean(g[mask])
+                    cell_hsv_h = np.mean(hsv[:, :, 0][mask])
+                    cell_hsv_s = np.mean(hsv[:, :, 1][mask])
+                    cell_hsv_v = np.mean(hsv[:, :, 2][mask])
+                    
+                    cell_data.update({
+                        'green_intensity': float(cell_green),
+                        'hue_mean': float(cell_hsv_h),
+                        'saturation_mean': float(cell_hsv_s),
+                        'value_mean': float(cell_hsv_v),
+                        'color_ratio_green': float(cell_green / (np.mean(r[mask]) + np.mean(b[mask]) + 1e-6))
+                    })
+                
+                # Morphometric properties
+                if region.perimeter > 0:
+                    cell_data['circularity'] = 4 * np.pi * region.area / (region.perimeter ** 2)
+                else:
+                    cell_data['circularity'] = 0
+                
+                cell_data['solidity'] = region.solidity
+                cell_data['extent'] = region.extent
+                
+                # Biomass estimation for individual cell
+                cell_volume_um3 = cell_data['area'] * self.cell_thickness_micron
+                cell_biomass_mg = cell_volume_um3 * 1e-12 * self.wolffia_density * 1000
+                cell_data['estimated_biomass_mg'] = float(cell_biomass_mg)
+                
+                cells.append(cell_data)
+        
+        return cells
 
+        
+        
+        
+        
     def color_aware_tophat_detection(self, color_img, enhanced_gray):
         """
         Enhanced tophat detection that uses both color and enhanced grayscale
@@ -455,437 +1812,10 @@ class WolffiaAnalyzer:
         except Exception as e:
             print(f"⚠️ Color-aware tophat failed, using standard: {e}")
             return self.tophat_ml_detection(enhanced_gray)
-    
-    def analyze_image_separate_methods(self, processed, image_path, use_tophat=True, use_cnn=True, use_celldetection=False):
-        """
-        Analyze image with each method separately for comparison.
-        Returns results for each method individually in a consistent format.
-        """
-        try:
-            img = cv2.imread(str(image_path))
-            original = processed.get('original', img)
-            if img is None or original is None:
-                raise ValueError(f"❌ Could not load image: {image_path}")
-
-            # Preserve color image - NO PREMATURE GRAYSCALE CONVERSION
-            color_img = img.copy()
-            # Create enhanced grayscale only when needed for specific methods
-            enhanced_gray = self.create_green_enhanced_grayscale(color_img)
-            method_results = {}
-
-            # --- Method 1: Color-Aware Watershed (Always Run) ---
-            print("🔬 Running Color-Aware Watershed method...")
-            
-            # Get watershed results with pipeline visualization
-            try:
-                enhanced_channel = self.create_green_enhanced_grayscale(color_img)
-                watershed_labels, pipeline_images = self.professional_watershed_segmentation(
-                    enhanced_channel, color_img, return_pipeline=True
-                )
-                watershed_cells = self.extract_cell_properties(watershed_labels, enhanced_gray)
-                watershed_viz = self.create_method_visualization(img, watershed_labels, watershed_cells, "Color-Aware Watershed")
-                
-                # Create pipeline visualization
-                watershed_pipeline_viz = self.create_watershed_pipeline_visualization(pipeline_images, watershed_cells)
-                
-            except Exception as e:
-                print(f"⚠️ Watershed with pipeline failed, using fallback: {e}")
-                watershed_labels = self.color_aware_watershed_segmentation(color_img)
-                watershed_cells = self.extract_cell_properties(watershed_labels, enhanced_gray)
-                watershed_viz = self.create_method_visualization(img, watershed_labels, watershed_cells, "Color-Aware Watershed")
-                watershed_pipeline_viz = None
-            method_results['watershed'] = {
-                'method_name': 'Professional Watershed',
-                'cells_detected': len(watershed_cells),
-                'total_area': sum(c['area'] for c in watershed_cells),
-                'average_area': np.mean([c['area'] for c in watershed_cells]) if watershed_cells else 0,
-                'cells': watershed_cells,
-                'visualization_path': str(watershed_viz) if watershed_viz else None,
-                'pipeline_visualization_path': str(watershed_pipeline_viz) if watershed_pipeline_viz else None
-            }
-
-            # --- Method 2: Color-Aware Tophat AI ---
-            if use_tophat and self.load_tophat_model():
-                print("🎯 Running Color-Aware Tophat ML method...")
-                tophat_labels = self.color_aware_tophat_detection(color_img, enhanced_gray)
-                tophat_cells = self.extract_cell_properties(tophat_labels, enhanced_gray)
-                tophat_viz = self.create_method_visualization(img, tophat_labels, tophat_cells, "Color-Aware Tophat AI")
-                method_results['tophat'] = {
-                    'method_name': 'Tophat AI Model',
-                    'cells_detected': len(tophat_cells),
-                    'total_area': sum(c['area'] for c in tophat_cells),
-                    'average_area': np.mean([c['area'] for c in tophat_cells]) if tophat_cells else 0,
-                    'cells': tophat_cells,
-                    'visualization_path': str(tophat_viz) if tophat_viz else None
-                }
-
-            # --- Method 3: Enhanced RGB Wolffia CNN ---
-            if use_cnn and TORCH_AVAILABLE and self.load_cnn_model():
-                print("🤖 Running Enhanced RGB Wolffia CNN method...")
-                
-                # Use smart CNN detection that automatically chooses RGB vs grayscale
-                cnn_labels = self.cnn_detection(enhanced_gray, color_img)
-                cnn_cells = self.extract_cell_properties(cnn_labels, enhanced_gray)
-                cnn_viz = self.create_method_visualization(img, cnn_labels, cnn_cells, "Wolffia CNN")
-                cv2.imwrite("debug_final_cnn_viz.png", (cnn_labels * 255).astype(np.uint8))
-
-                method_results['cnn'] = {
-                    'method_name': 'Wolffia CNN',
-                    'cells_detected': len(cnn_cells),
-                    'total_area': sum(c['area'] for c in cnn_cells),
-                    'average_area': np.mean([c['area'] for c in cnn_cells]) if cnn_cells else 0,
-                    'cells': cnn_cells,
-                    'visualization_path': str(cnn_viz) if cnn_viz else None
-                }
-
-            # --- Method 4: CellDetection AI ---
-            if use_celldetection and CELLDETECTION_AVAILABLE:
-                print("🧠 Running CellDetection AI method...")
-                try:
-                    # CellDetection expects RGB input, provide grayscale converted to RGB
-                    rgb_input = cv2.cvtColor(enhanced_gray, cv2.COLOR_GRAY2RGB) if enhanced_gray.ndim == 2 else original
-                    celldet_result = self.celldetection_detection(rgb_input)
-
-                    # Ensure celldet_result is proper labeled image format
-                    if celldet_result is None or celldet_result.size == 0:
-                        print("⚠️ CellDetection returned empty result")
-                        celldet_result = np.zeros_like(enhanced_gray, dtype=np.int32)
-                    
-                    # Handle data type conversion properly
-                    if celldet_result.dtype != np.int32:
-                        # If it's a float array, convert properly
-                        if celldet_result.dtype in [np.float32, np.float64]:
-                            celldet_result = celldet_result.astype(np.int32)
-                        else:
-                            celldet_result = celldet_result.astype(np.int32)
-                    
-                    # Ensure it's 2D (labeled image)
-                    if celldet_result.ndim > 2:
-                        print(f"⚠️ CellDetection result has {celldet_result.ndim} dimensions, converting to 2D")
-                        # Take first channel if multi-channel
-                        celldet_result = celldet_result[:, :, 0] if celldet_result.ndim == 3 else celldet_result.squeeze()
-                        celldet_result = celldet_result.astype(np.int32)
-                    
-                    # Ensure gray is 2D
-                    intensity_img = enhanced_gray if enhanced_gray.ndim == 2 else cv2.cvtColor(enhanced_gray, cv2.COLOR_BGR2GRAY)
-                    
-                    # Resize if shapes don't match
-                    if celldet_result.shape != intensity_img.shape:
-                        print(f"⚠️ Resizing intensity image to match CellDetection result: {celldet_result.shape}")
-                        intensity_img = cv2.resize(intensity_img, (celldet_result.shape[1], celldet_result.shape[0]))
-
-                    celldet_cells = self.extract_cell_properties(celldet_result, intensity_img)
-                    celldet_viz = self.create_method_visualization(img, celldet_result, celldet_cells, "CellDetection AI")
-                    
-                    method_results['celldetection'] = {
-                        'method_name': 'CellDetection AI',
-                        'cells_detected': len(celldet_cells),
-                        'total_area': sum(c['area'] for c in celldet_cells),
-                        'average_area': np.mean([c['area'] for c in celldet_cells]) if celldet_cells else 0,
-                        'cells': celldet_cells,
-                        'visualization_path': str(celldet_viz) if celldet_viz else None
-                    }
-                    
-                except Exception as celldet_error:
-                    print(f"❌ CellDetection method failed: {celldet_error}")
-                    # Add empty result to maintain consistency
-                    method_results['celldetection'] = {
-                        'method_name': 'CellDetection AI',
-                        'cells_detected': 0,
-                        'total_area': 0,
-                        'average_area': 0,
-                        'cells': [],
-                        'visualization_path': None,
-                        'error': str(celldet_error)
-                    }
-
-            # --- Convert visualizations to base64 for UI integration ---
-            for method_key, data in method_results.items():
-                # Convert main visualization
-                viz_path = data.get('visualization_path')
-                if viz_path and Path(viz_path).exists():
-                    with open(viz_path, 'rb') as f:
-                        data['visualization_b64'] = base64.b64encode(f.read()).decode('utf-8')
-                else:
-                    data['visualization_b64'] = None
-
-                # Convert pipeline visualization
-                pipeline_path = data.get('pipeline_visualization_path')
-                if pipeline_path and Path(pipeline_path).exists():
-                    with open(pipeline_path, 'rb') as f:
-                        data['pipeline_visualization_b64'] = base64.b64encode(f.read()).decode('utf-8')
-                else:
-                    data['pipeline_visualization_b64'] = None
-
-            return method_results
-
-        except Exception as e:
-            print(f"❌ Separate method analysis failed: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return {'error': str(e)}
-
-        
-        
-    # def create_method_visualization(self, original_img, labeled_img, cell_data, method_name):
-    #     """Create visualization for a specific method with improved visibility and color accuracy"""
-    #     try:
-    #         # Create overlay by blending labels with original image using proper alpha
-    #         colored_labels = color.label2rgb(
-    #             labeled_img, 
-    #             image=original_img,  # ensures proper RGB/BGR blending
-    #             bg_label=0, 
-    #             alpha=0.4, 
-    #             kind='overlay'
-    #         )
-    #         result = (colored_labels * 255).astype(np.uint8)
-
-    #         # Add cell numbers and center markers
-    #         for cell in cell_data:
-    #             center = tuple(cell['centroid'])
-    #             cv2.circle(result, center, 3, (0, 255, 255), -1)
-    #             cv2.putText(result, str(cell['id']), center, 
-    #                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, lineType=cv2.LINE_AA)
-
-    #         # Add method title with outline for better visibility
-    #         text = f"{method_name}: {len(cell_data)} cells"
-    #         cv2.putText(result, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 3, lineType=cv2.LINE_AA)
-    #         cv2.putText(result, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2, lineType=cv2.LINE_AA)
-
-    #         # Save visualization image
-    #         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    #         viz_path = self.dirs['results'] / f"{method_name.lower().replace(' ', '_')}_{timestamp}.png"
-    #         cv2.imwrite(str(viz_path), result)
-
-    #         return viz_path
-
-    #     except Exception as e:
-    #         print(f"⚠️ Failed to create {method_name} visualization: {e}")
-    #         return None
-
-
-
-
-    def run_full_pipeline(self, image=None):
-        pipeline = {}
-
-        # Step 1: Load and denoise image
-        if image is None:
-            original = img_as_float(data.coffee()[100:250, 50:300])
-        else:
-            image = np.asarray(image)
-            if image.ndim == 2:
-                image = cv2.cvtColor(image.astype(np.uint8), cv2.COLOR_GRAY2RGB)
-            elif image.shape[2] == 4:
-                image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
-            elif image.shape[2] == 3:
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            original = img_as_float(image)
-
-        sigma_est = estimate_sigma(original, channel_axis=-1, average_sigmas=True)
-        print(f"Estimated noise σ = {sigma_est:.3f}")
-
-        denoised = denoise_tv_chambolle(original, weight=0.1, channel_axis=-1)
-        pipeline['01_denoised'] = denoised
-
-        # Step 2: Green-enhanced masking
-        rgb_float = denoised
-        b, g, r = rgb_float[:, :, 0], rgb_float[:, :, 1], rgb_float[:, :, 2]
-
-        # Build a green-enhanced image by emphasizing green
-        green_dominance = g - np.maximum(r, b)  # how much more green than other channels
-        green_dominance = np.clip(green_dominance, 0, 1)
-
-        # Create an RGB-like overlay where:
-        # - green-dominant areas retain color
-        # - others go to white
-        green_mask = green_dominance > 0.05
-        green_enhanced = g - np.maximum(r, b)
-        green_enhanced_rgb = np.clip(green_enhanced, 0, 1)
-
-
-        pipeline["02_green_enhanced_rgb"] = green_enhanced_rgb
-
-
-
-        green_mask = green_enhanced_rgb > 0.05 # Threshold can be tuned
-        pipeline['03_green_mask'] = green_mask
-
-
-        # Step 3: Shape Index (standalone)
-        shape_idx = shape_index((green_enhanced_rgb * 255).astype(np.float32))
-        pipeline['shape_index'] = shape_idx
-
-            
-        # Step 5: Watershed using green mask
-        distance = ndi.distance_transform_edt(green_mask)
-        coords = peak_local_max(distance, footprint=np.ones((3, 3)), labels=green_mask)
-        markers = np.zeros_like(distance, dtype=bool)
-        markers[tuple(coords.T)] = True
-        markers, _ = ndi.label(markers)
-        labels = watershed(-distance, markers, mask=green_mask)
-        pipeline['04_watershed'] = labels
-
-        # Step 6: Extract region properties
-        props = measure.regionprops(labels, intensity_image=green_enhanced_rgb)
-        cell_data = []
-        for i, region in enumerate(props, 1):
-            if region.area < 10:
-                continue
-            cell_data.append({
-                'id': i,
-                'area': region.area,
-                'centroid': tuple(map(int, region.centroid)),
-                'circularity': 4 * np.pi * region.area / (region.perimeter**2) if region.perimeter > 0 else 1.0
-            })
-
-        print(f"✅ Extracted {len(cell_data)} valid regions.")
-
-        # Save visualization
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        images = [
-            (original, "Original"),
-            (denoised, "Denoised"),
-            (green_enhanced_rgb, "Green Enhanced"),
-            (green_mask, "Green Mask"),
-            (shape_idx, "Shape Index"),
-            (labels, "Watershed")
-        ]
-
-        for ax, (img, title) in zip(axes.ravel(), images):
-            cmap = 'nipy_spectral' if title == "Watershed" else 'gray' if img.ndim == 2 else None
-            ax.imshow(img, cmap=cmap)
-            ax.set_title(title)
-            ax.axis('off')
-
-        plt.tight_layout()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        fig_path = self.dirs['results'] / f"full_pipeline_{timestamp}.png"
-        plt.savefig(fig_path)
-        plt.close()
-        print(f"📦 Saved pipeline figure: {fig_path}")
-
-        return labels, cell_data, pipeline
-
 
 
     
-    def professional_watershed_segmentation(self, gray_img, color_img, return_pipeline=False):
-        try:
-            labels, cells, pipeline = self.run_full_pipeline(color_img)
-            return (labels, pipeline) if return_pipeline else labels
-        except Exception as e:
-            print(f"⚠️ Wolffia smart segmentation failed in professional_watershed_segmentation: {e}")
-            import traceback
-            print(traceback.format_exc())
-            empty_result = np.zeros(gray_img.shape[:2], dtype=np.int32)
-            return (empty_result, {}) if return_pipeline else empty_result
 
-
-    def create_method_visualization(self, original_img, labeled_img, cell_data=None, method_name="Segmentation"):
-        try:
-            if labeled_img is None or np.max(labeled_img) == 0:
-                print(f"⚠️ Skipping {method_name} visualization — no valid labels.")
-                return None
-
-            # Ensure RGB input (not grayscale)
-            if original_img.ndim == 2 or original_img.shape[2] == 1:
-                base_img = cv2.cvtColor(original_img, cv2.COLOR_GRAY2BGR)
-            else:
-                base_img = original_img.copy()
-
-            # Ensure base image is float for label2rgb
-            if base_img.dtype != np.float32 and base_img.dtype != np.float64:
-                base_img = base_img.astype(np.float32) / 255.0
-
-            # Use label2rgb
-            overlay = color.label2rgb(labeled_img, image=base_img, bg_label=0, alpha=0.4)
-
-            # Convert to uint8 BGR for saving
-            overlay_bgr = (overlay * 255).astype(np.uint8)
-            overlay_bgr = cv2.cvtColor(overlay_bgr, cv2.COLOR_RGB2BGR)
-
-            # Annotate
-            cv2.putText(overlay_bgr, method_name, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
-                        (0, 0, 0), 3, lineType=cv2.LINE_AA)
-            cv2.putText(overlay_bgr, method_name, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
-                        (255, 255, 255), 2, lineType=cv2.LINE_AA)
-
-            # Save
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = self.dirs['results'] / f"{method_name.lower().replace(' ', '_')}_{timestamp}.png"
-            cv2.imwrite(str(path), overlay_bgr)
-            print(f"🖼️ Saved visualization: {path}")
-            return path
-
-        except Exception as e:
-            print(f"⚠️ Failed to create {method_name} visualization: {e}")
-            return None
-
-        
-    def create_watershed_pipeline_visualization(self, pipeline_images, cell_data):
-        try:
-            if not pipeline_images:
-                raise ValueError("Pipeline images are empty.")
-
-            fig, axes = plt.subplots(1, len(pipeline_images), figsize=(18, 6))
-            for ax, (k, img) in zip(axes, pipeline_images.items()):
-                ax.imshow(img, cmap='nipy_spectral' if img.ndim == 2 else None)
-                ax.set_title(k)
-                ax.axis('off')
-
-            plt.tight_layout()
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = self.dirs['results'] / f"watershed_pipeline_{timestamp}.png"
-            plt.savefig(path)
-            plt.close()
-            return path
-        except Exception as e:
-            print(f"⚠️ Failed to generate pipeline visualization: {e}")
-            return None
-
-
-
-    
-    def refresh_model_status(self):
-        """Refresh the status of all AI models (useful after training new models)"""
-        print("🔄 Refreshing model status...")
-        
-        # Reset model states to force reloading
-        self._cnn_model = None
-        self._tophat_model = None
-        self._celldetection_model = None
-        self.wolffia_cnn_available = False
-        self.wolffia_cnn_model = None
-        self.tophat_model = None
-        self.celldetection_available = False
-        
-        # Check Wolffia CNN
-        cnn_available = self.load_cnn_model()
-        if cnn_available:
-            print("✅ Wolffia CNN model detected and loaded")
-        else:
-            print("📝 Wolffia CNN model not found - train with: python train_wolffia_cnn.py")
-        
-        # Check Tophat model
-        tophat_available = self.load_tophat_model()
-        if tophat_available:
-            print("✅ Tophat model detected")
-        else:
-            print("📝 Tophat model not found")
-        
-        # Check CellDetection model
-        if hasattr(self, 'celldetection_model') and self.celldetection_model:
-            print("✅ CellDetection model available")
-        else:
-            print("📝 CellDetection model not available")
-        
-        print(f"🎯 Final status: Wolffia_CNN={self.wolffia_cnn_available}, Tophat={self.tophat_model is not None}, CellDetection={self.celldetection_available}")
-        return {
-            'wolffia_cnn_available': self.wolffia_cnn_available,
-            'tophat_available': self.tophat_model is not None,
-            'celldetection_available': self.celldetection_available
-        }
         
     def load_tophat_model(self):
         """Load tophat model if available"""
@@ -904,143 +1834,366 @@ class WolffiaAnalyzer:
                 print(f"⚠️ Failed to load tophat model: {e}")
         return False
     
-    def tophat_ml_detection(self, gray_img):
+    def tophat_ml_detection(self, color_img):
         """
-        Tophat ML detection using feature extraction approach
-        Based on microscopist ML segmentation patterns (example 062-066)
-        FIXED: Now properly converts binary predictions to labeled cell regions
+        FAST & AUTONOMOUS Tophat ML detection - Everything in one place
+        Green-focused, GPU-accelerated, self-contained cell detection
         """
         try:
             if self._tophat_model is None:
-                return np.zeros_like(gray_img)
-            
-            # Extract features using proven approach
-            features = self.extract_ml_features(gray_img)
-            
-            # Predict using trained model
+                print("⚠️ Tophat model not loaded")
+                return np.zeros(color_img.shape[:2], dtype=np.int32)
+
+            # Quick channel validation and conversion
+            if len(color_img.shape) == 2:
+                color_img = cv2.cvtColor(color_img, cv2.COLOR_GRAY2BGR)
+            elif len(color_img.shape) == 3:
+                if color_img.shape[2] == 1:
+                    color_img = cv2.cvtColor(color_img.squeeze(), cv2.COLOR_GRAY2BGR)
+                elif color_img.shape[2] == 4:
+                    color_img = color_img[:, :, :3]
+                elif color_img.shape[2] != 3:
+                    color_img = color_img[:, :, :3]
+
+            print("⚡ Running FAST green-focused tophat detection...")
+
+            # Extract fast features
+            features = self.extract_ml_features(color_img)
+
+            # Quick prediction
             predictions = self._tophat_model.predict(features.reshape(-1, features.shape[-1]))
-            
-            # Reshape back to image - this creates a binary mask
-            binary_mask = predictions.reshape(gray_img.shape).astype(np.uint8)
-            
-            # CRITICAL FIX: Convert binary mask to labeled regions for individual cell detection
+            binary_mask = predictions.reshape(color_img.shape[:2]).astype(np.uint8)
+
+            # Fast post-processing with green validation
             if np.any(binary_mask > 0):
-                # Clean up the binary mask with morphological operations
+                # GPU-accelerated morphology
                 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-                cleaned_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
-                cleaned_mask = cv2.morphologyEx(cleaned_mask, cv2.MORPH_OPEN, kernel)
+                cleaned = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+                cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+
+                # Connected components
+                num_labels, labeled_img = cv2.connectedComponents(cleaned)
                 
-                # Convert to labeled image using connected components
-                # This gives each connected region a unique label (1, 2, 3, etc.)
-                num_labels, labeled_img = cv2.connectedComponents(cleaned_mask)
-                
-                print(f"🔍 Tophat ML: detected {num_labels-1} potential cell regions")
-                
-                # Apply size filtering to remove noise
-                filtered_labeled = self.filter_by_size(labeled_img)
-                
-                return filtered_labeled
-            else:
-                print("🔍 Tophat ML: no cells detected")
-                return np.zeros_like(gray_img)
-            
+                if num_labels > 1:
+                    # INLINE GREEN FILTERING - autonomous cell selection
+                    filtered_img = np.zeros_like(labeled_img, dtype=np.int32)
+                    new_label = 1
+                    
+                    # Extract green channel for validation
+                    b, g, r = cv2.split(color_img)
+                    # Determine if color_img is BGR or RGB (assuming RGB now)
+                    hsv = cv2.cvtColor(color_img, cv2.COLOR_RGB2HSV)
+                    green_mask = cv2.inRange(hsv, np.array([35, 40, 40]), np.array([85, 255, 255]))
+                    
+                    # Process each region autonomously
+                    unique_labels, counts = np.unique(labeled_img, return_counts=True)
+                    for label, area in zip(unique_labels, counts):
+                        if label == 0 or not (self.min_cell_area <= area <= self.max_cell_area):
+                            continue
+                        
+                        # Quick green validation
+                        region_mask = labeled_img == label
+                        mean_green = np.mean(g[region_mask])
+                        mean_other = np.mean(np.maximum(r[region_mask], b[region_mask]))
+                        green_pixels = np.sum(green_mask[region_mask] > 0)
+                        green_ratio = green_pixels / area if area > 0 else 0
+                        
+                        # Autonomous decision: is this a green cell?
+                        if mean_green > mean_other and green_ratio > 0.1 and mean_green > 70:
+                            filtered_img[region_mask] = new_label
+                            new_label += 1
+                    
+                    cell_count = new_label - 1
+                    print(f"⚡ Fast Green Tophat: {cell_count} green cells detected")
+                    return filtered_img
+
+            print("⚡ Fast Green Tophat: No green cells found")
+            return np.zeros(color_img.shape[:2], dtype=np.int32)
+
         except Exception as e:
-            print(f"⚠️ Tophat ML detection failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return np.zeros_like(gray_img)
-    
+            print(f"❌ Fast Tophat failed: {e}")
+            return np.zeros(color_img.shape[:2], dtype=np.int32)
+
     def extract_ml_features(self, img):
         """
-        Extract comprehensive ML features matching enhanced tophat trainer
-        Based on proven microscopist approach with comprehensive feature set
-        FIXED: Now generates features matching the enhanced trainer
+        Enhanced 52-feature extraction with built-in cell separation intelligence
+        Original 46 features + 6 separation-specific features
         """
-        if len(img.shape) == 3:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        features = []
-        
-        # 1. Original intensity features
-        features.append(img)
-        
-        # 2. Multi-scale Gaussian features (important for Wolffia size variations)
-        for sigma in [0.5, 1.0, 2.0, 3.0, 5.0]:
-            gaussian_img = ndimage.gaussian_filter(img, sigma=sigma)
-            features.append(gaussian_img)
-        
-        # 3. Enhanced edge detection suite
-        # Canny with multiple thresholds
-        for low, high in [(30, 100), (50, 150), (70, 200)]:
-            edges_canny = cv2.Canny(img, low, high)
-            features.append(edges_canny)
-        
-        # Comprehensive edge filters
-        edges_sobel = (filters.sobel(img) * 255).astype(np.uint8)
-        features.append(edges_sobel)
-        
-        edges_roberts = (filters.roberts(img) * 255).astype(np.uint8)
-        features.append(edges_roberts)
-        
-        edges_prewitt = (filters.prewitt(img) * 255).astype(np.uint8)
-        features.append(edges_prewitt)
-        
-        edges_scharr = (filters.scharr(img) * 255).astype(np.uint8)
-        features.append(edges_scharr)
-        
-        # 4. Morphological features (important for cell shape)
-        # Opening with different kernel sizes
-        for kernel_size in [3, 5, 7]:
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-            opened = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-            features.append(opened)
-        
-        # Closing with different kernel sizes
-        for kernel_size in [3, 5]:
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-            closed = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
-            features.append(closed)
-        
-        # 5. Statistical filters (texture analysis)
-        for size in [3, 5, 7]:
-            # Variance (texture)
-            variance_img = ndimage.generic_filter(img, np.var, size=size)
-            features.append(variance_img)
-            
-            # Standard deviation
-            std_img = ndimage.generic_filter(img, np.std, size=size)
-            features.append(std_img)
-            
-            # Median
-            median_img = ndimage.median_filter(img, size=size)
-            features.append(median_img)
-        
-        # 6. Min/Max filters
-        for size in [3, 5]:
-            maximum_img = ndimage.maximum_filter(img, size=size)
-            features.append(maximum_img)
-            
-            minimum_img = ndimage.minimum_filter(img, size=size)
-            features.append(minimum_img)
-        
-        # 7. Laplacian features
-        laplacian_img = cv2.Laplacian(img, cv2.CV_64F)
-        features.append(np.abs(laplacian_img).astype(np.uint8))
-        
-        # 8. Hessian-based features (blob detection) - optional
         try:
-            from skimage.feature import hessian_matrix, hessian_matrix_eigvals
-            hessian = hessian_matrix(img, sigma=1.0)
-            eigenvals = hessian_matrix_eigvals(hessian)
-            features.append((eigenvals[0] * 255).astype(np.uint8))
-            features.append((eigenvals[1] * 255).astype(np.uint8))
-        except:
-            # Fallback features if hessian not available
-            features.append(ndimage.generic_filter(img, np.mean, size=3))
-            features.append(ndimage.generic_filter(img, np.max, size=3))
+            # Fast preprocessing
+            if len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            elif len(img.shape) == 3 and img.shape[2] != 3:
+                img = img[:, :, :3]
+            
+            h, w = img.shape[:2]
+            img_size = h * w
+            
+            # Pre-allocate for 52 features (46 original + 6 separation)
+            features = np.empty((img_size, 52), dtype=np.float32)
+            
+            # Do ALL color conversions ONCE (biggest speedup)
+            b, g, r = cv2.split(img)
+            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+            h_hsv, s_hsv, v_hsv = cv2.split(hsv)
+            l_lab, a_lab, b_lab = cv2.split(lab)
+            
+            # Flatten all channels once
+            b_flat = b.flatten().astype(np.float32)
+            g_flat = g.flatten().astype(np.float32)
+            r_flat = r.flatten().astype(np.float32)
+            
+            # === ORIGINAL 46 FEATURES (VECTORIZED) ===
+            idx = 0
+            
+            # 1-9: Color channels (vectorized)
+            features[:, idx:idx+9] = np.column_stack([
+                r_flat, g_flat, b_flat,
+                h_hsv.flatten(), s_hsv.flatten(), v_hsv.flatten(),
+                l_lab.flatten(), a_lab.flatten(), b_lab.flatten()
+            ])
+            idx += 9
+            
+            # 10-13: Fast green features (vectorized)
+            green_dominance = np.clip(g_flat - np.maximum(r_flat, b_flat), 0, 255)
+            green_mask = cv2.inRange(hsv, np.array([35, 40, 40]), np.array([85, 255, 255])).flatten()
+            total_intensity = r_flat + g_flat + b_flat + 1e-6
+            green_ratio = (g_flat / total_intensity * 255)
+            enhanced_gray = (0.4 * g_flat + 0.3 * (255 - a_lab.flatten()) + 0.3 * green_mask)
+            
+            features[:, idx:idx+4] = np.column_stack([
+                green_dominance, green_mask, green_ratio, enhanced_gray
+            ])
+            idx += 4
+            
+            # 14-19: Fast Gaussian (use smaller kernels for speed)
+            enhanced_gray_2d = enhanced_gray.reshape(h, w).astype(np.uint8)
+            g_2d = g
+            
+            for sigma in [1.0, 2.0, 4.0]:
+                ksize = max(3, int(2 * sigma) | 1)  # Ensure odd kernel size
+                gauss_enhanced = cv2.GaussianBlur(enhanced_gray_2d, (ksize, ksize), sigma)
+                gauss_green = cv2.GaussianBlur(g_2d, (ksize, ksize), sigma)
+                
+                features[:, idx] = gauss_enhanced.flatten()
+                features[:, idx+1] = gauss_green.flatten()
+                idx += 2
+            
+            # 20-25: Fast edge detection (simplified)
+            enhanced_gray_uint = enhanced_gray_2d
+            
+            # Use fast edge detection
+            edges1 = cv2.Canny(enhanced_gray_uint, 40, 120)
+            edges2 = cv2.Canny(enhanced_gray_uint, 60, 180)
+            edges3 = cv2.Canny(g, 40, 120)
+            edges4 = cv2.Canny(g, 60, 180)
+            
+            # Fast Sobel using OpenCV (much faster than skimage)
+            sobel_enhanced = cv2.Sobel(enhanced_gray_uint, cv2.CV_8U, 1, 1, ksize=3)
+            sobel_green = cv2.Sobel(g, cv2.CV_8U, 1, 1, ksize=3)
+            
+            features[:, idx:idx+6] = np.column_stack([
+                edges1.flatten(), edges2.flatten(), edges3.flatten(),
+                edges4.flatten(), sobel_enhanced.flatten(), sobel_green.flatten()
+            ])
+            idx += 6
+            
+            # 26-31: Fast morphological operations
+            kernel3 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            kernel5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            
+            # Batch morphological operations
+            opened3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_OPEN, kernel3)
+            tophat3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_TOPHAT, kernel3)
+            closed3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_CLOSE, kernel3)
+            opened5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_OPEN, kernel5)
+            tophat5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_TOPHAT, kernel5)
+            closed5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_CLOSE, kernel5)
+            
+            features[:, idx:idx+6] = np.column_stack([
+                opened3.flatten(), tophat3.flatten(), closed3.flatten(),
+                opened5.flatten(), tophat5.flatten(), closed5.flatten()
+            ])
+            idx += 6
+            
+            # 32-39: Fast texture features (approximated for speed)
+            # Use uniform filter instead of generic_filter (much faster)
+            from scipy.ndimage import uniform_filter
+            
+            for channel_2d, size in [(enhanced_gray_uint, 3), (enhanced_gray_uint, 5), (g, 3), (g, 5)]:
+                mean = uniform_filter(channel_2d.astype(np.float32), size=size)
+                sqr_mean = uniform_filter(channel_2d.astype(np.float32)**2, size=size)
+                variance = np.clip(sqr_mean - mean**2, 0, None)
+                std = np.sqrt(variance)
+                
+                features[:, idx] = variance.flatten()
+                features[:, idx+1] = std.flatten()
+                idx += 2
+            
+            # 40-44: Fast enhancement filters
+            laplacian = np.abs(cv2.Laplacian(enhanced_gray_uint, cv2.CV_8U))
+            
+            # Fast min/max using erosion/dilation (faster than ndimage)
+            kernel_small = np.ones((3,3), np.uint8)
+            kernel_large = np.ones((5,5), np.uint8)
+            
+            max_green_3 = cv2.dilate(g, kernel_small)
+            min_green_3 = cv2.erode(g, kernel_small)
+            max_green_5 = cv2.dilate(g, kernel_large)
+            min_green_5 = cv2.erode(g, kernel_large)
+            
+            features[:, idx:idx+5] = np.column_stack([
+                laplacian.flatten(), max_green_3.flatten(), min_green_3.flatten(),
+                max_green_5.flatten(), min_green_5.flatten()
+            ])
+            idx += 5
+            
+            # 45-46: Fast color uniformity
+            color_var = np.var([r_flat, g_flat, b_flat], axis=0)
+            green_sat_consistency = s_hsv.flatten() * (green_mask / 255.0)
+            
+            features[:, idx:idx+2] = np.column_stack([color_var, green_sat_consistency])
+            idx += 2
+            
+            # === NEW: 6 SEPARATION-SPECIFIC FEATURES (47-52) ===
+            
+            # Feature 47: Distance Transform (cell center detection)
+            green_binary = (green_mask.reshape(h, w) > 0).astype(np.uint8)
+            if np.sum(green_binary) > 0:
+                dist_transform = cv2.distanceTransform(green_binary, cv2.DIST_L2, 5)
+                features[:, idx] = dist_transform.flatten()
+            else:
+                features[:, idx] = np.zeros(img_size)
+            idx += 1
+            
+            # Feature 48: Local Maxima Detection (potential cell centers)
+            from scipy import ndimage
+            local_maxima = ndimage.maximum_filter(enhanced_gray_2d, size=9) == enhanced_gray_2d
+            local_maxima = local_maxima & (enhanced_gray_2d > np.mean(enhanced_gray_2d))
+            features[:, idx] = local_maxima.flatten().astype(np.float32) * 255
+            idx += 1
+            
+            # Feature 49: Boundary Strength (cell edge detection)
+            gradient_mag = np.sqrt(
+                cv2.Sobel(enhanced_gray_uint, cv2.CV_64F, 1, 0, ksize=3)**2 + 
+                cv2.Sobel(enhanced_gray_uint, cv2.CV_64F, 0, 1, ksize=3)**2
+            )
+            if np.max(gradient_mag) > 0:
+                boundary_strength = (gradient_mag / np.max(gradient_mag) * 255).astype(np.uint8)
+            else:
+                boundary_strength = np.zeros_like(gradient_mag, dtype=np.uint8)
+            features[:, idx] = boundary_strength.flatten()
+            idx += 1
+            
+            # Feature 50: Cluster Density (local cell density)
+            density_kernel = np.ones((15, 15), np.float32) / (15*15)
+            density_map = cv2.filter2D(green_binary.astype(np.float32), -1, density_kernel)
+            features[:, idx] = (density_map * 255).flatten()
+            idx += 1
+            
+            # Feature 51: Center-to-Edge Ratio (separation strength)
+            if np.sum(green_binary) > 0:
+                center_strength = ndimage.gaussian_filter(dist_transform, sigma=2)
+                edge_strength = ndimage.gaussian_filter(boundary_strength.astype(np.float32), sigma=2)
+                center_edge_ratio = np.divide(center_strength, edge_strength + 1e-6)
+                center_edge_ratio = np.clip(center_edge_ratio, 0, 255)
+            else:
+                center_edge_ratio = np.zeros((h, w))
+            features[:, idx] = center_edge_ratio.flatten()
+            idx += 1
+            
+            # Feature 52: Multi-Scale Cell Probability
+            # Combine multiple scales of evidence
+            if w >= 4 and h >= 4:  # Ensure we can downsample
+                scale1 = cv2.resize(green_binary.astype(np.float32), (max(1, w//2), max(1, h//2)))
+                scale1 = cv2.resize(scale1, (w, h))
+                scale2 = cv2.resize(green_binary.astype(np.float32), (max(1, w//4), max(1, h//4)))
+                scale2 = cv2.resize(scale2, (w, h))
+                
+                multi_scale = (0.5 * green_binary.astype(np.float32) + 0.3 * scale1 + 0.2 * scale2)
+            else:
+                multi_scale = green_binary.astype(np.float32)
+            
+            features[:, idx] = (multi_scale * 255).flatten()
+            
+            print(f"🧠 Extracted 52 features with separation intelligence")
+            return features
+            
+        except Exception as e:
+            print(f"❌ Enhanced feature extraction failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return np.zeros((img.shape[0] * img.shape[1], 52), dtype=np.float32)
+
+    def extract_basic_fallback_features(self, img):
+        """Fallback feature extraction if comprehensive fails"""
+        try:
+            if len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            
+            b, g, r = cv2.split(img)
+            
+            # Create 46 basic features to match expected input size
+            features = []
+            
+            # Add channels multiple times to reach 46 features
+            for _ in range(5):
+                features.extend([b.flatten(), g.flatten(), r.flatten()])
+            
+            # Add more basic features
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            features.extend([gray.flatten()])
+            
+            # Pad to exactly 46 features if needed
+            while len(features) < 46:
+                features.append(gray.flatten())
+            
+            return np.column_stack(features[:46])  # Ensure exactly 46 features
+            
+        except Exception as e:
+            print(f"❌ Even fallback features failed: {e}")
+            # Return zeros with correct shape
+            return np.zeros((img.shape[0] * img.shape[1], 46))
+            
         
-        print(f"🔍 Extracted {len(features)} features for tophat ML detection")
-        return np.stack(features, axis=-1)
+        
+    def color_aware_watershed_segmentation(self, color_img):
+        """
+        Enhanced watershed segmentation that uses color information
+        Specifically optimized for green Wolffia cells
+        """
+        try:
+            # Extract color channels for analysis
+            b, g, r = cv2.split(color_img)
+            hsv = cv2.cvtColor(color_img, cv2.COLOR_BGR2HSV)
+            h, s, v = cv2.split(hsv)
+            
+            # Create green-enhanced mask for better segmentation
+            lower_green = np.array([35, 40, 40])
+            upper_green = np.array([85, 255, 255])
+            green_mask = cv2.inRange(hsv, lower_green, upper_green)
+            
+            # Use the green channel as primary source for Wolffia cells
+            # But enhance it with color information
+            enhanced_channel = g.copy().astype(np.float32)
+            
+            # Boost green regions in the enhanced channel
+            enhanced_channel[green_mask > 0] = enhanced_channel[green_mask > 0] * 1.3
+            enhanced_channel = np.clip(enhanced_channel, 0, 255).astype(np.uint8)
+            
+            # Apply CLAHE for local contrast enhancement
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            enhanced_channel = clahe.apply(enhanced_channel)
+            
+            # Now use the existing watershed segmentation on the enhanced channel
+            return self.watershed_segmentation(enhanced_channel, color_img)
+            
+        except Exception as e:
+            print(f"⚠️ Color-aware watershed failed, using fallback: {e}")
+            # Fallback to grayscale watershed
+            gray = cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY)
+            return self.watershed_segmentation(gray, color_img)
     
     def load_cnn_model(self):
         """
@@ -1360,221 +2513,9 @@ class WolffiaAnalyzer:
             print(traceback.format_exc())
             return np.zeros(color_img.shape[:2], dtype=np.int32)
     
-    def _legacy_cnn_detection(self, gray_img):
-        """
-        Legacy CNN detection for grayscale models
-        """
-        try:
-            print("🔘 Using legacy grayscale CNN detection...")
-            
-            # Simple patch-based processing for grayscale models
-            original_shape = gray_img.shape[:2]
-            patch_size = 64
-            overlap = 16
-            
-            full_prediction = np.zeros(original_shape, dtype=np.float32)
-            count_map = np.zeros(original_shape, dtype=np.float32)
-            
-            for y in range(0, original_shape[0] - patch_size + 1, patch_size - overlap):
-                for x in range(0, original_shape[1] - patch_size + 1, patch_size - overlap):
-                    y_end = min(y + patch_size, original_shape[0])
-                    x_end = min(x + patch_size, original_shape[1])
-                    patch = gray_img[y:y_end, x:x_end]
-                    
-                    if patch.shape != (patch_size, patch_size):
-                        patch = cv2.resize(patch, (patch_size, patch_size))
-                    
-                    # Convert to tensor
-                    patch_tensor = torch.from_numpy(patch).unsqueeze(0).unsqueeze(0).float()
-                    patch_tensor = patch_tensor.to(next(self._cnn_model.parameters()).device)
-                    
-                    # Model inference
-                    with torch.no_grad():
-                        output = self._cnn_model(patch_tensor)
-                        if isinstance(output, (tuple, list)):
-                            seg_output = output[0]
-                        else:
-                            seg_output = output
-                        
-                        patch_pred = torch.sigmoid(seg_output).squeeze().cpu().numpy()
-                    
-                    if patch_pred.shape != (y_end - y, x_end - x):
-                        patch_pred = cv2.resize(patch_pred, (x_end - x, y_end - y))
-                    
-                    full_prediction[y:y_end, x:x_end] += patch_pred
-                    count_map[y:y_end, x:x_end] += 1
-            
-            count_map[count_map == 0] = 1
-            prediction_map = full_prediction / count_map
-            
-            # Apply threshold and post-processing
-            binary_mask = (prediction_map > 0.5).astype(np.uint8)
-            
-            if np.any(binary_mask):
-                num_labels, labels = cv2.connectedComponents(binary_mask)
-                filtered_labels = self.filter_by_size(labels)
-                print(f"✅ Legacy CNN: detected {np.max(filtered_labels)} cells")
-                return filtered_labels.astype(np.int32)
-            else:
-                return np.zeros(original_shape, dtype=np.int32)
-                
-        except Exception as e:
-            print(f"⚠️ Legacy CNN detection failed: {e}")
-            return np.zeros_like(gray_img, dtype=np.int32)
 
 
-    def debug_cnn_detection(self, bgr_img, save_debug_images=True):
-        """
-        Debug CNN detection using enhanced 3-channel input
-        Tracks intermediate CNN responses and confidence across patches
-        """
-        try:
-            if not self.wolffia_cnn_available or self._cnn_model is None:
-                print("⚠️ CNN model not available for debugging")
-                return None
 
-            print("🔬 Running RGB-enhanced CNN debug analysis...")
-
-            # Step 1: Generate enhanced 3-channel input
-            from wolffia_cnn_model import GreenEnhancedPreprocessor
-            preprocessor = GreenEnhancedPreprocessor()
-            rgb_img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
-            enhanced_img = preprocessor.create_green_enhanced_channels(rgb_img)  # Shape: HxWx3
-            original_shape = enhanced_img.shape[:2]
-
-            patch_size = 128
-            overlap = 32
-
-            full_prediction = np.zeros(original_shape, dtype=np.float32)
-            count_map = np.zeros(original_shape, dtype=np.float32)
-
-            debug_info = {
-                'patch_predictions': [],
-                'patch_locations': [],
-                'confidence_map': np.zeros(original_shape, dtype=np.float32)
-            }
-
-            patches_processed = 0
-            for y in range(0, original_shape[0] - patch_size + 1, patch_size - overlap):
-                for x in range(0, original_shape[1] - patch_size + 1, patch_size - overlap):
-                    y_end = min(y + patch_size, original_shape[0])
-                    x_end = min(x + patch_size, original_shape[1])
-                    patch = enhanced_img[y:y_end, x:x_end, :]
-
-                    if patch.shape[:2] != (patch_size, patch_size):
-                        patch = cv2.resize(patch, (patch_size, patch_size))
-
-                    patch_normalized = patch.astype(np.float32)
-                    patch_tensor = torch.from_numpy(patch_normalized).permute(2, 0, 1).unsqueeze(0)
-
-                    model_device = next(self._cnn_model.parameters()).device
-                    patch_tensor = patch_tensor.to(model_device).float()
-
-                    with torch.no_grad():
-                        patch_output = self._cnn_model(patch_tensor)
-                        if isinstance(patch_output, tuple):
-                            patch_pred = patch_output[0].squeeze().cpu().numpy()
-                        else:
-                            patch_pred = patch_output.squeeze().cpu().numpy()
-
-                    if patch_pred.shape != (y_end - y, x_end - x):
-                        patch_pred = cv2.resize(patch_pred, (x_end - x, y_end - y))
-
-                    debug_info['patch_predictions'].append({
-                        'location': (y, x, y_end, x_end),
-                        'mean_confidence': float(np.mean(patch_pred)),
-                        'max_confidence': float(np.max(patch_pred)),
-                        'min_confidence': float(np.min(patch_pred))
-                    })
-
-                    full_prediction[y:y_end, x:x_end] += patch_pred
-                    count_map[y:y_end, x:x_end] += 1
-                    patches_processed += 1
-
-            count_map[count_map == 0] = 1
-            averaged_prediction = full_prediction / count_map
-            prediction_sigmoid = 1 / (1 + np.exp(-averaged_prediction))
-
-            # Convert for debug visualizations
-            raw_prediction = (prediction_sigmoid * 255).astype(np.uint8)
-            confidence_colored = cv2.applyColorMap(raw_prediction, cv2.COLORMAP_JET)
-
-            otsu_val, _ = cv2.threshold(raw_prediction, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            otsu_thresh = float(otsu_val)
-            high_mask = (prediction_sigmoid > (otsu_thresh / 255.0)).astype(np.uint8) * 255
-            low_mask = (prediction_sigmoid > (otsu_thresh / 255.0 * 0.6)).astype(np.uint8) * 255
-
-            final_labels = self.cnn_detection(bgr_img)  # rerun CNN detection on original RGB
-
-            # Compile debug images
-            debug_images = {
-                'raw_prediction': raw_prediction,
-                'confidence_colored': confidence_colored,
-                'high_confidence': high_mask,
-                'low_confidence': low_mask,
-                'final_detection': self.create_debug_overlay(bgr_img, final_labels)
-            }
-
-            # Save debug visualizations
-            if save_debug_images:
-                debug_dir = self.dirs['results'] / 'cnn_debug'
-                debug_dir.mkdir(exist_ok=True)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                for name, img in debug_images.items():
-                    if img is not None:
-                        path = debug_dir / f"debug_{timestamp}_{name}.png"
-                        cv2.imwrite(str(path), img)
-                        print(f"💾 Saved debug image: {path}")
-
-            print("🔍 CNN Debug Summary:")
-            print(f"📊 Patches processed: {patches_processed}")
-            print(f"📊 Confidence range: {np.min(prediction_sigmoid):.3f} - {np.max(prediction_sigmoid):.3f}")
-            print(f"📊 Mean confidence: {np.mean(prediction_sigmoid):.3f}")
-            print(f"📊 Otsu threshold: {otsu_thresh / 255.0:.3f}")
-            print(f"📊 High conf pixels: {np.sum(high_mask > 0)}")
-            print(f"📊 Final cells detected: {np.max(final_labels)}")
-
-            return {
-                'debug_images': debug_images,
-                'debug_info': debug_info,
-                'statistics': {
-                    'patches_processed': patches_processed,
-                    'confidence_range': (float(np.min(prediction_sigmoid)), float(np.max(prediction_sigmoid))),
-                    'mean_confidence': float(np.mean(prediction_sigmoid)),
-                    'otsu_threshold': otsu_thresh / 255.0,
-                    'cells_detected': int(np.max(final_labels))
-                }
-            }
-
-        except Exception as e:
-            print(f"❌ CNN debug analysis failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-
-    def create_debug_overlay(self, gray_img, labels):
-        """Create a colored overlay showing detected cells"""
-        try:
-            # Create colored visualization
-            overlay = cv2.cvtColor(gray_img, cv2.COLOR_GRAY2BGR)
-            
-            # Color each detected cell differently
-            num_cells = np.max(labels)
-            if num_cells > 0:
-                colors = plt.cm.Set3(np.linspace(0, 1, min(num_cells, 12)))
-                
-                for i in range(1, num_cells + 1):
-                    mask = labels == i
-                    if np.any(mask):
-                        color = colors[(i-1) % 12][:3]  # RGB
-                        color_bgr = (int(color[2]*255), int(color[1]*255), int(color[0]*255))  # Convert to BGR
-                        overlay[mask] = color_bgr
-            
-            return overlay
-            
-        except Exception as e:
-            print(f"⚠️ Failed to create debug overlay: {e}")
-            return cv2.cvtColor(gray_img, cv2.COLOR_GRAY2BGR)
     
     def celldetection_detection(self, input_img):
         """
@@ -1657,7 +2598,6 @@ class WolffiaAnalyzer:
     def _convert_celldetection_to_labels(self, contours, scores, image_shape):
         """
         Convert CellDetection contours to labeled image
-        Based on backup implementation from bioimaging_backup.py
         """
         try:
             labeled_img = np.zeros(image_shape, dtype=np.int32)
@@ -1849,9 +2789,15 @@ class WolffiaAnalyzer:
             'labeled_image_path': '',
             'error': error_msg,
             'method_used': [],
-            'processing_time': 0
+            'processing_time': 0,
+            'quantitative_analysis': {
+                'biomass_analysis': {'total_biomass_mg': 0},
+                'color_analysis': {'green_percentage': 0},
+                'morphometric_analysis': {'error': error_msg},
+                'spatial_analysis': {'error': error_msg},
+                'health_assessment': {'overall_health': 'unknown', 'health_score': 0}
+            }
         }
-    
     # Enhanced Training methods for tophat ML
     def start_tophat_training(self, file_infos):
         """

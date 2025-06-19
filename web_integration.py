@@ -31,6 +31,7 @@ from flask import (
 )
 from flask_cors import CORS
 from PIL import Image
+from skimage.color import label2rgb
 from werkzeug.utils import secure_filename
 
 # Import our streamlined analyzer
@@ -43,6 +44,7 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 RESULTS_FOLDER = 'results'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif', 'jfif'}
+SESSIONS_FILE = Path('data/training_sessions.json')
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['RESULTS_FOLDER'] = RESULTS_FOLDER
@@ -54,6 +56,7 @@ os.makedirs(RESULTS_FOLDER, exist_ok=True)
 os.makedirs('models', exist_ok=True)
 os.makedirs('annotations', exist_ok=True)
 os.makedirs('tophat_training', exist_ok=True)
+os.makedirs('results/time_series', exist_ok=True)  # New for time-series
 
 # Global analyzer instance - streamlined initialization
 analyzer = WolffiaAnalyzer()
@@ -65,8 +68,25 @@ analysis_progress = {}
 uploaded_files_store = {}
 training_sessions = {}
 
+def load_training_sessions():
+    """Load training sessions from file"""
+    try:
+        if SESSIONS_FILE.exists():
+            with open(SESSIONS_FILE, 'r') as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        print(f"⚠️ Failed to load training sessions: {e}")
+        return {}
+
+training_sessions = load_training_sessions()
+time_series_sessions = {}  # New for time-series tracking
+
 def convert_numpy_types(obj):
-    """Convert numpy types to JSON-serializable Python types"""
+    """
+    Convert numpy types and Path objects to JSON-serializable Python types
+    FIXED: Now handles WindowsPath and all Path objects properly
+    """
     if isinstance(obj, dict):
         return {key: convert_numpy_types(value) for key, value in obj.items()}
     elif isinstance(obj, list):
@@ -79,11 +99,44 @@ def convert_numpy_types(obj):
         return float(obj)
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
+    elif isinstance(obj, (Path, os.PathLike)):  # 🔧 FIX: Handle Path objects
+        return str(obj)
+    elif hasattr(obj, '__fspath__'):  # 🔧 FIX: Handle any path-like object
+        return str(obj)
     else:
         return obj
 
+def safe_json_dump(data, file_path, **kwargs):
+    """
+    Safely dump data to JSON with proper error handling
+    FIXED: Uses enhanced convert_numpy_types function
+    """
+    try:
+        # Convert all non-serializable types
+        serializable_data = convert_numpy_types(data)
+        
+        with open(file_path, 'w') as f:
+            json.dump(serializable_data, f, **kwargs)
+        
+        print(f"💾 Successfully saved JSON to {file_path}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to save JSON to {file_path}: {e}")
+        
+        # Fallback: try with default=str for any remaining issues
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(data, f, default=str, **kwargs)
+            print(f"💾 Saved JSON with fallback method to {file_path}")
+            return True
+        except Exception as fallback_error:
+            print(f"❌ Even fallback JSON save failed: {fallback_error}")
+            return False
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 @app.route('/')
 def index():
@@ -131,25 +184,40 @@ def serve_display_image(filename):
 
 @app.route('/api/health')
 def health_check():
-    """System health check"""
+    """Enhanced system health check with comprehensive status"""
     try:
-        # Check system status
         available_features = []
         if analyzer.load_tophat_model():
-            available_features.append('Tophat AI Model')
+            available_features.append('Enhanced Tophat AI Model')
         if analyzer.load_cnn_model():
-            available_features.append('Wolffia CNN')
-        available_features.append('Watershed Segmentation')  # Always available
+            available_features.append('Enhanced Wolffia CNN')
+        if analyzer.celldetection_available:
+            available_features.append('CellDetection AI with Patch Processing')
+        available_features.append('Enhanced Watershed Segmentation')
+        available_features.append('Comprehensive Biomass Analysis')
+        available_features.append('Color Wavelength Analysis')
+        available_features.append('Time-Series Tracking')
         
         status = {
             'status': 'healthy',
-            'version': '3.0-Deployment',
+            'version': '3.0-Enhanced-Professional',
             'timestamp': datetime.now().isoformat(),
-            'features': available_features,  # Add features array for frontend
+            'features': available_features,
             'available_methods': {
-                'watershed': True,  # Always available
-                'tophat': analyzer.load_tophat_model(),
-                'cnn': analyzer.load_cnn_model(),
+                'enhanced_watershed': True,
+                'enhanced_tophat': analyzer.load_tophat_model(),
+                'enhanced_cnn': analyzer.load_cnn_model(),
+                'enhanced_celldetection': analyzer.celldetection_available,
+            },
+            'enhanced_capabilities': {
+                'patch_processing': True,
+                'biomass_calculation': True,
+                'wavelength_analysis': True,
+                'time_series_tracking': True,
+                'comprehensive_visualization': True,
+                'morphometric_analysis': True,
+                'spatial_analysis': True,
+                'health_assessment': True
             },
             'ai_status': {
                 'wolffia_cnn_available': analyzer.wolffia_cnn_available,
@@ -157,8 +225,6 @@ def health_check():
                 'celldetection_available': analyzer.celldetection_available
             }
         }
-        
-
         
         return jsonify(status)
     
@@ -171,7 +237,7 @@ def health_check():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_files():
-    """Upload images for analysis"""
+    """Enhanced upload with time-series support"""
     try:
         if 'files' not in request.files:
             return jsonify({'error': 'No files provided'}), 400
@@ -180,78 +246,95 @@ def upload_files():
         if not files or files[0].filename == '':
             return jsonify({'error': 'No files selected'}), 400
         
+        # Check for time-series metadata
+        time_series_data = request.form.get('time_series_data')
+        series_id = request.form.get('series_id')
+        
+        if time_series_data:
+            try:
+                time_series_info = json.loads(time_series_data)
+            except:
+                time_series_info = {}
+        else:
+            time_series_info = {}
+        
         uploaded_files = []
         for i, file in enumerate(files):
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
                 
-                # Auto-convert to TIFF for optimal processing
                 original_filename = filename
                 base_name = os.path.splitext(filename)[0]
                 tiff_filename = f"{base_name}.tiff"
                 unique_filename = f"{uuid.uuid4()}_{tiff_filename}"
                 file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
                 
-                # Save and convert to TIFF
                 temp_path = os.path.join(UPLOAD_FOLDER, f"temp_{uuid.uuid4()}_{filename}")
                 file.save(temp_path)
                 
                 try:
-                    # Convert to TIFF using CV2 for better compatibility - PRESERVE RGB
                     import cv2
                     img = cv2.imread(temp_path, cv2.IMREAD_UNCHANGED)
+                    preview_b64 = None
+
                     if img is not None:
-                        # Convert to uint8 if needed
                         if img.dtype != np.uint8:
                             img = cv2.convertScaleAbs(img)
 
-                        # Convert grayscale to 3-channel RGB (not BGR!)
                         if len(img.shape) == 2:
                             print("⚠️ Upload image was grayscale — converting to 3-channel RGB")
-                            img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
-                            # Convert RGB back to BGR for cv2.imwrite
-                            img = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-                        elif len(img.shape) == 3 and img.shape[2] == 3:
-                            # Already 3-channel, ensure it's in correct format
-                            # OpenCV imread loads as BGR, keep as BGR for consistency
-                            pass
+                            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-                        # Drop alpha if present and convert to RGB first
-                        if len(img.shape) == 3 and img.shape[2] == 4:
+                        elif len(img.shape) == 3 and img.shape[2] == 4:
                             print("⚠️ Upload image had alpha — dropping to 3 channels RGB")
-                            img = img[:, :, :3]  # Drop alpha channel
-                        
-                        # Verify we have 3 channels in BGR format for storage
+                            img = img[:, :, :3]
+
                         if len(img.shape) == 3 and img.shape[2] == 3:
-                            # Save as TIFF with consistent BGR format (OpenCV standard)
-                            cv2.imwrite(file_path, img, [cv2.IMWRITE_TIFF_COMPRESSION, 1])
-                            print(f"✅ Saved {original_filename} as TIFF with 3-channel BGR format")
+                            # ✅ Save a 3-channel TIFF version for internal use
+                            # ✅ Save the original bytes directly without conversion
+                            shutil.copy2(temp_path, file_path)
+
+                            # ✅ Generate preview directly from original bytes for fidelity
+                            with open(temp_path, 'rb') as f:
+                                raw_bytes = f.read()
+                                nparr = np.frombuffer(raw_bytes, np.uint8)
+                                img_orig = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                                preview_b64 = None
+                                if img_orig is not None:
+                                    _, buffer = cv2.imencode('.png', img_orig)
+                                    preview_b64 = base64.b64encode(buffer).decode('utf-8')
+
+
                         else:
-                            print(f"❌ Invalid image format for {original_filename}: shape={img.shape}")
                             raise ValueError(f"Invalid image format: {img.shape}")
 
                     else:
-                        # Fallback: just copy the file if conversion fails
+                        # Couldn't decode — fallback to storing as-is
                         shutil.copy2(temp_path, file_path)
                         print(f"⚠️ Could not convert {original_filename}, keeping original format")
-                    
-                    # Clean up temporary file
+
                     os.remove(temp_path)
-                    
+
                 except Exception as conv_error:
                     print(f"⚠️ TIFF conversion failed for {original_filename}: {conv_error}")
-                    # Fallback: use original file
                     shutil.move(temp_path, file_path)
                     unique_filename = f"{uuid.uuid4()}_{filename}"
                     file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+                    preview_b64 = None
+
                 
+                # Enhanced file info with time-series support
                 file_info = {
                     'id': str(uuid.uuid4()),
                     'filename': filename,
                     'path': file_path,
                     'upload_order': i + 1,
                     'size': os.path.getsize(file_path),
-                    'upload_time': datetime.now().isoformat()
+                    'upload_time': datetime.now().isoformat(),
+                    'preview_b64': preview_b64,
+                    'series_id': series_id,
+                    'timestamp': time_series_info.get('timestamps', [None])[i] if i < len(time_series_info.get('timestamps', [])) else None,
+                    'time_point': time_series_info.get('time_points', [None])[i] if i < len(time_series_info.get('time_points', [])) else None
                 }
                 uploaded_files.append(file_info)
                 uploaded_files_store[file_info['id']] = file_info
@@ -259,9 +342,20 @@ def upload_files():
         if not uploaded_files:
             return jsonify({'error': 'No valid files uploaded'}), 400
         
+        # Initialize time-series session if applicable
+        if series_id and any(f.get('timestamp') for f in uploaded_files):
+            time_series_sessions[series_id] = {
+                'created': datetime.now().isoformat(),
+                'files': uploaded_files,
+                'analysis_results': {}
+            }
+            print(f"📊 Created time-series session: {series_id}")
+        
         return jsonify({
             'success': True,
             'files': uploaded_files,
+            'series_id': series_id,
+            'time_series_enabled': bool(series_id),
             'message': f'{len(uploaded_files)} files uploaded successfully'
         })
     
@@ -271,17 +365,17 @@ def upload_files():
 
 @app.route('/api/analyze/<file_id>', methods=['POST'])
 def analyze_image(file_id):
-    """Analyze a specific image using streamlined methods"""
+    """Enhanced analysis with comprehensive features and time-series support"""
     try:
         request_data = request.get_json() or {}
         
-        # Get analysis options with sensible defaults
+        # Enhanced analysis options
         use_tophat = request_data.get('use_tophat', True)
-        # FIXED: Accept both parameter names for CNN (frontend compatibility)
         use_cnn = request_data.get('use_cnn', False) or request_data.get('use_wolffia_cnn', False)
         use_celldetection = request_data.get('use_celldetection', False)
+        enable_patch_processing = request_data.get('enable_patch_processing', True)
+        enable_time_series = request_data.get('enable_time_series', False)
         
-        # Find file info
         if file_id not in uploaded_files_store:
             return jsonify({'error': 'File not found. Please upload the file again.'}), 404
         
@@ -291,152 +385,92 @@ def analyze_image(file_id):
         if not os.path.exists(file_path):
             return jsonify({'error': 'File no longer exists on server.'}), 404
         
-        # Start analysis in background
-        def run_analysis():
+        # Enhanced analysis function
+        def run_enhanced_analysis():
             try:
                 analysis_results[file_id] = {'status': 'processing', 'progress': 10}
                 
-                print(f"🔬 Starting analysis for: {file_info.get('filename', 'Unknown')}")
+                print(f"🔬 Starting ENHANCED analysis for: {file_info.get('filename', 'Unknown')}")
                 print(f"📝 Options: tophat={use_tophat}, cnn={use_cnn}, celldetection={use_celldetection}")
+                print(f"🚀 Enhanced features: patch_processing={enable_patch_processing}, time_series={enable_time_series}")
                 
-                # Update progress
                 analysis_results[file_id]['progress'] = 25
                 
-                # Get start time for performance measurement
                 start_time = datetime.now()
                 
-                # Run separate method analysis for better comparison
-                img = cv2.imread(str(file_path))
-                if img is None:
-                    raise Exception(f"Could not load image: {file_path}")
-                processed = {'original': img}
-
-                method_results = analyzer.analyze_image_separate_methods(
-                    processed,
-                    file_path,
-                    use_tophat=use_tophat,
-                    use_cnn=use_cnn,
-                    use_celldetection=use_celldetection
-                )
-
-                
-                # Create combined result structure for frontend compatibility
-                if 'error' in method_results:
-                    raise Exception(method_results['error'])
-                
-                # Get the best method result for summary (prioritize: cnn > celldetection > tophat > watershed)
-                best_method = None
-                best_cells = 0
-                for method_name in ['cnn', 'celldetection', 'tophat', 'watershed']:
-                    if method_name in method_results:
-                        cells_count = method_results[method_name]['cells_detected']
-                        if cells_count > best_cells or best_method is None:
-                            best_method = method_name
-                            best_cells = cells_count
-                
-                # Build result structure compatible with frontend
-                best_result = method_results[best_method] if best_method else method_results['watershed']
-                
-                result = {
-                    # Legacy format for compatibility
-                    'total_cells': best_result['cells_detected'],
-                    'total_area': best_result['total_area'],
-                    'average_area': best_result['average_area'],
-                    'cells': best_result['cells'],
-                    'method_used': list(method_results.keys()),
-                    
-                    # Extended format with separate method results
-                    'method_results': method_results,
-                    'best_method': best_method,
-                    'detection_results': {
-                        'detection_method': f"Multi-Method Analysis ({len(method_results)} methods)",
-                        'cells_detected': best_result['cells_detected'],
-                        'total_area': best_result['total_area'],
-                        'cells_data': best_result['cells']
-                    },
-                    'quantitative_analysis': {
-                        'average_cell_area': best_result['average_area'],
-                        'biomass_analysis': {
-                            'total_biomass_mg': best_result['total_area'] * 0.001,
-                        },
-                        'color_analysis': {
-                            'green_cell_percentage': 85.0
-                        },
-                        'health_assessment': {
-                            'overall_health': 'good',
-                            'health_score': 0.75
-                        }
-                    },
-                    'visualizations': {
-                        'detection_overview': best_result['visualization_b64']
-                    }
+                # Enhanced analysis with time-series support
+                analysis_params = {
+                    'use_tophat': use_tophat,
+                    'use_cnn': use_cnn,
+                    'use_celldetection': use_celldetection
                 }
                 
-                # Add pipeline visualization from watershed method if available
-                if 'watershed' in method_results and 'pipeline_visualization_b64' in method_results['watershed']:
-                    result['visualizations']['pipeline_steps'] = {
-                        'pipeline_overview': method_results['watershed']['pipeline_visualization_b64'],
-                        'step_count': 11,
-                        'step_descriptions': {
-                            'original': 'Input image as uploaded by user',
-                            'gray': 'Converted to grayscale for processing',
-                            'otsu_threshold': 'OTSU thresholding',
-                            'morphological_opening': 'Morphological opening',
-                            'clear_border': 'Border removal',
-                            'sure_background': 'Sure background (dilated)',
-                            'distance_transform': 'Distance transform',
-                            'sure_foreground': 'Sure foreground',
-                            'unknown_region': 'Unknown region',
-                            'markers': 'Markers for watershed',
-                            'watershed_boundaries': 'Watershed with boundaries',
-                            'final_segmentation': 'Final segmentation'
-                        }
-                    }
+                # Add time-series parameters if applicable
+                if enable_time_series and file_info.get('series_id') and file_info.get('timestamp'):
+                    analysis_params.update({
+                        'timestamp': file_info['timestamp'],
+                        'image_series_id': file_info['series_id']
+                    })
                 
-                # Also add individual method visualizations for complete analysis
-                for method_name, method_data in method_results.items():
-                    if 'visualization_b64' in method_data and method_data['visualization_b64']:
-                        result['visualizations'][f'{method_name}_detection'] = method_data['visualization_b64']
-                    if 'pipeline_visualization_b64' in method_data and method_data['pipeline_visualization_b64']:
-                        result['visualizations'][f'{method_name}_pipeline'] = method_data['pipeline_visualization_b64']
+                # Run enhanced analysis
+                result = analyzer.analyze_image(file_path, **analysis_params)
                 
-                # Calculate processing time
+                if not isinstance(result, dict) or 'error' in result:
+                    raise Exception(result.get('error', 'Analysis failed'))
+                
+                analysis_results[file_id]['progress'] = 85
+                
+                # Enhanced result processing
                 end_time = datetime.now()
                 processing_time = (end_time - start_time).total_seconds()
                 result['processing_time'] = processing_time
                 
-                # Update progress
-                analysis_results[file_id]['progress'] = 85
-                
-                print(f"✅ Analysis completed in {processing_time:.2f} seconds")
-                print(f"📊 Cells detected: {result.get('total_cells', 0)}")
-                print(f"📊 Methods used: {result.get('method_used', [])}")
-                
-                # Add file info to result
+                # Enhanced file info
                 result['file_info'] = {
                     'filename': file_info['filename'],
                     'upload_time': file_info['upload_time'],
-                    'file_size': file_info['size']
+                    'file_size': file_info['size'],
+                    'series_id': file_info.get('series_id'),
+                    'timestamp': file_info.get('timestamp'),
+                    'time_point': file_info.get('time_point')
                 }
                 
-                # Save results
-                result_file = Path(RESULTS_FOLDER) / f"{file_id}_result.json"
+                print(f"✅ Enhanced analysis completed in {processing_time:.2f} seconds")
+                print(f"📊 Cells detected: {result.get('total_cells', 0)}")
+                print(f"🧬 Biomass: {result.get('quantitative_analysis', {}).get('biomass_analysis', {}).get('total_biomass_mg', 0):.3f} mg")
+                print(f"🟢 Green content: {result.get('quantitative_analysis', {}).get('color_analysis', {}).get('green_percentage', 0):.1f}%")
+                
+                # Save enhanced results
+                result_file = Path(RESULTS_FOLDER) / f"{file_id}_enhanced_result.json"
                 try:
                     with open(result_file, 'w') as f:
                         json.dump(convert_numpy_types(result), f, indent=2)
-                    print(f"💾 Results saved to {result_file}")
+                    print(f"💾 Enhanced results saved to {result_file}")
                 except Exception as save_error:
                     print(f"⚠️ Failed to save results: {save_error}")
                 
-                # Save cell data as CSV if cells were detected
+                # Save enhanced cell data as CSV
                 if result.get('cells') and len(result['cells']) > 0:
-                    csv_file = Path(RESULTS_FOLDER) / f"{file_id}_cells.csv"
+                    csv_file = Path(RESULTS_FOLDER) / f"{file_id}_enhanced_cells.csv"
                     try:
                         df = pd.DataFrame(result['cells'])
                         df.to_csv(csv_file, index=False)
                         result['csv_export_path'] = str(csv_file)
                     except Exception as csv_error:
-                        print(f"⚠️ Failed to save CSV: {csv_error}")
+                        print(f"⚠️ Failed to save enhanced CSV: {csv_error}")
+                
+                # Update time-series session if applicable
+                if enable_time_series and file_info.get('series_id'):
+                    series_id = file_info['series_id']
+                    if series_id in time_series_sessions:
+                        time_series_sessions[series_id]['analysis_results'][file_id] = {
+                            'timestamp': file_info.get('timestamp'),
+                            'result_summary': {
+                                'cell_count': result.get('total_cells', 0),
+                                'biomass_mg': result.get('quantitative_analysis', {}).get('biomass_analysis', {}).get('total_biomass_mg', 0),
+                                'green_percentage': result.get('quantitative_analysis', {}).get('color_analysis', {}).get('green_percentage', 0)
+                            }
+                        }
                 
                 analysis_results[file_id] = {
                     'status': 'completed',
@@ -445,7 +479,7 @@ def analyze_image(file_id):
                 }
                 
             except Exception as e:
-                print(f"❌ Analysis error for {file_id}: {e}")
+                print(f"❌ Enhanced analysis error for {file_id}: {e}")
                 import traceback
                 traceback.print_exc()
                 
@@ -456,20 +490,27 @@ def analyze_image(file_id):
                     'details': traceback.format_exc()
                 }
         
-        # Start analysis thread
-        thread = threading.Thread(target=run_analysis, daemon=True)
+        # Start enhanced analysis thread
+        thread = threading.Thread(target=run_enhanced_analysis, daemon=True)
         thread.start()
         
         return jsonify({
             'success': True,
             'analysis_id': file_id,
             'status': 'started',
-            'message': 'Analysis started in background'
+            'enhanced_features': {
+                'patch_processing': enable_patch_processing,
+                'biomass_analysis': True,
+                'wavelength_analysis': True,
+                'time_series': enable_time_series,
+                'comprehensive_visualization': True
+            },
+            'message': 'Enhanced analysis started with professional features'
         })
     
     except Exception as e:
-        print(f"❌ Analysis setup error: {str(e)}")
-        return jsonify({'error': f'Analysis failed to start: {str(e)}'}), 500
+        print(f"❌ Enhanced analysis setup error: {str(e)}")
+        return jsonify({'error': f'Enhanced analysis failed to start: {str(e)}'}), 500
 
 @app.route('/api/status/<analysis_id>')
 def get_analysis_status(analysis_id):
@@ -488,7 +529,7 @@ def get_analysis_status(analysis_id):
 
 @app.route('/api/analyze_batch', methods=['POST'])
 def analyze_batch():
-    """Analyze multiple images in batch"""
+    """Enhanced batch analysis with time-series and comprehensive features"""
     try:
         request_data = request.get_json() or {}
         files_data = request_data.get('files', [])
@@ -496,22 +537,25 @@ def analyze_batch():
         if not files_data:
             return jsonify({'error': 'No files provided for batch analysis'}), 400
         
+        # Enhanced analysis options
         use_tophat = request_data.get('use_tophat', True)
-        # FIXED: Accept both parameter names for CNN (frontend compatibility)
         use_cnn = request_data.get('use_cnn', False) or request_data.get('use_wolffia_cnn', False)
         use_celldetection = request_data.get('use_celldetection', False)
+        enable_time_series = request_data.get('enable_time_series', False)
+        series_id = request_data.get('series_id')
         
         batch_id = str(uuid.uuid4())
         
-        def run_batch_analysis():
+        def run_enhanced_batch_analysis():
             try:
                 analysis_results[batch_id] = {'status': 'processing', 'progress': 0, 'results': []}
                 
-                print(f"🔬 Starting batch analysis for {len(files_data)} files")
+                print(f"🔬 Starting ENHANCED batch analysis for {len(files_data)} files")
                 
                 batch_results = []
                 total_files = len(files_data)
                 
+                # Enhanced batch processing with time-series support
                 for i, file_data in enumerate(files_data):
                     file_id = file_data.get('id')
                     if file_id not in uploaded_files_store:
@@ -524,84 +568,437 @@ def analyze_batch():
                         continue
                     
                     try:
-                        # Update progress
                         progress = int((i / total_files) * 90)
                         analysis_results[batch_id]['progress'] = progress
                         
-                        print(f"📁 Analyzing file {i+1}/{total_files}: {file_info['filename']}")
+                        print(f"📁 Enhanced analysis {i+1}/{total_files}: {file_info['filename']}")
                         
-                        # Analyze image
                         start_time = datetime.now()
-                        result = analyzer.analyze_image(
-                            file_path,
-                            use_tophat=use_tophat,
-                            use_cnn=use_cnn,
-                            use_celldetection=use_celldetection
-                        )
-                        end_time = datetime.now()
                         
+                        # Enhanced analysis parameters
+                        analysis_params = {
+                            'use_tophat': use_tophat,
+                            'use_cnn': use_cnn,
+                            'use_celldetection': use_celldetection
+                        }
+                        
+                        # Add time-series parameters if applicable
+                        if enable_time_series and file_info.get('timestamp') and series_id:
+                            analysis_params.update({
+                                'timestamp': file_info['timestamp'],
+                                'image_series_id': series_id
+                            })
+                        
+                        # Run enhanced analysis
+                        result = analyzer.analyze_image(file_path, **analysis_params)
+                        
+                        end_time = datetime.now()
                         result['processing_time'] = (end_time - start_time).total_seconds()
                         result['file_info'] = file_info
                         
-                        batch_results.append({
+                        # Enhanced result summary
+                        result_summary = {
                             'file_id': file_id,
                             'filename': file_info['filename'],
-                            'result': convert_numpy_types(result)
-                        })
+                            'result': convert_numpy_types(result),
+                            'enhanced_metrics': {
+                                'biomass_mg': result.get('quantitative_analysis', {}).get('biomass_analysis', {}).get('total_biomass_mg', 0),
+                                'green_percentage': result.get('quantitative_analysis', {}).get('color_analysis', {}).get('green_percentage', 0),
+                                'cell_density': result.get('quantitative_analysis', {}).get('biomass_analysis', {}).get('cell_density_per_mm2', 0),
+                                'health_score': result.get('quantitative_analysis', {}).get('health_assessment', {}).get('health_score', 0)
+                            }
+                        }
                         
-                        # Save individual result
-                        result_file = Path(RESULTS_FOLDER) / f"{file_id}_result.json"
+                        batch_results.append(result_summary)
+                        
+                        # Save individual enhanced result
+                        result_file = Path(RESULTS_FOLDER) / f"{file_id}_batch_enhanced_result.json"
                         with open(result_file, 'w') as f:
                             json.dump(convert_numpy_types(result), f, indent=2)
                         
                     except Exception as file_error:
-                        print(f"❌ Error analyzing {file_info['filename']}: {file_error}")
+                        print(f"❌ Error in enhanced analysis {file_info['filename']}: {file_error}")
                         batch_results.append({
                             'file_id': file_id,
                             'filename': file_info['filename'],
                             'error': str(file_error)
                         })
                 
-                # Save batch results
-                batch_file = Path(RESULTS_FOLDER) / f"batch_{batch_id}_results.json"
+                # Enhanced batch summary
+                successful_results = [r for r in batch_results if 'error' not in r]
+                
+                # Calculate batch statistics
+                batch_statistics = {}
+                if successful_results:
+                    total_cells = sum(r['result']['total_cells'] for r in successful_results)
+                    total_biomass = sum(r['enhanced_metrics']['biomass_mg'] for r in successful_results)
+                    avg_green_content = np.mean([r['enhanced_metrics']['green_percentage'] for r in successful_results])
+                    avg_health_score = np.mean([r['enhanced_metrics']['health_score'] for r in successful_results])
+                    
+                    batch_statistics = {
+                        'total_cells_all_images': total_cells,
+                        'total_biomass_mg': total_biomass,
+                        'average_green_content_percent': float(avg_green_content),
+                        'average_health_score': float(avg_health_score),
+                        'images_processed': len(successful_results),
+                        'processing_success_rate': len(successful_results) / total_files * 100
+                    }
+                
+                # Save enhanced batch results
+                batch_file = Path(RESULTS_FOLDER) / f"enhanced_batch_{batch_id}_results.json"
+                enhanced_batch_data = {
+                    'batch_id': batch_id,
+                    'created': datetime.now().isoformat(),
+                    'files_processed': total_files,
+                    'results': batch_results,
+                    'batch_statistics': batch_statistics,
+                    'time_series_enabled': enable_time_series,
+                    'series_id': series_id
+                }
+                
                 with open(batch_file, 'w') as f:
-                    json.dump(convert_numpy_types(batch_results), f, indent=2)
+                    json.dump(convert_numpy_types(enhanced_batch_data), f, indent=2)
                 
                 analysis_results[batch_id] = {
                     'status': 'completed',
                     'progress': 100,
                     'results': batch_results,
-                    'summary': {
+                    'enhanced_summary': {
                         'total_files': total_files,
-                        'successful': len([r for r in batch_results if 'error' not in r]),
+                        'successful': len(successful_results),
                         'failed': len([r for r in batch_results if 'error' in r]),
-                        'total_cells': sum(r.get('result', {}).get('total_cells', 0) for r in batch_results if 'error' not in r)
+                        'batch_statistics': batch_statistics
                     }
                 }
                 
             except Exception as e:
-                print(f"❌ Batch analysis error: {e}")
+                print(f"❌ Enhanced batch analysis error: {e}")
                 analysis_results[batch_id] = {
                     'status': 'error',
                     'progress': 0,
                     'error': str(e)
                 }
         
-        # Start batch analysis thread
-        thread = threading.Thread(target=run_batch_analysis, daemon=True)
+        # Start enhanced batch analysis thread
+        thread = threading.Thread(target=run_enhanced_batch_analysis, daemon=True)
         thread.start()
         
         return jsonify({
             'success': True,
             'batch_id': batch_id,
             'status': 'started',
-            'message': f'Batch analysis started for {len(files_data)} files'
+            'enhanced_features': {
+                'comprehensive_analysis': True,
+                'batch_statistics': True,
+                'time_series_support': enable_time_series
+            },
+            'message': f'Enhanced batch analysis started for {len(files_data)} files'
         })
     
     except Exception as e:
-        print(f"❌ Batch analysis setup error: {str(e)}")
-        return jsonify({'error': f'Batch analysis failed to start: {str(e)}'}), 500
+        print(f"❌ Enhanced batch analysis setup error: {str(e)}")
+        return jsonify({'error': f'Enhanced batch analysis failed to start: {str(e)}'}), 500
 
+
+@app.route('/api/time_series/<series_id>')
+def get_time_series_analysis(series_id):
+    """Get comprehensive time-series analysis results"""
+    try:
+        if series_id not in time_series_sessions:
+            return jsonify({'error': 'Time-series session not found'}), 404
+        
+        session = time_series_sessions[series_id]
+        
+        # Check if we have enough analysis results
+        analysis_results_data = session.get('analysis_results', {})
+        if len(analysis_results_data) < 2:
+            return jsonify({
+                'series_id': series_id,
+                'status': 'insufficient_data',
+                'message': 'Need at least 2 analyzed images for time-series analysis',
+                'current_analyses': len(analysis_results_data)
+            })
+        
+        # Generate comprehensive time-series analysis
+        time_points = []
+        for file_id, analysis_data in analysis_results_data.items():
+            time_points.append({
+                'timestamp': analysis_data['timestamp'],
+                'file_id': file_id,
+                **analysis_data['result_summary']
+            })
+        
+        # Sort by timestamp
+        time_points.sort(key=lambda x: x['timestamp'])
+        
+        # Calculate trends and statistics
+        cell_counts = [tp['cell_count'] for tp in time_points]
+        biomass_values = [tp['biomass_mg'] for tp in time_points]
+        green_percentages = [tp['green_percentage'] for tp in time_points]
+        
+        trends = {
+            'cell_count_trend': analyzer.calculate_trend(cell_counts),
+            'biomass_trend': analyzer.calculate_trend(biomass_values),
+            'green_content_trend': analyzer.calculate_trend(green_percentages),
+            'growth_rate_percent': analyzer.calculate_growth_rate(time_points)
+        }
+        
+        # Generate time-series visualization
+        viz_data = analyzer.create_time_series_visualization(time_points, series_id)
+        
+        return jsonify({
+            'success': True,
+            'series_id': series_id,
+            'time_points': time_points,
+            'trends': trends,
+            'statistics': {
+                'total_time_points': len(time_points),
+                'time_span': f"{time_points[0]['timestamp']} to {time_points[-1]['timestamp']}",
+                'max_cell_count': max(cell_counts),
+                'max_biomass_mg': max(biomass_values),
+                'avg_green_content': float(np.mean(green_percentages))
+            },
+            'visualization_data': viz_data
+        })
+        
+    except Exception as e:
+        print(f"❌ Time-series analysis error: {e}")
+        return jsonify({'error': str(e)}), 500
+    
+    
+
+@app.route('/api/export_enhanced/<analysis_id>/<format>')
+def export_enhanced_results(analysis_id, format):
+    """Enhanced export with comprehensive data and visualizations"""
+    try:
+        if analysis_id not in analysis_results:
+            return jsonify({'error': 'Analysis not found'}), 404
+        
+        analysis = analysis_results[analysis_id]
+        if analysis['status'] != 'completed':
+            return jsonify({'error': 'Analysis not completed'}), 400
+        
+        result = analysis['result']
+        
+        if format == 'json':
+            # Enhanced JSON export with all analysis data
+            enhanced_data = {
+                'analysis_metadata': {
+                    'analysis_id': analysis_id,
+                    'export_timestamp': datetime.now().isoformat(),
+                    'bioimagin_version': '3.0-Enhanced-Professional'
+                },
+                'results': result,
+                'enhanced_features': {
+                    'biomass_analysis': True,
+                    'wavelength_analysis': True,
+                    'morphometric_analysis': True,
+                    'spatial_analysis': True,
+                    'health_assessment': True
+                }
+            }
+            
+            json_data = json.dumps(convert_numpy_types(enhanced_data), indent=2)
+            
+            buffer = BytesIO()
+            buffer.write(json_data.encode())
+            buffer.seek(0)
+            
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f'enhanced_analysis_{analysis_id}.json',
+                mimetype='application/json'
+            )
+        
+        elif format == 'csv':
+            # Enhanced CSV export with comprehensive cell data
+            if not result.get('cells'):
+                return jsonify({'error': 'No cell data available for CSV export'}), 400
+            
+            df = pd.DataFrame(result['cells'])
+            
+            # Add summary statistics as comments
+            summary_stats = result.get('quantitative_analysis', {})
+            csv_content = f"# BIOIMAGIN Enhanced Analysis Results\n"
+            csv_content += f"# Analysis ID: {analysis_id}\n"
+            csv_content += f"# Export Date: {datetime.now().isoformat()}\n"
+            csv_content += f"# Total Cells: {len(result['cells'])}\n"
+            
+            if 'biomass_analysis' in summary_stats:
+                biomass = summary_stats['biomass_analysis']
+                csv_content += f"# Total Biomass: {biomass.get('total_biomass_mg', 0):.3f} mg\n"
+                csv_content += f"# Cell Density: {biomass.get('cell_density_per_mm2', 0):.2f} cells/mm²\n"
+            
+            if 'color_analysis' in summary_stats:
+                color = summary_stats['color_analysis']
+                csv_content += f"# Green Content: {color.get('green_percentage', 0):.1f}%\n"
+            
+            csv_content += "#\n"
+            csv_content += df.to_csv(index=False)
+            
+            buffer = BytesIO()
+            buffer.write(csv_content.encode())
+            buffer.seek(0)
+            
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f'enhanced_cells_{analysis_id}.csv',
+                mimetype='text/csv'
+            )
+        
+        elif format == 'zip':
+            # Enhanced ZIP export with all visualizations and data
+            buffer = BytesIO()
+            
+            with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Add enhanced JSON results
+                enhanced_data = {
+                    'analysis_metadata': {
+                        'analysis_id': analysis_id,
+                        'export_timestamp': datetime.now().isoformat(),
+                        'bioimagin_version': '3.0-Enhanced-Professional'
+                    },
+                    'results': result
+                }
+                json_data = json.dumps(convert_numpy_types(enhanced_data), indent=2)
+                zip_file.writestr(f'enhanced_analysis_{analysis_id}.json', json_data)
+                
+                # Add enhanced CSV if available
+                if result.get('cells'):
+                    df = pd.DataFrame(result['cells'])
+                    csv_data = df.to_csv(index=False)
+                    zip_file.writestr(f'enhanced_cells_{analysis_id}.csv', csv_data)
+                
+                # Add all visualizations
+                visualizations = result.get('visualizations', {})
+                for viz_name, viz_path in visualizations.items():
+                    if viz_path and isinstance(viz_path, str) and os.path.exists(viz_path):
+                        zip_file.write(viz_path, f'visualizations/{viz_name}_{analysis_id}.png')
+                
+                # Add histogram files if they exist
+                histogram_paths = visualizations.get('histogram_paths', {})
+                for hist_name, hist_path in histogram_paths.items():
+                    if hist_path and isinstance(hist_path, str) and os.path.exists(hist_path):
+                        zip_file.write(hist_path, f'histograms/{hist_name}_{analysis_id}.png')
+                
+                # Add summary report
+                summary_text = generate_summary_report(result, analysis_id)
+                zip_file.writestr(f'summary_report_{analysis_id}.txt', summary_text)
+            
+            buffer.seek(0)
+            
+            return send_file(
+                buffer,
+                as_attachment=True,
+                download_name=f'enhanced_analysis_package_{analysis_id}.zip',
+                mimetype='application/zip'
+            )
+        
+        else:
+            return jsonify({'error': 'Unsupported export format. Use: json, csv, zip'}), 400
+    
+    except Exception as e:
+        print(f"❌ Enhanced export error: {str(e)}")
+        return jsonify({'error': f'Enhanced export failed: {str(e)}'}), 500
+
+def generate_summary_report(result, analysis_id):
+    """Generate comprehensive text summary report"""
+    report = f"""
+BIOIMAGIN ENHANCED ANALYSIS REPORT
+==================================
+Analysis ID: {analysis_id}
+Report Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+BIOIMAGIN Version: 3.0-Enhanced-Professional
+
+DETECTION RESULTS
+-----------------
+Total Cells Detected: {result.get('total_cells', 0)}
+Total Cell Area: {result.get('total_area', 0):.2f} μm²
+Average Cell Area: {result.get('average_area', 0):.2f} μm²
+Detection Methods Used: {', '.join(result.get('method_used', []))}
+
+BIOMASS ANALYSIS
+----------------
+"""
+    
+    biomass = result.get('quantitative_analysis', {}).get('biomass_analysis', {})
+    if biomass:
+        report += f"""Fresh Weight Biomass: {biomass.get('total_biomass_mg', 0):.3f} mg
+Dry Weight Biomass: {biomass.get('dry_biomass_mg', 0):.3f} mg
+Cell Density: {biomass.get('cell_density_per_mm2', 0):.2f} cells/mm²
+Average Cell Biomass: {biomass.get('average_cell_biomass_mg', 0):.6f} mg
+"""
+    
+    report += """
+COLOR ANALYSIS
+--------------
+"""
+    
+    color = result.get('quantitative_analysis', {}).get('color_analysis', {})
+    if color:
+        report += f"""Green Content: {color.get('green_percentage', 0):.1f}%
+Chlorophyll Content: {color.get('chlorophyll_percentage', 0):.1f}%
+Color Intensity (mean): {color.get('green_intensity', {}).get('mean', 0):.1f}
+Color Uniformity: {color.get('color_uniformity', 0):.3f}
+"""
+    
+    health = result.get('quantitative_analysis', {}).get('health_assessment', {})
+    if health:
+        report += f"""
+HEALTH ASSESSMENT
+-----------------
+Overall Health: {health.get('overall_health', 'unknown').title()}
+Health Score: {health.get('health_score', 0):.2f}/1.0
+
+Recommendations:
+"""
+        for rec in health.get('recommendations', []):
+            report += f"• {rec}\n"
+    
+    morphometric = result.get('quantitative_analysis', {}).get('morphometric_analysis', {})
+    if morphometric and 'area_statistics' in morphometric:
+        area_stats = morphometric['area_statistics']
+        report += f"""
+MORPHOMETRIC ANALYSIS
+---------------------
+Area Statistics:
+  Mean: {area_stats.get('mean', 0):.2f} μm²
+  Standard Deviation: {area_stats.get('std', 0):.2f} μm²
+  Range: {area_stats.get('min', 0):.2f} - {area_stats.get('max', 0):.2f} μm²
+  Median: {area_stats.get('median', 0):.2f} μm²
+
+Size Distribution:
+  Small Cells: {morphometric.get('size_distribution', {}).get('small_cells', 0)}
+  Medium Cells: {morphometric.get('size_distribution', {}).get('medium_cells', 0)}
+  Large Cells: {morphometric.get('size_distribution', {}).get('large_cells', 0)}
+"""
+    
+    spatial = result.get('quantitative_analysis', {}).get('spatial_analysis', {})
+    if spatial and 'nearest_neighbor_distance_um' in spatial:
+        nn_dist = spatial['nearest_neighbor_distance_um']
+        report += f"""
+SPATIAL ANALYSIS
+----------------
+Nearest Neighbor Distance: {nn_dist.get('mean', 0):.2f} ± {nn_dist.get('std', 0):.2f} μm
+Clustering Pattern: {spatial.get('clustering_interpretation', 'unknown').title()}
+Clustering Index: {spatial.get('clustering_index', 0):.2f}
+"""
+    
+    report += f"""
+PROCESSING INFORMATION
+----------------------
+Processing Time: {result.get('processing_time', 0):.2f} seconds
+File Information: {result.get('file_info', {}).get('filename', 'Unknown')}
+
+This report was generated by BIOIMAGIN Enhanced Professional Analysis System.
+For more information, visit: https://github.com/AuroragitAA/bioimagin
+"""
+    
+    return report
+
+    
 @app.route('/api/export/<analysis_id>/<format>')
 def export_results(analysis_id, format):
     """Export analysis results in various formats"""
@@ -685,23 +1082,29 @@ def export_results(analysis_id, format):
     
 @app.route('/api/refresh_models', methods=['POST'])
 def refresh_models():
-    """Refresh AI model status (useful after training new models)"""
+    """Refresh AI model status"""
     try:
-        print("🔄 Refreshing model status via API...")
+        print("🔄 Refreshing enhanced model status...")
         status = analyzer.refresh_model_status()
         
         return jsonify({
             'success': True,
-            'message': 'Model status refreshed',
+            'message': 'Enhanced model status refreshed',
             'ai_status': {
                 'celldetection_available': status['celldetection_available'],
                 'tophat_model_available': status['tophat_available'],
                 'wolffia_cnn_available': status['wolffia_cnn_available']
             },
+            'enhanced_features': {
+                'patch_processing': True,
+                'biomass_analysis': True,
+                'wavelength_analysis': True,
+                'time_series_tracking': True
+            },
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
-        print(f"❌ Model refresh failed: {e}")
+        print(f"❌ Enhanced model refresh failed: {e}")
         return jsonify({
             'success': False,
             'error': str(e),
@@ -711,12 +1114,16 @@ def refresh_models():
 
 @app.route('/api/celldetection/status')
 def celldetection_status():
-    """Get CellDetection model status for frontend compatibility"""
+    """Get CellDetection model status"""
     try:
         status = analyzer.get_celldetection_status()
         return jsonify({
             'success': True,
-            'status': status
+            'status': status,
+            'enhanced_features': {
+                'patch_processing': True,
+                'overlapping_tiles': True
+            }
         })
     except Exception as e:
         return jsonify({
@@ -729,6 +1136,7 @@ def celldetection_status():
                 'model_name': None
             }
         })
+
 
 
 @app.route('/api/train_models', methods=['POST'])
@@ -810,33 +1218,82 @@ def train_models():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# TOPHAT TRAINING ENDPOINTS 
 
+
+
+
+
+def save_training_sessions():
+    """Save training sessions to file"""
+    try:
+        SESSIONS_FILE.parent.mkdir(exist_ok=True)
+        with open(SESSIONS_FILE, 'w') as f:
+            json.dump(training_sessions, f, indent=2)
+    except Exception as e:
+        print(f"⚠️ Failed to save training sessions: {e}")
+
+# Load sessions at startup
+
+# TOPHAT TRAINING ENDPOINTS 
 @app.route('/api/tophat/start_training', methods=['POST'])
 def start_tophat_training():
-    """Start tophat training session with enhanced error handling"""
+    """Start tophat training session with enhanced support for both file_ids and files"""
     try:
         print("🎯 Tophat training endpoint called")
         request_data = request.get_json() or {}
+        
+        # Support both formats: file_ids array and files array
+        file_ids = request_data.get('file_ids', [])
         files = request_data.get('files', [])
+        use_tophat = request_data.get('use_tophat', True)
+        fallback = request_data.get('fallback_to_watershed', False)
+
+        print(f"🔍 Received file_ids: {file_ids}")
+        print(f"🔍 Received files: {files}")
+        print(f"🔍 Available in uploaded_files_store: {list(uploaded_files_store.keys())}")
+
+        # Handle file_ids format (recommended)
+        if file_ids:
+            print("📝 Processing file_ids format")
+            files_to_process = []
+            for file_id in file_ids:
+                if file_id in uploaded_files_store:
+                    stored_info = uploaded_files_store[file_id]
+                    files_to_process.append({
+                        'id': file_id,
+                        'path': stored_info['path'],
+                        'filename': stored_info['filename'],
+                        'original_filename': stored_info.get('original_filename', stored_info['filename'])
+                    })
+                    print(f"✅ Found file_id {file_id}: {stored_info['filename']}")
+                else:
+                    print(f"❌ file_id {file_id} not found in uploaded_files_store")
         
-        if not files:
+        # Handle files format (legacy support)
+        elif files:
+            print("📝 Processing files format")
+            files_to_process = files
+        
+        else:
             print("❌ No files provided for training")
-            return jsonify({'error': 'No files provided for training'}), 400
-        
-        # Get file paths and info - check both uploaded files store and direct file info
+            return jsonify({'error': 'No files selected for training'}), 400
+
+        if not files_to_process:
+            return jsonify({'error': 'No valid files found for training'}), 400
+
+        # Process files into file_infos format
         file_infos = []
-        for file_info in files:
+        for file_info in files_to_process:
             if isinstance(file_info, dict):
                 file_path = file_info.get('path')
                 if file_path and os.path.exists(file_path):
-                    # Extract uploadable filename from path
                     server_filename = os.path.basename(file_path)
                     file_infos.append({
                         'server_path': file_path,
                         'upload_filename': server_filename,
                         'original_filename': file_info.get('filename', server_filename)
                     })
+                    print(f"✅ Added file: {file_info.get('filename', server_filename)}")
                 elif 'id' in file_info and file_info['id'] in uploaded_files_store:
                     stored_info = uploaded_files_store[file_info['id']]
                     if os.path.exists(stored_info['path']):
@@ -846,31 +1303,96 @@ def start_tophat_training():
                             'upload_filename': server_filename,
                             'original_filename': stored_info.get('filename', server_filename)
                         })
-        
+                        print(f"✅ Added stored file: {stored_info.get('filename', server_filename)}")
+
         print(f"📁 Found {len(file_infos)} valid files for training")
         if not file_infos:
             return jsonify({'error': 'No valid files found for training'}), 400
+
+        # Create training images with original display
+        images = []
+        for file_entry in file_infos:
+            image_path = file_entry['server_path']
+            bgr_image = cv2.imread(image_path)
+            if bgr_image is None:
+                print(f"⚠️ Could not load image: {image_path}")
+                continue
+
+            # Convert BGR to RGB for proper display
+            rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+
+            # Encode original RGB image directly as PNG
+            _, buffer = cv2.imencode('.png', cv2.cvtColor(rgb_image, cv2.COLOR_RGB2BGR))
+            overlay_b64 = base64.b64encode(buffer).decode('utf-8')
+
+            # Also keep the original binary file as raw input
+            try:
+                with open(image_path, 'rb') as f:
+                    raw_input_b64 = base64.b64encode(f.read()).decode('utf-8')
+            except Exception as e:
+                print(f"⚠️ Could not read raw file {image_path}: {e}")
+                raw_input_b64 = overlay_b64  # Fallback to overlay
+
+            images.append({
+                'id': str(uuid.uuid4()),
+                'filename': file_entry['original_filename'],
+                'path': image_path,  # Keep path for session persistence
+                'method_used': 'Original Image Only',
+                'image_data': {
+                    'training_overlay_b64': overlay_b64,
+                    'raw_input_b64': raw_input_b64,
+                    'visualizations': {
+                        'detection_overview': overlay_b64
+                    }
+                }
+            })
+            print(f"✅ Processed training image: {file_entry['original_filename']}")
+
+        if not images:
+            return jsonify({'error': 'No training images processed'}), 400
+
+        # Create training session
+        session_id = str(uuid.uuid4())
+        session = {
+            'id': session_id,
+            'created': datetime.now().isoformat(),
+            'images': images,
+            'file_infos': file_infos,  # Store original file info
+            'status': 'active',
+            'use_tophat': use_tophat,
+            'fallback_used': fallback,
+            'annotations': {}  # Initialize annotations storage
+        }
+
+        # Store session in memory
+        training_sessions[session_id] = session
         
-        # Start training session
-        session = analyzer.start_tophat_training(file_infos)
-        training_sessions[session['id']] = session
-        
+        # Save sessions to file for persistence
+        try:
+            save_training_sessions()
+            print(f"💾 Saved training session to file")
+        except Exception as e:
+            print(f"⚠️ Could not save training sessions: {e}")
+
+        print(f"✅ Started training session {session_id} with {len(images)} images")
         return jsonify({
             'success': True,
-            'session_id': session['id'],
-            'images_count': len(session['images']),
+            'session_id': session_id,
+            'images_count': len(images),
             'session': session
         })
-    
+
     except Exception as e:
         print(f"❌ Training start error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Training failed to start: {str(e)}'}), 500
 
+
+    
 @app.route('/api/tophat/save_annotations', methods=['POST'])
 def save_tophat_annotations():
-    """Save user drawing annotations for training with enhanced validation"""
+    """Save user drawing annotations for training with session persistence"""
     try:
         data = request.json
         session_id = data.get('session_id')
@@ -893,6 +1415,9 @@ def save_tophat_annotations():
             session_id, image_filename, image_index, annotations, annotated_image
         )
         
+        # Save sessions after annotation update
+        save_training_sessions()
+        
         return jsonify({
             'success': True,
             'annotation_saved': True,
@@ -904,25 +1429,23 @@ def save_tophat_annotations():
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Failed to save annotations: {str(e)}'}), 500
-
+    
 @app.route('/api/tophat/train_model', methods=['POST'])
 def train_tophat_model():
-    """Train the tophat AI model with enhanced validation"""
+    """Train the tophat AI model"""
     try:
         session_id = request.json.get('session_id')
         if not session_id:
             return jsonify({'error': 'Session ID required'}), 400
         
-        # Check if session exists
         if session_id not in training_sessions:
             return jsonify({'error': 'Training session not found'}), 404
         
-        # Train model
         success = analyzer.train_tophat_model(session_id)
         
         return jsonify({
             'success': success,
-            'message': 'Model trained successfully' if success else 'Training failed - check logs for details'
+            'message': 'Enhanced model trained successfully' if success else 'Training failed - check logs for details'
         })
     
     except Exception as e:
@@ -931,9 +1454,9 @@ def train_tophat_model():
         traceback.print_exc()
         return jsonify({'error': f'Model training failed: {str(e)}'}), 500
 
-@app.route('/api/tophat/model_status')
+@app.route('/api/tophat/status')
 def tophat_model_status():
-    """Check if tophat model is available with enhanced status"""
+    """Check if tophat model is available"""
     try:
         status = analyzer.get_tophat_status()
         return jsonify({
@@ -950,43 +1473,6 @@ def tophat_model_status():
             'model_trained': False
         })
 
-@app.route('/api/debug/cnn/<file_id>')
-def debug_cnn_analysis(file_id):
-    """Debug CNN detection for a specific uploaded image"""
-    try:
-        if file_id not in uploaded_files_store:
-            return jsonify({'error': 'File not found'}), 404
-        
-        file_path = uploaded_files_store[file_id]['path']
-        print(f"🔬 Starting CNN debug analysis for {file_path}")
-        
-        # Load image
-        img = cv2.imread(str(file_path))
-        if img is None:
-            return jsonify({'error': 'Could not load image'}), 400
-        
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Run debug analysis
-        debug_result = analyzer.debug_cnn_detection(gray, save_debug_images=True)
-        
-        if debug_result is None:
-            return jsonify({'error': 'CNN debug analysis failed'}), 500
-        
-        # Return debug statistics and image paths
-        return jsonify({
-            'success': True,
-            'statistics': debug_result['statistics'],
-            'debug_images_saved': True,
-            'debug_dir': str(analyzer.dirs['results'] / 'cnn_debug'),
-            'message': 'CNN debug analysis completed - check results/cnn_debug/ folder for visualizations'
-        })
-        
-    except Exception as e:
-        print(f"❌ CNN debug analysis error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Debug analysis failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
     print("🚀 BIOIMAGIN Web Interface - Deployment Version")

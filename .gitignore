@@ -17,3 +17,4 @@ models/
 images/
 backup/
 tophat_training/
+data/
