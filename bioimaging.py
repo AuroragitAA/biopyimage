@@ -215,17 +215,31 @@ class WolffiaAnalyzer:
             color_img = img.copy()
             
             # Advanced green content and wavelength analysis
-            color_analysis = self.analyze_enhanced_color_content(color_img)
+            color_analysis = color_img
             
             # Create enhanced grayscale
-            enhanced_gray = self.create_green_enhanced_grayscale(color_img)
+            enhanced_gray = color_img
             
             # Get results from available methods with enhanced patch processing
             results = []
             
             # Method 1: Enhanced Watershed with patch processing
-            watershed_labels, watershed_pipeline = self.watershed_segmentation(color_img, return_pipeline=True)
-            results.append(('watershed', watershed_labels))
+            watershed_pipeline = {}  # Initialize to avoid undefined variable errors
+            try:
+                watershed_result = self.watershed_segmentation(color_img, return_pipeline=True)
+                if isinstance(watershed_result, tuple) and len(watershed_result) == 2:
+                    watershed_labels, watershed_pipeline = watershed_result
+                else:
+                    watershed_labels = watershed_result
+                results.append(('watershed', watershed_labels))
+            except Exception as e:
+                print(f"⚠️ Watershed method failed: {e}")
+                # Try fallback without pipeline
+                try:
+                    watershed_labels = self.color_aware_watershed_segmentation(color_img) 
+                    results.append(('watershed', watershed_labels))
+                except Exception as e2:
+                    print(f"⚠️ Watershed fallback failed: {e2}")
 
             
             # Method 2: Enhanced Tophat ML with patches
@@ -265,7 +279,7 @@ class WolffiaAnalyzer:
             # Create comprehensive visualization
             # Build visualizations
             vis_data = self.create_comprehensive_visualization(
-                img, final_result, cell_data, color_analysis, biomass_analysis
+                img, final_result, cell_data, enhanced_color_analysis, biomass_analysis
             )
 
             # ✅ Inject enhanced pipeline steps for watershed if available
@@ -284,28 +298,31 @@ class WolffiaAnalyzer:
                         _, buffer = cv2.imencode('.png', image)
                         return base64.b64encode(buffer).decode('utf-8')
 
-                    vis_data['pipeline_steps'] = {
-                        'step_descriptions': {
-                            'Original': 'Original uploaded image',
-                            'Denoised': 'Denoised image (TV-Chambolle)',
-                            'Green_enhanced': 'Green dominance and contrast enhanced',
-                            'Green_mask': 'Binary mask of green regions',
-                            'Shape_index': 'Topological shape descriptor map',
-                            'Watershed': 'Final segmented watershed result',
-                            'Shape_index_3d': '3D projection of shape index over intensity surface'
-                        },
-                        'individual_steps': {
-                            'Original': to_b64((watershed_pipeline['Original'] * 255).astype(np.uint8)),
-                            'Denoised': to_b64((watershed_pipeline['Denoised'] * 255).astype(np.uint8)),
-                            'Green_enhanced': to_b64((watershed_pipeline['Green_enhanced'] * 255).astype(np.uint8)),
-                            'Green_mask': to_b64((watershed_pipeline['Green_mask'] * 255).astype(np.uint8)),
-                            'Shape_index': to_b64((watershed_pipeline['Shape_index'] * 255).astype(np.uint8)),
-                            'Watershed': to_b64((color.label2rgb(watershed_pipeline['Watershed'], bg_label=0, alpha=0.5) * 255).astype(np.uint8)),
-                            'Shape_index_3d': watershed_pipeline['Shape_index_3d']  # already base64 PNG string
-                        },
-                        'pipeline_overview': to_b64((color.label2rgb(watershed_pipeline['Watershed'], image=color_img, bg_label=0, alpha=0.5) * 255).astype(np.uint8)),
-                        'step_count': 7
-                    }
+                    if watershed_pipeline:  # Only create pipeline steps if watershed succeeded
+                        vis_data['pipeline_steps'] = {
+                            'step_descriptions': {
+                                'Original': 'Original uploaded image',
+                                'Denoised': 'Denoised image (TV-Chambolle)',
+                                'Green_enhanced': 'Green dominance and contrast enhanced',
+                                'Green_mask': 'Binary mask of green regions',
+                                'Shape_index': 'Topological shape descriptor map',
+                                'Watershed': 'Final segmented watershed result',
+                                'Shape_index_3d': '3D projection of shape index over intensity surface'
+                            },
+                            'individual_steps': {
+                                'Original': to_b64((watershed_pipeline['Original'] * 255).astype(np.uint8)),
+                                'Denoised': to_b64((watershed_pipeline['Denoised'] * 255).astype(np.uint8)),
+                                'Green_enhanced': to_b64((watershed_pipeline['Green_enhanced'] * 255).astype(np.uint8)),
+                                'Green_mask': to_b64((watershed_pipeline['Green_mask'] * 255).astype(np.uint8)),
+                                'Shape_index': to_b64((watershed_pipeline['Shape_index'] * 255).astype(np.uint8)),
+                                'Watershed': to_b64((color.label2rgb(watershed_pipeline['Watershed'], bg_label=0, alpha=0.5) * 255).astype(np.uint8)),
+                                'Shape_index_3d': watershed_pipeline['Shape_index_3d']  # already base64 PNG string
+                            },
+                            'pipeline_overview': to_b64((color.label2rgb(watershed_pipeline['Watershed'], image=color_img, bg_label=0, alpha=0.5) * 255).astype(np.uint8)),
+                            'step_count': 7
+                        }
+                    else:
+                        print("⚠️ Watershed pipeline not available - skipping pipeline visualization")
 
 
                 except Exception as viz_err:
@@ -316,8 +333,8 @@ class WolffiaAnalyzer:
             analysis_result = {
                 # Legacy compatibility
                 'total_cells': len(cell_data),
-                'total_area': sum(cell['area'] for cell in cell_data),
-                'average_area': np.mean([cell['area'] for cell in cell_data]) if cell_data else 0,
+                'total_area': sum(cell.get('area_microns_sq', cell.get('area', 0)) for cell in cell_data),
+                'average_area': np.mean([cell.get('area_microns_sq', cell.get('area', 0)) for cell in cell_data]) if cell_data else 0,
                 'cells': cell_data,
                 'labeled_image_path': str(vis_data.get('main_visualization')),
                 'method_used': [method for method, _ in results],
@@ -327,7 +344,7 @@ class WolffiaAnalyzer:
                 'detection_results': {
                     'detection_method': f"Enhanced Multi-Method Analysis ({len(results)} methods)",
                     'cells_detected': len(cell_data),
-                    'total_area': sum(cell['area'] for cell in cell_data),
+                    'total_area': sum(cell.get('area_microns_sq', cell.get('area', 0)) for cell in cell_data),
                     'cells_data': cell_data
                 },
                 
@@ -360,8 +377,10 @@ class WolffiaAnalyzer:
                 try:
                     # Extract stats per method
                     method_cells = self.extract_enhanced_cell_properties(label_img, enhanced_gray, color_img)
-                    total_area = sum(cell['area'] for cell in method_cells)
-                    avg_area = np.mean([cell['area'] for cell in method_cells]) if method_cells else 0
+                    # Handle both old and new cell data formats
+                    total_area = sum(cell.get('area_microns_sq', cell.get('area', 0)) for cell in method_cells)
+                    areas = [cell.get('area_microns_sq', cell.get('area', 0)) for cell in method_cells]
+                    avg_area = np.mean(areas) if areas else 0
 
                     # Create base64 overlay
                     rgb_image = cv2.cvtColor(color_img, cv2.COLOR_BGR2RGB) if color_img.shape[2] == 3 else color_img
@@ -381,7 +400,8 @@ class WolffiaAnalyzer:
                         'cells_detected': len(method_cells),
                         'total_area': total_area,
                         'average_area': avg_area,
-                        'visualization_b64': viz_b64
+                        'visualization_b64': viz_b64,
+                        'cells_data': method_cells  # Add detailed cell data per method
                     }
 
                 except Exception as m_err:
@@ -426,7 +446,9 @@ class WolffiaAnalyzer:
         pipeline["Denoised"] = denoised
 
         # Step 3: Green-Enhanced Detection
-        b, g, r = denoised[:, :, 0], denoised[:, :, 1], denoised[:, :, 2]
+        b, g, r = denoised[:, :, 0].astype(np.float32), denoised[:, :, 1].astype(np.float32), denoised[:, :, 2].astype(np.float32)
+
+        # Normalize RGB and compute green dominance
         brightness = r + g + b + 1e-6
         green_ratio = g / brightness
         green_dominance = g - np.maximum(r, b)
@@ -527,65 +549,6 @@ class WolffiaAnalyzer:
         return b64_img
 
 
-    def enhanced_patch_watershed(self, color_img):
-        """Enhanced watershed with overlapping patch processing"""
-        try:
-            print("🔬 Enhanced Patch-based Watershed Analysis...")
-            
-            # Configuration for patch processing
-            patch_size = 256
-            overlap = 32
-            h, w = color_img.shape[:2]
-            
-            # Initialize result accumulation
-            final_labels = np.zeros((h, w), dtype=np.int32)
-            label_counter = 1
-            
-            # Process overlapping patches
-            for y in range(0, h - patch_size + 1, patch_size - overlap):
-                for x in range(0, w - patch_size + 1, patch_size - overlap):
-                    y_end = min(y + patch_size, h)
-                    x_end = min(x + patch_size, w)
-                    
-                    # Extract patch
-                    patch = color_img[y:y_end, x:x_end]
-                    
-                    # Process patch with watershed
-                    patch_labels = self.color_aware_watershed_segmentation(patch)
-                    
-                    if np.max(patch_labels) > 0:
-                        # Update labels to avoid conflicts
-                        patch_labels[patch_labels > 0] += label_counter - 1
-                        label_counter += np.max(patch_labels)
-                        
-                        # Merge with final result (center region to avoid edge artifacts)
-                        center_y_start = y + overlap//2 if y > 0 else y
-                        center_y_end = y_end - overlap//2 if y_end < h else y_end
-                        center_x_start = x + overlap//2 if x > 0 else x
-                        center_x_end = x_end - overlap//2 if x_end < w else x_end
-                        
-                        patch_center_y_start = overlap//2 if y > 0 else 0
-                        patch_center_y_end = patch_labels.shape[0] - overlap//2 if y_end < h else patch_labels.shape[0]
-                        patch_center_x_start = overlap//2 if x > 0 else 0
-                        patch_center_x_end = patch_labels.shape[1] - overlap//2 if x_end < w else patch_labels.shape[1]
-                        
-                        # Only add new labels where there are none
-                        patch_region = patch_labels[patch_center_y_start:patch_center_y_end, 
-                                                  patch_center_x_start:patch_center_x_end]
-                        final_region = final_labels[center_y_start:center_y_end, 
-                                                   center_x_start:center_x_end]
-                        
-                        # Add patch labels where final is zero
-                        mask = (final_region == 0) & (patch_region > 0)
-                        final_region[mask] = patch_region[mask]
-            
-            print(f"✅ Enhanced Watershed: {np.max(final_labels)} cells detected")
-            return final_labels
-            
-        except Exception as e:
-            print(f"⚠️ Enhanced patch watershed failed: {e}")
-            return self.color_aware_watershed_segmentation(color_img)
-    
     def enhanced_patch_tophat(self, color_img, enhanced_gray):
         """Enhanced tophat with optimized patch processing"""
         try:
@@ -1836,7 +1799,7 @@ Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chloro
     
     def tophat_ml_detection(self, color_img):
         """
-        FAST & AUTONOMOUS Tophat ML detection - Everything in one place
+         Tophat ML detection - Everything in one place
         Green-focused, GPU-accelerated, self-contained cell detection
         """
         try:
@@ -1855,7 +1818,7 @@ Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chloro
                 elif color_img.shape[2] != 3:
                     color_img = color_img[:, :, :3]
 
-            print("⚡ Running FAST green-focused tophat detection...")
+            print("⚡ Running  green-focused tophat detection...")
 
             # Extract fast features
             features = self.extract_ml_features(color_img)
@@ -1904,10 +1867,10 @@ Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chloro
                             new_label += 1
                     
                     cell_count = new_label - 1
-                    print(f"⚡ Fast Green Tophat: {cell_count} green cells detected")
+                    print(f"⚡  Green Tophat: {cell_count} green cells detected")
                     return filtered_img
 
-            print("⚡ Fast Green Tophat: No green cells found")
+            print("⚡  Green Tophat: No green cells found")
             return np.zeros(color_img.shape[:2], dtype=np.int32)
 
         except Exception as e:
@@ -1915,216 +1878,101 @@ Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chloro
             return np.zeros(color_img.shape[:2], dtype=np.int32)
 
     def extract_ml_features(self, img):
-        """
-        Enhanced 52-feature extraction with built-in cell separation intelligence
-        Original 46 features + 6 separation-specific features
-        """
-        try:
-            # Fast preprocessing
-            if len(img.shape) == 2:
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            elif len(img.shape) == 3 and img.shape[2] != 3:
-                img = img[:, :, :3]
-            
-            h, w = img.shape[:2]
-            img_size = h * w
-            
-            # Pre-allocate for 52 features (46 original + 6 separation)
-            features = np.empty((img_size, 52), dtype=np.float32)
-            
-            # Do ALL color conversions ONCE (biggest speedup)
-            b, g, r = cv2.split(img)
-            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-            lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-            h_hsv, s_hsv, v_hsv = cv2.split(hsv)
-            l_lab, a_lab, b_lab = cv2.split(lab)
-            
-            # Flatten all channels once
-            b_flat = b.flatten().astype(np.float32)
-            g_flat = g.flatten().astype(np.float32)
-            r_flat = r.flatten().astype(np.float32)
-            
-            # === ORIGINAL 46 FEATURES (VECTORIZED) ===
-            idx = 0
-            
-            # 1-9: Color channels (vectorized)
-            features[:, idx:idx+9] = np.column_stack([
-                r_flat, g_flat, b_flat,
-                h_hsv.flatten(), s_hsv.flatten(), v_hsv.flatten(),
-                l_lab.flatten(), a_lab.flatten(), b_lab.flatten()
-            ])
-            idx += 9
-            
-            # 10-13: Fast green features (vectorized)
-            green_dominance = np.clip(g_flat - np.maximum(r_flat, b_flat), 0, 255)
-            green_mask = cv2.inRange(hsv, np.array([35, 40, 40]), np.array([85, 255, 255])).flatten()
-            total_intensity = r_flat + g_flat + b_flat + 1e-6
-            green_ratio = (g_flat / total_intensity * 255)
-            enhanced_gray = (0.4 * g_flat + 0.3 * (255 - a_lab.flatten()) + 0.3 * green_mask)
-            
-            features[:, idx:idx+4] = np.column_stack([
-                green_dominance, green_mask, green_ratio, enhanced_gray
-            ])
-            idx += 4
-            
-            # 14-19: Fast Gaussian (use smaller kernels for speed)
-            enhanced_gray_2d = enhanced_gray.reshape(h, w).astype(np.uint8)
-            g_2d = g
-            
-            for sigma in [1.0, 2.0, 4.0]:
-                ksize = max(3, int(2 * sigma) | 1)  # Ensure odd kernel size
-                gauss_enhanced = cv2.GaussianBlur(enhanced_gray_2d, (ksize, ksize), sigma)
-                gauss_green = cv2.GaussianBlur(g_2d, (ksize, ksize), sigma)
+            """
+            10-feature extraction for speed and accuracy
+            Focus on most discriminative features for Wolffia cells
+            """
+            try:
+                # Fast preprocessing
+                if len(img.shape) == 2:
+                    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                elif len(img.shape) == 3 and img.shape[2] != 3:
+                    img = img[:, :, :3]
                 
-                features[:, idx] = gauss_enhanced.flatten()
-                features[:, idx+1] = gauss_green.flatten()
-                idx += 2
-            
-            # 20-25: Fast edge detection (simplified)
-            enhanced_gray_uint = enhanced_gray_2d
-            
-            # Use fast edge detection
-            edges1 = cv2.Canny(enhanced_gray_uint, 40, 120)
-            edges2 = cv2.Canny(enhanced_gray_uint, 60, 180)
-            edges3 = cv2.Canny(g, 40, 120)
-            edges4 = cv2.Canny(g, 60, 180)
-            
-            # Fast Sobel using OpenCV (much faster than skimage)
-            sobel_enhanced = cv2.Sobel(enhanced_gray_uint, cv2.CV_8U, 1, 1, ksize=3)
-            sobel_green = cv2.Sobel(g, cv2.CV_8U, 1, 1, ksize=3)
-            
-            features[:, idx:idx+6] = np.column_stack([
-                edges1.flatten(), edges2.flatten(), edges3.flatten(),
-                edges4.flatten(), sobel_enhanced.flatten(), sobel_green.flatten()
-            ])
-            idx += 6
-            
-            # 26-31: Fast morphological operations
-            kernel3 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-            kernel5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-            
-            # Batch morphological operations
-            opened3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_OPEN, kernel3)
-            tophat3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_TOPHAT, kernel3)
-            closed3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_CLOSE, kernel3)
-            opened5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_OPEN, kernel5)
-            tophat5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_TOPHAT, kernel5)
-            closed5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_CLOSE, kernel5)
-            
-            features[:, idx:idx+6] = np.column_stack([
-                opened3.flatten(), tophat3.flatten(), closed3.flatten(),
-                opened5.flatten(), tophat5.flatten(), closed5.flatten()
-            ])
-            idx += 6
-            
-            # 32-39: Fast texture features (approximated for speed)
-            # Use uniform filter instead of generic_filter (much faster)
-            from scipy.ndimage import uniform_filter
-            
-            for channel_2d, size in [(enhanced_gray_uint, 3), (enhanced_gray_uint, 5), (g, 3), (g, 5)]:
-                mean = uniform_filter(channel_2d.astype(np.float32), size=size)
-                sqr_mean = uniform_filter(channel_2d.astype(np.float32)**2, size=size)
+                h, w = img.shape[:2]
+                img_size = h * w
+                
+                # Pre-allocate for 10 optimized features
+                features = np.empty((img_size, 10), dtype=np.float32)
+                
+                # OPTIMIZED: Only most discriminative features for Wolffia
+                b, g, r = cv2.split(img)
+                hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+                h_hsv, s_hsv, v_hsv = cv2.split(hsv)
+                
+                # Flatten channels once
+                g_flat = g.flatten().astype(np.float32)
+                r_flat = r.flatten().astype(np.float32)
+                b_flat = b.flatten().astype(np.float32)
+                
+                idx = 0
+                
+                # Feature 1: Green channel (most important for Wolffia)
+                features[:, idx] = g_flat
+                idx += 1
+                
+                # Feature 2: Green dominance (key discriminator)
+                green_dominance = np.clip(g_flat - np.maximum(r_flat, b_flat), 0, 255)
+                features[:, idx] = green_dominance
+                idx += 1
+                
+                # Feature 3: Green mask (binary green detection)
+                green_mask = cv2.inRange(hsv, np.array([35, 40, 40]), np.array([85, 255, 255])).flatten()
+                features[:, idx] = green_mask.astype(np.float32)
+                idx += 1
+                
+                # Feature 4: Enhanced grayscale (color-aware processing)
+                lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                a_lab = cv2.split(lab)[1]
+                enhanced_gray = (0.4 * g_flat + 0.3 * (255 - a_lab.flatten()) + 0.3 * green_mask)
+                features[:, idx] = enhanced_gray
+                idx += 1
+                
+                # Feature 5: Distance transform (cell center detection)
+                green_binary = (green_mask.reshape(h, w) > 0).astype(np.uint8)
+                if np.sum(green_binary) > 0:
+                    dist_transform = cv2.distanceTransform(green_binary, cv2.DIST_L2, 5)
+                    features[:, idx] = dist_transform.flatten()
+                else:
+                    features[:, idx] = np.zeros(img.shape[0] * img.shape[1])
+                idx += 1
+                
+                # Feature 6: Tophat operation (blob detection)
+                enhanced_gray_2d = enhanced_gray.reshape(h, w).astype(np.uint8)
+                kernel5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                tophat = cv2.morphologyEx(enhanced_gray_2d, cv2.MORPH_TOPHAT, kernel5)
+                features[:, idx] = tophat.flatten()
+                idx += 1
+                
+                # Feature 7: Gaussian blur (smoothed regions)
+                gauss = cv2.GaussianBlur(enhanced_gray_2d, (5, 5), 2.0)
+                features[:, idx] = gauss.flatten()
+                idx += 1
+                
+                # Feature 8: Local variance (texture)
+                from scipy.ndimage import uniform_filter
+                mean = uniform_filter(enhanced_gray_2d.astype(np.float32), size=5)
+                sqr_mean = uniform_filter(enhanced_gray_2d.astype(np.float32)**2, size=5)
                 variance = np.clip(sqr_mean - mean**2, 0, None)
-                std = np.sqrt(variance)
-                
                 features[:, idx] = variance.flatten()
-                features[:, idx+1] = std.flatten()
-                idx += 2
-            
-            # 40-44: Fast enhancement filters
-            laplacian = np.abs(cv2.Laplacian(enhanced_gray_uint, cv2.CV_8U))
-            
-            # Fast min/max using erosion/dilation (faster than ndimage)
-            kernel_small = np.ones((3,3), np.uint8)
-            kernel_large = np.ones((5,5), np.uint8)
-            
-            max_green_3 = cv2.dilate(g, kernel_small)
-            min_green_3 = cv2.erode(g, kernel_small)
-            max_green_5 = cv2.dilate(g, kernel_large)
-            min_green_5 = cv2.erode(g, kernel_large)
-            
-            features[:, idx:idx+5] = np.column_stack([
-                laplacian.flatten(), max_green_3.flatten(), min_green_3.flatten(),
-                max_green_5.flatten(), min_green_5.flatten()
-            ])
-            idx += 5
-            
-            # 45-46: Fast color uniformity
-            color_var = np.var([r_flat, g_flat, b_flat], axis=0)
-            green_sat_consistency = s_hsv.flatten() * (green_mask / 255.0)
-            
-            features[:, idx:idx+2] = np.column_stack([color_var, green_sat_consistency])
-            idx += 2
-            
-            # === NEW: 6 SEPARATION-SPECIFIC FEATURES (47-52) ===
-            
-            # Feature 47: Distance Transform (cell center detection)
-            green_binary = (green_mask.reshape(h, w) > 0).astype(np.uint8)
-            if np.sum(green_binary) > 0:
-                dist_transform = cv2.distanceTransform(green_binary, cv2.DIST_L2, 5)
-                features[:, idx] = dist_transform.flatten()
-            else:
-                features[:, idx] = np.zeros(img_size)
-            idx += 1
-            
-            # Feature 48: Local Maxima Detection (potential cell centers)
-            from scipy import ndimage
-            local_maxima = ndimage.maximum_filter(enhanced_gray_2d, size=9) == enhanced_gray_2d
-            local_maxima = local_maxima & (enhanced_gray_2d > np.mean(enhanced_gray_2d))
-            features[:, idx] = local_maxima.flatten().astype(np.float32) * 255
-            idx += 1
-            
-            # Feature 49: Boundary Strength (cell edge detection)
-            gradient_mag = np.sqrt(
-                cv2.Sobel(enhanced_gray_uint, cv2.CV_64F, 1, 0, ksize=3)**2 + 
-                cv2.Sobel(enhanced_gray_uint, cv2.CV_64F, 0, 1, ksize=3)**2
-            )
-            if np.max(gradient_mag) > 0:
-                boundary_strength = (gradient_mag / np.max(gradient_mag) * 255).astype(np.uint8)
-            else:
-                boundary_strength = np.zeros_like(gradient_mag, dtype=np.uint8)
-            features[:, idx] = boundary_strength.flatten()
-            idx += 1
-            
-            # Feature 50: Cluster Density (local cell density)
-            density_kernel = np.ones((15, 15), np.float32) / (15*15)
-            density_map = cv2.filter2D(green_binary.astype(np.float32), -1, density_kernel)
-            features[:, idx] = (density_map * 255).flatten()
-            idx += 1
-            
-            # Feature 51: Center-to-Edge Ratio (separation strength)
-            if np.sum(green_binary) > 0:
-                center_strength = ndimage.gaussian_filter(dist_transform, sigma=2)
-                edge_strength = ndimage.gaussian_filter(boundary_strength.astype(np.float32), sigma=2)
-                center_edge_ratio = np.divide(center_strength, edge_strength + 1e-6)
-                center_edge_ratio = np.clip(center_edge_ratio, 0, 255)
-            else:
-                center_edge_ratio = np.zeros((h, w))
-            features[:, idx] = center_edge_ratio.flatten()
-            idx += 1
-            
-            # Feature 52: Multi-Scale Cell Probability
-            # Combine multiple scales of evidence
-            if w >= 4 and h >= 4:  # Ensure we can downsample
-                scale1 = cv2.resize(green_binary.astype(np.float32), (max(1, w//2), max(1, h//2)))
-                scale1 = cv2.resize(scale1, (w, h))
-                scale2 = cv2.resize(green_binary.astype(np.float32), (max(1, w//4), max(1, h//4)))
-                scale2 = cv2.resize(scale2, (w, h))
+                idx += 1
                 
-                multi_scale = (0.5 * green_binary.astype(np.float32) + 0.3 * scale1 + 0.2 * scale2)
-            else:
-                multi_scale = green_binary.astype(np.float32)
-            
-            features[:, idx] = (multi_scale * 255).flatten()
-            
-            print(f"🧠 Extracted 52 features with separation intelligence")
-            return features
-            
-        except Exception as e:
-            print(f"❌ Enhanced feature extraction failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return np.zeros((img.shape[0] * img.shape[1], 52), dtype=np.float32)
+                # Feature 9: HSV Saturation (color purity)
+                features[:, idx] = s_hsv.flatten().astype(np.float32)
+                idx += 1
+                
+                # Feature 10: Edge strength (boundary detection)
+                edges = cv2.Canny(enhanced_gray_2d, 40, 120)
+                features[:, idx] = edges.flatten().astype(np.float32)
+                
+                print(f"🚀 Extracted 10 optimized features for fast Wolffia detection")
+                return features
+                
+            except Exception as e:
+                print(f"❌ Enhanced feature extraction failed: {e}")
+                import traceback
+                traceback.print_exc()
+                return np.zeros((img.shape[0] * img.shape[1], 10), dtype=np.float32)
 
     def extract_basic_fallback_features(self, img):
         """Fallback feature extraction if comprehensive fails"""
@@ -2406,7 +2254,6 @@ Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chloro
             count_map[count_map == 0] = 1
             averaged = full_prediction / count_map
             sigmoid_map = 1 / (1 + np.exp(-averaged))
-            cv2.imwrite("debug_cnn_sigmoid.png", (sigmoid_map * 255).astype(np.uint8))
 
             if np.isinf(averaged).any() or sigmoid_map.max() - sigmoid_map.min() < 1e-4:
                 print("🚫 CNN output too flat or invalid — skipping detection")
@@ -3168,11 +3015,27 @@ Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chloro
             model_path = self.dirs['models'] / 'tophat_model.pkl'
             info_path = self.dirs['models'] / 'tophat_model_info.json'
             
+            # Check if model file exists and is valid
+            model_file_valid = False
+            if model_path.exists():
+                try:
+                    # Try to validate the model file
+                    import pickle
+                    with open(model_path, 'rb') as f:
+                        test_model = pickle.load(f)
+                    # If we can load it and it has the right methods, it's valid
+                    model_file_valid = hasattr(test_model, 'predict') and hasattr(test_model, 'predict_proba')
+                except Exception as e:
+                    print(f"⚠️ Model file exists but is invalid: {e}")
+                    model_file_valid = False
+            
             status = {
                 'model_available': model_path.exists(),
-                'model_trained': model_path.exists() and self._tophat_model is not None,
+                'model_trained': model_file_valid,  # File exists and is a valid trained model
+                'model_loaded_in_memory': self._tophat_model is not None,
                 'model_path': str(model_path),
-                'training_info_available': info_path.exists()
+                'training_info_available': info_path.exists(),
+                'model_file_size': model_path.stat().st_size if model_path.exists() else 0
             }
             
             # Load training info if available
@@ -3181,8 +3044,22 @@ Estimated Wavelength: {color_analysis.get('wavelength_analysis', {}).get('chloro
                     with open(info_path, 'r') as f:
                         training_info = json.load(f)
                     status['training_info'] = training_info
+                    status['training_sessions_count'] = training_info.get('training_sessions', 0)
+                    status['last_trained'] = training_info.get('last_trained', 'Unknown')
                 except Exception as e:
                     print(f"⚠️ Error reading training info: {e}")
+            
+            # Additional validation - check if we have annotation data
+            annotations_dir = self.dirs.get('annotations', Path('annotations'))
+            if annotations_dir.exists():
+                annotation_files = list(annotations_dir.glob('*.json'))
+                status['annotation_files_count'] = len(annotation_files)
+                status['has_training_data'] = len(annotation_files) > 0
+            else:
+                status['annotation_files_count'] = 0
+                status['has_training_data'] = False
+            
+            print(f"🔍 Tophat status: model_available={status['model_available']}, model_trained={status['model_trained']}, has_training_data={status['has_training_data']}")
             
             return status
             

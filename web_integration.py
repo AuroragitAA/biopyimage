@@ -48,7 +48,7 @@ SESSIONS_FILE = Path('data/training_sessions.json')
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['RESULTS_FOLDER'] = RESULTS_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 
 # Create directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -768,8 +768,9 @@ def get_time_series_analysis(series_id):
     
 
 @app.route('/api/export_enhanced/<analysis_id>/<format>')
-def export_enhanced_results(analysis_id, format):
-    """Enhanced export with comprehensive data and visualizations"""
+@app.route('/api/export_enhanced/<analysis_id>/<format>/<method>')
+def export_enhanced_results(analysis_id, format, method=None):
+    """Enhanced export with comprehensive data and visualizations - supports method-specific exports"""
     try:
         if analysis_id not in analysis_results:
             return jsonify({'error': 'Analysis not found'}), 404
@@ -812,18 +813,34 @@ def export_enhanced_results(analysis_id, format):
             )
         
         elif format == 'csv':
-            # Enhanced CSV export with comprehensive cell data
-            if not result.get('cells'):
-                return jsonify({'error': 'No cell data available for CSV export'}), 400
+            # Enhanced CSV export with comprehensive cell data - method-specific support
+            cells_data = None
+            export_method = 'Combined Analysis'
             
-            df = pd.DataFrame(result['cells'])
+            # Check if specific method is requested
+            if method and method != 'all':
+                method_results = result.get('detection_results', {}).get('method_results', {})
+                if method in method_results and 'cells_data' in method_results[method]:
+                    cells_data = method_results[method]['cells_data']
+                    export_method = method_results[method]['method_name']
+                else:
+                    return jsonify({'error': f'Method "{method}" not found or has no cell data'}), 400
+            else:
+                # Use combined results
+                cells_data = result.get('cells', [])
+            
+            if not cells_data:
+                return jsonify({'error': f'No cell data available for {export_method}'}), 400
+            
+            df = pd.DataFrame(cells_data)
             
             # Add summary statistics as comments
             summary_stats = result.get('quantitative_analysis', {})
             csv_content = f"# BIOIMAGIN Enhanced Analysis Results\n"
             csv_content += f"# Analysis ID: {analysis_id}\n"
             csv_content += f"# Export Date: {datetime.now().isoformat()}\n"
-            csv_content += f"# Total Cells: {len(result['cells'])}\n"
+            csv_content += f"# Detection Method: {export_method}\n"
+            csv_content += f"# Total Cells ({export_method}): {len(cells_data)}\n"
             
             if 'biomass_analysis' in summary_stats:
                 biomass = summary_stats['biomass_analysis']
@@ -841,10 +858,13 @@ def export_enhanced_results(analysis_id, format):
             buffer.write(csv_content.encode())
             buffer.seek(0)
             
+            # Create method-specific filename
+            method_suffix = f"_{method}" if method and method != 'all' else ""
+            
             return send_file(
                 buffer,
                 as_attachment=True,
-                download_name=f'enhanced_cells_{analysis_id}.csv',
+                download_name=f'enhanced_cells_{analysis_id}{method_suffix}.csv',
                 mimetype='text/csv'
             )
         

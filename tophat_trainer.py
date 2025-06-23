@@ -69,7 +69,7 @@ class EnhancedTophatTrainer:
         
     def extract_enhanced_patch_features(self, image):
         """
-        Extract 52 features with separation intelligence (training version)
+        OPTIMIZED: Extract 10 most important features for fast training
         Must match bioimaging.py extract_ml_features exactly
         """
         # Ensure we have a 3-channel color image
@@ -81,131 +81,44 @@ class EnhancedTophatTrainer:
         h, w = image.shape[:2]
         img_size = h * w
         
-        # Pre-allocate for 52 features (46 original + 6 separation)
-        features = np.empty((img_size, 52), dtype=np.float32)
+        # Pre-allocate for 10 optimized features
+        features = np.empty((img_size, 10), dtype=np.float32)
         
-        # Do ALL color conversions ONCE
+        # OPTIMIZED: Only most discriminative features for Wolffia (same as bioimaging.py)
         b, g, r = cv2.split(image)
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
         h_hsv, s_hsv, v_hsv = cv2.split(hsv)
-        l_lab, a_lab, b_lab = cv2.split(lab)
         
-        # Flatten all channels once
-        b_flat = b.flatten().astype(np.float32)
+        # Flatten channels once
         g_flat = g.flatten().astype(np.float32)
         r_flat = r.flatten().astype(np.float32)
+        b_flat = b.flatten().astype(np.float32)
         
-        # === ORIGINAL 46 FEATURES (same as before) ===
         idx = 0
         
-        # 1-9: Color channels
-        features[:, idx:idx+9] = np.column_stack([
-            r_flat, g_flat, b_flat,
-            h_hsv.flatten(), s_hsv.flatten(), v_hsv.flatten(),
-            l_lab.flatten(), a_lab.flatten(), b_lab.flatten()
-        ])
-        idx += 9
+        # Feature 1: Green channel (most important for Wolffia)
+        features[:, idx] = g_flat
+        idx += 1
         
-        # 10-13: Green features
+        # Feature 2: Green dominance (key discriminator)
         green_dominance = np.clip(g_flat - np.maximum(r_flat, b_flat), 0, 255)
+        features[:, idx] = green_dominance
+        idx += 1
+        
+        # Feature 3: Green mask (binary green detection)
         green_mask = cv2.inRange(hsv, np.array([35, 40, 40]), np.array([85, 255, 255])).flatten()
-        total_intensity = r_flat + g_flat + b_flat + 1e-6
-        green_ratio = (g_flat / total_intensity * 255)
+        features[:, idx] = green_mask.astype(np.float32)
+        idx += 1
+        
+        # Feature 4: Enhanced grayscale (color-aware processing)
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        a_lab = cv2.split(lab)[1]
         enhanced_gray = (0.4 * g_flat + 0.3 * (255 - a_lab.flatten()) + 0.3 * green_mask)
+        features[:, idx] = enhanced_gray
+        idx += 1
         
-        features[:, idx:idx+4] = np.column_stack([
-            green_dominance, green_mask, green_ratio, enhanced_gray
-        ])
-        idx += 4
-        
-        # 14-19: Gaussian features
+        # Feature 5: Distance transform (cell center detection)
         enhanced_gray_2d = enhanced_gray.reshape(h, w).astype(np.uint8)
-        g_2d = g
-        
-        for sigma in [1.0, 2.0, 4.0]:
-            ksize = max(3, int(2 * sigma) | 1)
-            gauss_enhanced = cv2.GaussianBlur(enhanced_gray_2d, (ksize, ksize), sigma)
-            gauss_green = cv2.GaussianBlur(g_2d, (ksize, ksize), sigma)
-            
-            features[:, idx] = gauss_enhanced.flatten()
-            features[:, idx+1] = gauss_green.flatten()
-            idx += 2
-        
-        # 20-25: Edge detection
-        enhanced_gray_uint = enhanced_gray_2d
-        
-        edges1 = cv2.Canny(enhanced_gray_uint, 40, 120)
-        edges2 = cv2.Canny(enhanced_gray_uint, 60, 180)
-        edges3 = cv2.Canny(g, 40, 120)
-        edges4 = cv2.Canny(g, 60, 180)
-        
-        sobel_enhanced = cv2.Sobel(enhanced_gray_uint, cv2.CV_8U, 1, 1, ksize=3)
-        sobel_green = cv2.Sobel(g, cv2.CV_8U, 1, 1, ksize=3)
-        
-        features[:, idx:idx+6] = np.column_stack([
-            edges1.flatten(), edges2.flatten(), edges3.flatten(),
-            edges4.flatten(), sobel_enhanced.flatten(), sobel_green.flatten()
-        ])
-        idx += 6
-        
-        # 26-31: Morphological operations
-        kernel3 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        kernel5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        
-        opened3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_OPEN, kernel3)
-        tophat3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_TOPHAT, kernel3)
-        closed3 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_CLOSE, kernel3)
-        opened5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_OPEN, kernel5)
-        tophat5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_TOPHAT, kernel5)
-        closed5 = cv2.morphologyEx(enhanced_gray_uint, cv2.MORPH_CLOSE, kernel5)
-        
-        features[:, idx:idx+6] = np.column_stack([
-            opened3.flatten(), tophat3.flatten(), closed3.flatten(),
-            opened5.flatten(), tophat5.flatten(), closed5.flatten()
-        ])
-        idx += 6
-        
-        # 32-39: Texture features
-        from scipy.ndimage import uniform_filter
-        
-        for channel_2d, size in [(enhanced_gray_uint, 3), (enhanced_gray_uint, 5), (g, 3), (g, 5)]:
-            mean = uniform_filter(channel_2d.astype(np.float32), size=size)
-            sqr_mean = uniform_filter(channel_2d.astype(np.float32)**2, size=size)
-            variance = np.clip(sqr_mean - mean**2, 0, None)
-            std = np.sqrt(variance)
-            
-            features[:, idx] = variance.flatten()
-            features[:, idx+1] = std.flatten()
-            idx += 2
-        
-        # 40-44: Enhancement filters
-        laplacian = np.abs(cv2.Laplacian(enhanced_gray_uint, cv2.CV_8U))
-        
-        kernel_small = np.ones((3,3), np.uint8)
-        kernel_large = np.ones((5,5), np.uint8)
-        
-        max_green_3 = cv2.dilate(g, kernel_small)
-        min_green_3 = cv2.erode(g, kernel_small)
-        max_green_5 = cv2.dilate(g, kernel_large)
-        min_green_5 = cv2.erode(g, kernel_large)
-        
-        features[:, idx:idx+5] = np.column_stack([
-            laplacian.flatten(), max_green_3.flatten(), min_green_3.flatten(),
-            max_green_5.flatten(), min_green_5.flatten()
-        ])
-        idx += 5
-        
-        # 45-46: Color uniformity
-        color_var = np.var([r_flat, g_flat, b_flat], axis=0)
-        green_sat_consistency = s_hsv.flatten() * (green_mask / 255.0)
-        
-        features[:, idx:idx+2] = np.column_stack([color_var, green_sat_consistency])
-        idx += 2
-        
-        # === NEW: 6 SEPARATION-SPECIFIC FEATURES (47-52) ===
-        
-        # Feature 47: Distance Transform
         green_binary = (green_mask.reshape(h, w) > 0).astype(np.uint8)
         if np.sum(green_binary) > 0:
             dist_transform = cv2.distanceTransform(green_binary, cv2.DIST_L2, 5)
@@ -214,68 +127,41 @@ class EnhancedTophatTrainer:
             features[:, idx] = np.zeros(img_size)
         idx += 1
         
-        # Feature 48: Local Maxima Detection
-        from scipy import ndimage
-        local_maxima = ndimage.maximum_filter(enhanced_gray_2d, size=9) == enhanced_gray_2d
-        local_maxima = local_maxima & (enhanced_gray_2d > np.mean(enhanced_gray_2d))
-        features[:, idx] = local_maxima.flatten().astype(np.float32) * 255
+        # Feature 6: Tophat operation (blob detection)
+        kernel5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        tophat = cv2.morphologyEx(enhanced_gray_2d, cv2.MORPH_TOPHAT, kernel5)
+        features[:, idx] = tophat.flatten()
         idx += 1
         
-        # Feature 49: Boundary Strength
-        gradient_mag = np.sqrt(
-            cv2.Sobel(enhanced_gray_uint, cv2.CV_64F, 1, 0, ksize=3)**2 + 
-            cv2.Sobel(enhanced_gray_uint, cv2.CV_64F, 0, 1, ksize=3)**2
-        )
-        boundary_strength = (gradient_mag / np.max(gradient_mag) * 255).astype(np.uint8)
-        features[:, idx] = boundary_strength.flatten()
+        # Feature 7: Gaussian blur (smoothed regions)
+        gauss = cv2.GaussianBlur(enhanced_gray_2d, (5, 5), 2.0)
+        features[:, idx] = gauss.flatten()
         idx += 1
         
-        # Feature 50: Cluster Density
-        density_kernel = np.ones((15, 15), np.float32) / (15*15)
-        density_map = cv2.filter2D(green_binary.astype(np.float32), -1, density_kernel)
-        features[:, idx] = (density_map * 255).flatten()
+        # Feature 8: Local variance (texture)
+        from scipy.ndimage import uniform_filter
+        mean = uniform_filter(enhanced_gray_2d.astype(np.float32), size=5)
+        sqr_mean = uniform_filter(enhanced_gray_2d.astype(np.float32)**2, size=5)
+        variance = np.clip(sqr_mean - mean**2, 0, None)
+        features[:, idx] = variance.flatten()
         idx += 1
         
-        # Feature 51: Center-to-Edge Ratio
-        if np.sum(green_binary) > 0:
-            center_strength = ndimage.gaussian_filter(dist_transform, sigma=2)
-            edge_strength = ndimage.gaussian_filter(boundary_strength.astype(np.float32), sigma=2)
-            center_edge_ratio = np.divide(center_strength, edge_strength + 1e-6)
-            center_edge_ratio = np.clip(center_edge_ratio, 0, 255)
-        else:
-            center_edge_ratio = np.zeros((h, w))
-        features[:, idx] = center_edge_ratio.flatten()
+        # Feature 9: HSV Saturation (color purity)
+        features[:, idx] = s_hsv.flatten().astype(np.float32)
         idx += 1
         
-        # Feature 52: Multi-Scale Cell Probability
-        scale1 = cv2.resize(green_binary.astype(np.float32), (w//2, h//2))
-        scale1 = cv2.resize(scale1, (w, h))
-        scale2 = cv2.resize(green_binary.astype(np.float32), (w//4, h//4))
-        scale2 = cv2.resize(scale2, (w, h))
+        # Feature 10: Edge strength (boundary detection)
+        edges = cv2.Canny(enhanced_gray_2d, 40, 120)
+        features[:, idx] = edges.flatten().astype(np.float32)
         
-        multi_scale = (0.5 * green_binary.astype(np.float32) + 0.3 * scale1 + 0.2 * scale2)
-        features[:, idx] = (multi_scale * 255).flatten()
-        
-        # Update feature names for 52 features
+        # Update feature names for 10 optimized features
         self.feature_names = [
-            'Red_channel', 'Green_channel', 'Blue_channel', 'HSV_Hue', 'HSV_Saturation', 'HSV_Value',
-            'LAB_Lightness', 'LAB_A', 'LAB_B', 'Green_dominance', 'Green_mask', 'Green_ratio', 
-            'Enhanced_grayscale', 'Gaussian_enhanced_s1.0', 'Gaussian_green_s1.0', 
-            'Gaussian_enhanced_s2.0', 'Gaussian_green_s2.0', 'Gaussian_enhanced_s4.0', 
-            'Gaussian_green_s4.0', 'Canny_enhanced_40_120', 'Canny_enhanced_60_180', 
-            'Canny_green_40_120', 'Canny_green_60_180', 'Sobel_enhanced', 'Sobel_green',
-            'Opening_enhanced_3', 'Tophat_enhanced_3', 'Closing_enhanced_3', 
-            'Opening_enhanced_5', 'Tophat_enhanced_5', 'Closing_enhanced_5',
-            'Variance_enhanced_3', 'Std_enhanced_3', 'Variance_enhanced_5', 'Std_enhanced_5',
-            'Variance_green_3', 'Std_green_3', 'Variance_green_5', 'Std_green_5',
-            'Laplacian_enhanced', 'Maximum_green_3', 'Minimum_green_3', 
-            'Maximum_green_5', 'Minimum_green_5', 'Color_variance', 'Green_saturation_consistency',
-            # NEW: 6 separation features
-            'Distance_transform', 'Local_maxima', 'Boundary_strength', 
-            'Cluster_density', 'Center_edge_ratio', 'Multi_scale_probability'
+            'Green_channel', 'Green_dominance', 'Green_mask', 'Enhanced_grayscale',
+            'Distance_transform', 'Tophat_operation', 'Gaussian_blur', 'Local_variance',
+            'HSV_Saturation', 'Edge_strength'
         ]
         
-        print(f"🧠 Extracted {len(self.feature_names)} features with separation intelligence")
+        print(f"🚀 Extracted {len(self.feature_names)} optimized features for fast Wolffia training")
         return features
     
     def create_patch_based_training_data(self, image, annotations):
@@ -1180,7 +1066,7 @@ if __name__ == "__main__":
     print("🧠 SEPARATION-INTELLIGENT TOPHAT ML TRAINER")
     print("=" * 60)
     print("🎯 Built-in cell separation intelligence")
-    print("📊 52 features with separation awareness")
+    print("📊 10 features with separation awareness")
     print("🔧 No post-processing needed - separation is learned")
     print()
     
@@ -1194,7 +1080,7 @@ if __name__ == "__main__":
         print("Using separation-intelligent configuration: 8 epochs, 200 estimators")
     
     print(f"🧠 Separation-Intelligent Configuration: {epochs} epochs, {n_estimators} estimators")
-    print("🔧 52 features with built-in separation intelligence")
+    print("🔧 10 features with built-in separation intelligence")
     print()
     
     # Start separation-intelligent training

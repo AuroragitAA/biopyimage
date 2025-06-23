@@ -807,6 +807,346 @@
             font-weight: bold;
             cursor: pointer;
         }
+
+        /* Fullscreen Annotation Modal */
+        .fullscreen-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #1a252f;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .fullscreen-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            padding: 10px 20px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #4a6741;
+            flex-shrink: 0;
+            min-height: 50px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .fullscreen-header h3 {
+            margin: 0;
+            color: white;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .fullscreen-controls {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .fullscreen-controls .btn {
+            padding: 6px 12px;
+            font-size: 0.8em;
+            margin: 0;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+            min-height: 32px;
+            white-space: nowrap;
+        }
+
+        .fullscreen-controls .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        }
+
+        .fullscreen-controls .btn.active {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+            border-color: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.4);
+        }
+
+        .fullscreen-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #1a252f;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1001;
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            background: rgba(0,0,0,0.85);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .zoom-btn {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            min-width: 32px;
+            box-shadow: 0 2px 6px rgba(0,123,255,0.3);
+        }
+
+        .zoom-btn:hover {
+            background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(0,123,255,0.4);
+        }
+
+        .zoom-btn:active {
+            transform: translateY(0);
+        }
+
+        #zoomLevel {
+            color: #ffffff;
+            font-weight: bold;
+            margin-left: 8px;
+            font-size: 0.9em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background: #1a252f;
+            overflow: hidden;
+            border-radius: 0;
+            width: 100%;
+            min-height: 0;
+        }
+
+        #fullscreenCanvas {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            background: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            display: block;
+        }
+
+        #fullscreenCanvas:active {
+            cursor: grabbing;
+        }
+
+        /* Pan Indicator */
+        .pan-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 1002;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        .pan-indicator.visible {
+            opacity: 1;
+        }
+
+        .pan-indicator .icon {
+            display: inline-block;
+            margin-right: 8px;
+            font-size: 18px;
+        }
+
+        .fullscreen-footer {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            padding: 8px 20px;
+            color: white;
+            border-top: 2px solid #4a6741;
+            flex-shrink: 0;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+        }
+
+        .drawing-info {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            font-size: 0.9em;
+        }
+
+        .drawing-info span {
+            color: #bdc3c7;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        #currentDrawingMode {
+            font-weight: bold;
+            color: #3498db;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        #annotationCount {
+            font-weight: bold;
+            color: #2ecc71;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Responsive adjustments for fullscreen */
+        @media (max-width: 768px) {
+            .fullscreen-header {
+                padding: 8px 15px;
+                flex-direction: column;
+                gap: 8px;
+                min-height: auto;
+            }
+
+            .fullscreen-header h3 {
+                font-size: 1em;
+            }
+
+            .fullscreen-controls {
+                gap: 4px;
+                justify-content: center;
+            }
+
+            .fullscreen-controls .btn {
+                padding: 4px 8px;
+                font-size: 0.75em;
+                min-height: 28px;
+            }
+
+            .zoom-controls {
+                top: 5px;
+                right: 5px;
+                padding: 6px 8px;
+            }
+
+            .zoom-btn {
+                padding: 4px 8px;
+                font-size: 0.75em;
+                min-width: 28px;
+            }
+
+            .drawing-info {
+                gap: 10px;
+                font-size: 0.8em;
+            }
+
+            .fullscreen-footer {
+                padding: 6px 15px;
+                flex-direction: column;
+                gap: 4px;
+                min-height: auto;
+            }
+        }
+
+        /* Keyboard shortcuts help overlay */
+        .shortcuts-help {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .shortcuts-help.visible {
+            opacity: 1;
+        }
+
+        .shortcuts-help h4 {
+            margin: 0 0 8px 0;
+            color: #3498db;
+            font-size: 0.9em;
+        }
+
+        .shortcuts-help div {
+            margin: 2px 0;
+            color: #bdc3c7;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(26, 37, 47, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.3s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -936,6 +1276,7 @@
                         </div>
                         
                         <div style="display: flex; justify-content: center; gap: 15px; margin: 20px 0;">
+                            <button class="btn btn-info" onclick="openFullscreenAnnotator()">🖥️ Fullscreen Mode</button>
                             <button class="btn btn-success" onclick="setAnnotationMode('correct')">✅ Mark Correct</button>
                             <button class="btn btn-warning" onclick="setAnnotationMode('false_positive')">❌ Mark False Positive</button>
                             <button class="btn btn-primary" onclick="setAnnotationMode('missed')">➕ Mark Missed Cell</button>
@@ -944,6 +1285,7 @@
                         
                         <div style="text-align: center; margin: 20px 0;">
                             <button class="btn btn-primary" onclick="saveAnnotations()">💾 Save Annotations</button>
+                            <button class="btn btn-secondary" onclick="previousTrainingImage()">⬅️ Previous Image</button>
                             <button class="btn btn-success" onclick="nextTrainingImage()">➡️ Next Image</button>
                             <button class="btn btn-warning" onclick="finishTraining()">🏁 Finish Training</button>
                         </div>
@@ -961,6 +1303,63 @@
     <div id="imageModal" class="image-modal" onclick="closeImageModal()">
         <span class="close-modal" onclick="closeImageModal()">&times;</span>
         <img id="modalImage" src="" alt="Full Size Image">
+    </div>
+
+    <!-- Fullscreen Annotation Modal -->
+    <div id="fullscreenAnnotationModal" class="fullscreen-modal" style="display: none;">
+        <div class="fullscreen-header">
+            <h3>🖌️ Fullscreen Annotation Mode</h3>
+            <div class="fullscreen-controls">
+                <button class="btn btn-success" onclick="setFullscreenMode('correct')">✅ Mark Correct</button>
+                <button class="btn btn-warning" onclick="setFullscreenMode('false_positive')">❌ Mark False Positive</button>
+                <button class="btn btn-primary" onclick="setFullscreenMode('missed')">➕ Mark Missed Cell</button>
+                <button class="btn" onclick="toggleAutoBorder()">🎯 Auto Border: <span id="autoBorderStatus">OFF</span></button>
+                <button class="btn" onclick="clearFullscreenAnnotations()">🗑️ Clear All</button>
+                <button class="btn btn-info" onclick="closeFullscreenAnnotator()">🚪 Exit Fullscreen</button>
+            </div>
+        </div>
+        
+        <div class="fullscreen-content">
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="zoomIn()">🔍 +</button>
+                <button class="zoom-btn" onclick="zoomOut()">🔍 -</button>
+                <button class="zoom-btn" onclick="resetZoom()">🎯 Reset</button>
+                <button class="zoom-btn" onclick="toggleShortcutsHelp()" title="Show keyboard shortcuts (H)">❓</button>
+                <span id="zoomLevel">100%</span>
+            </div>
+            
+            <div class="shortcuts-help" id="shortcutsHelp">
+                <h4>⌨️ Keyboard Shortcuts</h4>
+                <div><strong>1, 2, 3:</strong> Switch annotation modes</div>
+                <div><strong>+/-:</strong> Zoom in/out</div>
+                <div><strong>0:</strong> Reset zoom</div>
+                <div><strong>H:</strong> Toggle this help</div>
+                <div><strong>Ctrl+A:</strong> Toggle auto-border</div>
+                <div><strong>Ctrl+C:</strong> Clear annotations</div>
+                <div><strong>Escape:</strong> Exit fullscreen</div>
+                <div><strong>Right-click:</strong> Pan image</div>
+            </div>
+            
+            <div class="canvas-container" id="fullscreenCanvasContainer">
+                <canvas id="fullscreenCanvas"></canvas>
+                <div class="pan-indicator" id="panIndicator">
+                    <span class="icon">🤏</span>
+                    <span class="text">Drag to move image</span>
+                </div>
+                <div class="loading-overlay" id="fullscreenLoading">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading fullscreen annotator...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="fullscreen-footer">
+            <div class="drawing-info">
+                <span id="currentDrawingMode">Click mode active</span>
+                <span>|</span>
+                <span id="annotationCount">0 annotations</span>
+            </div>
+        </div>
     </div>
 
     <!-- Include separate JavaScript file -->
