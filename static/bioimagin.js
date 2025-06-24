@@ -460,27 +460,35 @@ function createPipelineVisualization(pipelineSteps, detectionMethod) {
     // Full sophisticated version with all step data
     const stepDescriptions = pipelineSteps.step_descriptions || {};
     const individualSteps = pipelineSteps.individual_steps || {};
+    
+    // Backward compatibility mapping for legacy step keys
+    const stepKeyMapping = {
+        'Denoised': 'Green_enhanced',        // Old "denoised" was actually green enhanced
+        'Shape_index': 'Distance_transform', // Old "shape index" was actually distance transform
+        'Preprocessed': 'Green_enhanced',    // Legacy preprocessing step
+        'Segmented': 'Watershed_raw',        // Legacy segmentation step
+        'Final': 'Watershed_final'           // Legacy final step
+    };
+    
+    // Apply backward compatibility mapping
+    Object.keys(stepKeyMapping).forEach(oldKey => {
+        if (individualSteps[oldKey] && !individualSteps[stepKeyMapping[oldKey]]) {
+            individualSteps[stepKeyMapping[oldKey]] = individualSteps[oldKey];
+            console.log(`🔄 Mapped legacy step '${oldKey}' to '${stepKeyMapping[oldKey]}'`);
+        }
+    });
+    
     const stepCount = pipelineSteps.step_count || 0;
     
     // Define pipeline steps with status
+    // Unified Watershed Pipeline - Watershed Result is Final
     const pipelineDefinition = [
         { key: 'Original', name: 'Original Image', status: 'success', icon: '📸' },
-        { key: 'Denoised', name: 'Denoised Image', status: 'success', icon: '🧹' },
-        { key: 'Green_enhanced', name: 'Green Enhancement', status: 'success', icon: '🌿' },
-        { key: 'Green_mask', name: 'Green Mask', status: 'success', icon: '🟢' },
-        { key: 'Shape_index', name: 'Shape Index', status: 'success', icon: '📐' },
-        { key: 'Shape_index_3d', name: 'Shape Index 3D', status: 'success', icon: '📐📐📐' },
-        { key: 'Watershed', name: 'Watershed Segmentation', status: 'success', icon: '💧' },
-        
-        // Legacy or non-watershed steps — still supported if present
-        { key: 'Gray', name: 'Grayscale', status: 'success', icon: '⚫' },
-        { key: 'Li_foreground', name: 'Li Thresholding', status: 'success', icon: '🎯' },
-        { key: 'Plate_removed', name: 'Plate Removal', status: 'success', icon: '🗑️' },
-        { key: 'Multi_otsu', name: 'Multi-Otsu', status: 'success', icon: '🔧' },
-        { key: 'Combined', name: 'Mask Fusion', status: 'success', icon: '🔀' },
-        { key: 'Opened', name: 'Morphological', status: 'success', icon: '🔄' },
-        { key: 'Final', name: 'Final Segmentation', status: 'success', icon: '✅' },
-        { key: 'Detection_result', name: 'Cell Detection', status: detectionMethod?.includes('AI') ? 'success' : 'warning', icon: '🧬' }
+        { key: 'Green_enhanced', name: 'Green Enhanced', status: 'success', icon: '🟢' },
+        { key: 'Green_mask', name: 'Color Filtered', status: 'success', icon: '🎯' },
+        { key: 'Distance_transform', name: 'Distance Transform', status: 'success', icon: '📏' },
+        { key: 'Watershed_final', name: 'Watershed Result (Final)', status: 'success', icon: '🧬' },
+        { key: 'Watershed_raw', name: 'Processing Reference', status: 'success', icon: '💧' }
     ];
 
     

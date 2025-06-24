@@ -934,9 +934,18 @@ class WolffiaSyntheticDataset(Dataset):
         num_cells = np.random.randint(5, 25)  # More realistic cell count for field of view
 
         for _ in range(num_cells):
-            # Wolffia-specific cell sizes (small, oval-shaped)
-            ry = np.random.randint(3, 8)  # Slightly larger for better detection
-            rx = np.random.randint(2, 6)  # Slightly elongated
+            # SCALE-AWARE: Wolffia-specific cell sizes adapted to image size
+            # Scale cell sizes based on patch size to match analysis conditions
+            scale_factor = self.image_size / 128.0  # Base scale for 128x128 patches
+            
+            # Original Wolffia cell sizes scaled appropriately
+            base_ry = np.random.uniform(3, 8) * scale_factor
+            base_rx = np.random.uniform(2, 6) * scale_factor
+            
+            # Ensure minimum and maximum bounds
+            ry = max(2, min(int(base_ry), h // 6))
+            rx = max(1, min(int(base_rx), w // 6))
+            
             cy = np.random.randint(ry, h - ry)
             cx = np.random.randint(rx, w - rx)
             angle = np.random.randint(0, 180)
